@@ -11,6 +11,8 @@ use winreg::{RegKey, RegValue};
 pub enum Hive {
     Hkcu,
     Hklm,
+    /// HKEY_USERS, bijvoorbeeld S-1-5-20 (het NetworkService-account).
+    Hku,
 }
 
 impl Hive {
@@ -18,17 +20,19 @@ impl Hive {
         match self {
             Hive::Hkcu => RegKey::predef(HKEY_CURRENT_USER),
             Hive::Hklm => RegKey::predef(HKEY_LOCAL_MACHINE),
+            Hive::Hku => RegKey::predef(HKEY_USERS),
         }
     }
     pub fn label(self) -> &'static str {
         match self {
             Hive::Hkcu => "HKCU",
             Hive::Hklm => "HKLM",
+            Hive::Hku => "HKU",
         }
     }
     /// Schrijven in HKLM vereist administratorrechten.
     pub fn needs_admin(self) -> bool {
-        matches!(self, Hive::Hklm)
+        matches!(self, Hive::Hklm | Hive::Hku)
     }
 }
 

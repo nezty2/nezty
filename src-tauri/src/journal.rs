@@ -62,6 +62,34 @@ pub enum RevertPayload {
         pid: u32,
         old_class: u32,
     },
+    /// Eén sleutel in een ini-bestand. `old` leeg: de sleutel stond er niet en wordt weer weggehaald.
+    IniKey {
+        path: String,
+        section: String,
+        key: String,
+        old: Option<String>,
+    },
+    /// Eén waarde in een JSON-bestand (JSON-pointer). `old` is de oude waarde als JSON-tekst, leeg als hij ontbrak.
+    JsonKey {
+        path: String,
+        pointer: String,
+        old: Option<String>,
+        #[serde(default)]
+        pretty: bool,
+    },
+    /// Eén sleutel in een eenvoudig tekstbestand van een game (sleutel:waarde of "sleutel" "waarde").
+    TextKey {
+        path: String,
+        format: String,
+        key: String,
+        old: String,
+    },
+    /// Een geavanceerde eigenschap van een netwerkkaart (bv. *InterruptModeration).
+    AdapterProperty {
+        name: String,
+        keyword: String,
+        old_value: String,
+    },
     None,
 }
 
@@ -333,6 +361,32 @@ pub fn execute_revert(payload: &RevertPayload) -> AppResult<()> {
             if winapi::process_exists(*pid) {
                 winapi::set_priority_class(*pid, *old_class)?;
             }
+            Ok(())
+        }
+        RevertPayload::IniKey { path, section, key, old } => {
+            let p = Path::new(path);
+            let (mut text, utf16) = crate::ini::read_text(p)?;
+            match old {
+                Some(v) => crate::ini::set(&mut text, section, key, v),
+                None => crate::ini::remove(&mut text, section, key),
+            }
+            crate::ini::write_text(p, &text, utf16)
+        }
+        RevertPayload::JsonKey { path, pointer, old, pretty } => {
+            let old = match old {
+                Some(t) => Some(serde_json::from_str(t).map_err(|e| AppError::msg(e.to_string()))?),
+                None => None,
+            };
+            crate::jsonfile::set_pointer(Path::new(path), pointer, old, *pretty)
+        }
+        RevertPayload::TextKey { path, format, key, old } => crate::gameconfig::revert_key(Path::new(path), format, key, old),
+        RevertPayload::AdapterProperty { name, keyword, old_value } => {
+            run_ps(&format!(
+                "Set-NetAdapterAdvancedProperty -Name {} -RegistryKeyword {} -RegistryValue {} -NoRestart:$false",
+                ps_quote(name),
+                ps_quote(keyword),
+                ps_quote(old_value)
+            ))?;
             Ok(())
         }
         RevertPayload::None => Err(AppError::coded("not_revertable")),

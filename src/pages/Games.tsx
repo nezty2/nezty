@@ -1,6 +1,8 @@
 import { FolderOpen, Gamepad2, Lightbulb, Play, Plus, RefreshCw, Save, Trash2, Undo2, Zap } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { GameConfigCard } from "@/components/GameConfigCard";
 import { GameCover } from "@/components/GameCover";
+import { OverlaysCard } from "@/components/OverlaysCard";
 import { GainBadge, StateBadge, TimingBadge } from "@/components/TweakCard";
 import { useAppIcons } from "@/components/useAppIcons";
 import { Badge, Button, Chip, EmptyState, Modal, PageHeader, Row, SearchInput, SegmentedControl, Skeleton, Spinner, TextInput, Toggle, cn } from "@/components/ui";
@@ -138,7 +140,7 @@ function ProfileTab({ game, profile, onChange }: { game: Game; profile: GameProf
 
 /* ---------- Nu instellen (los van een boost) ---------- */
 
-function NowTab({ game }: { game: Game }) {
+export function NowTab({ game, extras = true }: { game: Game; extras?: boolean }) {
   const { t, td } = useT();
   const [list, setList] = useState<TweakInfo[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -183,6 +185,8 @@ function NowTab({ game }: { game: Game }) {
           </div>
         ))}
       </div>
+      {extras && <GameConfigCard gameId={game.id} />}
+      {extras && <OverlaysCard />}
     </div>
   );
 }
@@ -191,7 +195,7 @@ function NowTab({ game }: { game: Game }) {
 
 const fpsPresets = [60, 120, 144, 165, 240, 360];
 
-function FortniteIniTab() {
+export function FortniteIniTab() {
   const { t } = useT();
   const [data, setData] = useState<FortniteSettings | null>(null);
   const [draft, setDraft] = useState<FortniteSettings | null>(null);

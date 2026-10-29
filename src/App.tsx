@@ -3,7 +3,6 @@ import { useEffect, useRef } from "react";
 import { BoostResultModal } from "@/components/BoostResultModal";
 import { Sidebar } from "@/components/Sidebar";
 import { Toasts } from "@/components/Toasts";
-import { UpdateBanner } from "@/components/UpdateBanner";
 import { Spinner } from "@/components/ui";
 import { WelcomeModal } from "@/components/WelcomeModal";
 import { useT } from "@/i18n/hooks";
@@ -12,29 +11,31 @@ import { isTauri } from "@/lib/ipc";
 import { BackgroundAppsPage } from "@/pages/BackgroundApps";
 import { CrosshairPage } from "@/pages/Crosshair";
 import { DashboardPage } from "@/pages/Dashboard";
+import { FortnitePage } from "@/pages/Fortnite";
 import { GamesPage } from "@/pages/Games";
 import { InputPage } from "@/pages/Input";
 import { ControllerPage } from "@/pages/Controller";
-import { ConsolePage } from "@/pages/Console";
 import { LogPage } from "@/pages/Log";
 import { NetworkPage } from "@/pages/Network";
 import { SettingsPage } from "@/pages/Settings";
 import { StartupPage } from "@/pages/Startup";
+import { TestPage } from "@/pages/Test";
 import { TweaksPage } from "@/pages/Tweaks";
 import { useApp } from "@/store/app";
 
 const pages = {
   dashboard: DashboardPage,
   games: GamesPage,
+  fortnite: FortnitePage,
   tweaks: TweaksPage,
   input: InputPage,
   controller: ControllerPage,
-  console: ConsolePage,
   crosshair: CrosshairPage,
   background: BackgroundAppsPage,
   network: NetworkPage,
   startup: StartupPage,
   log: LogPage,
+  test: TestPage,
   settings: SettingsPage,
 };
 
@@ -87,7 +88,6 @@ export default function App() {
                 transition={{ duration: 0.12 }}
                 className="mx-auto w-full max-w-[1400px] px-6 py-6 md:px-8"
               >
-                <UpdateBanner />
                 <Page />
               </motion.div>
             </AnimatePresence>

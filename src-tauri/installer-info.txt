@@ -7,6 +7,7 @@ nezty only connects to:
 - GitHub Releases of nezty2/nezty, to check for updates (can be turned off in Settings > Updates)
 - Steam, Epic and optionally SteamGridDB, to fetch game images (can be turned off in Settings > Covers)
 - ping test servers, only when you use the Network page or the dashboard ping
+- Cloudflare's speed test (speed.cloudflare.com), only when you start the bufferbloat test yourself
 
 CHANGES TO WINDOWS
 Every tweak is explained before you apply it, is logged with its old value and can be undone with "Undo all".
@@ -15,7 +16,8 @@ Before the first change nezty creates a Windows restore point. Uninstall nezty t
 PRIVACY (NEDERLANDS)
 nezty verzamelt, bewaart en verstuurt geen persoonlijke gegevens. Geen accounts, geen analyse, geen tracking.
 nezty maakt alleen verbinding met GitHub (updates, uit te zetten in Instellingen), Steam, Epic en eventueel
-SteamGridDB (game-afbeeldingen, uit te zetten in Instellingen) en testservers voor ping (alleen als je die test gebruikt).
+SteamGridDB (game-afbeeldingen, uit te zetten in Instellingen), testservers voor ping (alleen als je die test gebruikt)
+en de snelheidstest van Cloudflare (alleen als je zelf de bufferbloat-test start).
 
 ------------------------------------------------------------------------------
 

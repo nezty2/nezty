@@ -19,7 +19,7 @@ export function CrosshairOverlay() {
   if (!cfg) return null;
   return (
     <div style={{ position: "fixed", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
-      <CrosshairShape cfg={cfg} box={200} />
+      <CrosshairShape cfg={cfg} box={400} />
     </div>
   );
 }

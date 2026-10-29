@@ -13,7 +13,6 @@ async function call<R>(cmd: string, args?: Record<string, unknown>): Promise<R> 
 
 export interface Api {
   getAppInfo(): Promise<T.AppInfo>;
-  relaunchElevated(): Promise<void>;
   getSettings(): Promise<T.Settings>;
   saveSettings(settings: T.Settings): Promise<T.Settings>;
   openPath(path: string): Promise<void>;
@@ -60,15 +59,29 @@ export interface Api {
   getFortniteSettings(): Promise<T.FortniteSettings>;
   saveFortniteSettings(settings: T.FortniteSettings): Promise<T.FortniteSettings>;
   restoreFortniteBackup(backupPath: string): Promise<T.FortniteSettings>;
+  getFortniteOverview(): Promise<T.FortniteOverview>;
+  applyFortniteRecommended(ids: string[]): Promise<T.FortniteOverview>;
+  listOverlays(): Promise<T.OverlayInfo[]>;
+  verifyInputLive(): Promise<T.LiveCheck[]>;
+  measureBandwidth(seconds: number): Promise<T.BandwidthReport>;
+  measureSession(gameId: string, seconds: number, pingHost: string | null): Promise<T.Measurement>;
+  runBufferbloat(): Promise<T.BufferbloatResult>;
+  syncInputLive(): Promise<T.LiveCheck[]>;
+  listGameConfig(gameId: string): Promise<T.GameConfigCheck[]>;
+  applyGameConfig(gameId: string): Promise<T.GameConfigCheck[]>;
+  closeOverlay(id: string): Promise<T.OverlayInfo[]>;
+  listHwAccel(): Promise<T.HwAccelInfo[]>;
+  setHwAccel(id: string, enabled: boolean): Promise<T.HwAccelInfo[]>;
   setCrosshairEnabled(enabled: boolean): Promise<boolean>;
   getCrosshairConfig(): Promise<T.CrosshairConfig>;
+  runCheckup(): Promise<T.TestCheck[]>;
+  runTweakTest(): Promise<T.TweakTestStep[]>;
   listControllers(): Promise<T.ControllerInfo[]>;
   measureControllerRate(id: string, seconds?: number): Promise<T.ControllerRate>;
 }
 
 const tauriApi: Api = {
   getAppInfo: () => call("get_app_info"),
-  relaunchElevated: () => call("relaunch_elevated"),
   getSettings: () => call("get_settings"),
   saveSettings: (settings) => call("save_settings", { settings }),
   openPath: (path) => call("open_path", { path }),
@@ -115,8 +128,23 @@ const tauriApi: Api = {
   getFortniteSettings: () => call("get_fortnite_settings"),
   saveFortniteSettings: (settings) => call("save_fortnite_settings", { settings }),
   restoreFortniteBackup: (backupPath) => call("restore_fortnite_backup", { backupPath }),
+  getFortniteOverview: () => call("get_fortnite_overview"),
+  applyFortniteRecommended: (ids) => call("apply_fortnite_recommended", { ids }),
+  listOverlays: () => call("list_overlays"),
+  verifyInputLive: () => call("verify_input_live"),
+  measureBandwidth: (seconds) => call("measure_bandwidth", { seconds }),
+  measureSession: (gameId, seconds, pingHost) => call("measure_session", { gameId, seconds, pingHost }),
+  runBufferbloat: () => call("run_bufferbloat"),
+  syncInputLive: () => call("sync_input_live"),
+  listGameConfig: (gameId) => call("list_game_config", { gameId }),
+  applyGameConfig: (gameId) => call("apply_game_config", { gameId }),
+  closeOverlay: (id) => call("close_overlay", { id }),
+  listHwAccel: () => call("list_hw_accel"),
+  setHwAccel: (id, enabled) => call("set_hw_accel", { id, enabled }),
   setCrosshairEnabled: (enabled) => call("set_crosshair_enabled", { enabled }),
   getCrosshairConfig: () => call("get_crosshair_config"),
+  runCheckup: () => call("run_checkup"),
+  runTweakTest: () => call("run_tweak_test"),
   listControllers: () => call("list_controllers"),
   measureControllerRate: (id, seconds) => call("measure_controller_rate", { id, seconds: seconds ?? null }),
 };
@@ -145,18 +173,15 @@ export async function fileUrl(path: string): Promise<string> {
   return convertFileSrc(path);
 }
 
-/** Starten met Windows (autostart-plugin). */
+/** Starten met Windows (geplande taak met hoogste rechten, zie autostart.rs). */
 export const autostart = {
   async isEnabled(): Promise<boolean> {
     if (!isTauri) return false;
-    const m = await import("@tauri-apps/plugin-autostart");
-    return m.isEnabled();
+    return call<boolean>("get_autostart");
   },
   async set(enabled: boolean): Promise<void> {
     if (!isTauri) return;
-    const m = await import("@tauri-apps/plugin-autostart");
-    if (enabled) await m.enable();
-    else await m.disable();
+    await call<void>("set_autostart", { enabled });
   },
 };
 

@@ -1,4 +1,6 @@
-import { Award, Cable, Globe, Info, RefreshCw, Wifi } from "lucide-react";
+import { Award, Cable, Globe, Info, RefreshCw, ShieldQuestion, Wifi } from "lucide-react";
+import { BandwidthCard } from "@/components/BandwidthCard";
+import { BufferbloatCard } from "@/components/BufferbloatCard";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { TweakCard } from "@/components/TweakCard";
 import { Badge, Button, Card, Kv, PageHeader, SectionTitle, Skeleton, cn } from "@/components/ui";
@@ -46,7 +48,7 @@ function PingTile({ title, sub, result, loading, recommended, onTest }: { title:
       {result && result.avgMs != null && (
         <div className="mt-1.5 text-[12px] text-ink-3">
           {t("network.jitter", { ms: formatMs(lang, result.jitterMs) })}
-          {result.lossPct > 0 ? ` · ${t("network.loss", { pct: Math.round(result.lossPct) })}` : ""}
+          {` · ${t("network.loss", { pct: Math.round(result.lossPct) })}`}
         </div>
       )}
     </button>
@@ -71,7 +73,7 @@ export function NetworkPage() {
     async (id: string, host: string) => {
       setLoading((s) => new Set(s).add(id));
       try {
-        const r = await api.pingHost(host, 5);
+        const r = await api.pingHost(host, 10);
         setResults((cur) => ({ ...cur, [id]: r }));
       } catch (e) {
         handleError(e);
@@ -163,6 +165,26 @@ export function NetworkPage() {
         }
       />
 
+      {overview && (
+        <Card className={cn("flex items-start gap-3", onWifi ? "border-warn/50" : "border-ok/40")}>
+          {onWifi ? <Wifi className="mt-0.5 h-5 w-5 shrink-0 text-warn" /> : <Cable className="mt-0.5 h-5 w-5 shrink-0 text-ok" />}
+          <div>
+            <div className="text-sm font-semibold">{onWifi ? t("network.onWifiTitle") : t("network.onCableTitle")}</div>
+            <p className="mt-0.5 text-[13px] text-ink-2">{onWifi ? t("network.onWifiText") : t("network.onCableText")}</p>
+          </div>
+        </Card>
+      )}
+
+      <Card className="flex items-start gap-3">
+        <ShieldQuestion className="mt-0.5 h-5 w-5 shrink-0 text-info" />
+        <div className="space-y-1 text-[13px] text-ink-2">
+          <div className="text-sm font-semibold text-ink">{t("network.honestTitle")}</div>
+          <p>{t("network.honestPing")}</p>
+          <p>{t("network.honestDns")}</p>
+          <p>{t("network.honestHelps")}</p>
+        </div>
+      </Card>
+
       {best && (
         <Card className="flex items-start gap-4 border-accent">
           <Award className="mt-0.5 h-6 w-6 shrink-0 text-accent" />
@@ -170,6 +192,7 @@ export function NetworkPage() {
             <div className="text-[15px] font-semibold">{t("network.bestTitle", { region: td(`region.${best.region.region}`) })}</div>
             <p className="mt-1 text-[13px] text-ink-2">{t("network.bestAdvice", { region: td(`region.${best.region.region}`), ms: formatMs(lang, best.ms) })}</p>
             <p className="mt-1 text-[12px] text-ink-3">{t("network.fortniteHow")}</p>
+            <p className="mt-0.5 text-[12px] text-ink-3">{t("network.otherGamesHow")}</p>
           </div>
         </Card>
       )}
@@ -243,6 +266,10 @@ export function NetworkPage() {
           </div>
         )}
       </section>
+
+      <BandwidthCard />
+
+      <BufferbloatCard />
 
       <section>
         <SectionTitle>{t("network.tweaks")}</SectionTitle>

@@ -3,19 +3,18 @@
 use crate::error::{AppError, AppResult};
 use crate::registry::{self, Hive};
 use std::ffi::c_void;
-use std::ptr::{null, null_mut};
+use std::ptr::null_mut;
 use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, HANDLE};
 use windows_sys::Win32::Security::{GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY};
 use windows_sys::Win32::System::Threading::{
     GetCurrentProcess, GetPriorityClass, OpenProcess, OpenProcessToken, SetPriorityClass, HIGH_PRIORITY_CLASS,
     PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SET_INFORMATION, REALTIME_PRIORITY_CLASS,
 };
-use windows_sys::Win32::UI::Shell::ShellExecuteW;
 use windows_sys::Win32::UI::Accessibility::{FILTERKEYS, STICKYKEYS, TOGGLEKEYS};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     SendMessageTimeoutW, SystemParametersInfoW, ANIMATIONINFO, HWND_BROADCAST, SMTO_ABORTIFHUNG, SPIF_SENDCHANGE,
     SPI_GETFILTERKEYS, SPI_GETSTICKYKEYS, SPI_GETTOGGLEKEYS, SPI_SETANIMATION, SPI_SETFILTERKEYS, SPI_SETKEYBOARDDELAY,
-    SPI_SETKEYBOARDSPEED, SPI_SETMOUSE, SPI_SETSTICKYKEYS, SPI_SETTOGGLEKEYS, SPI_SETUIEFFECTS, SW_SHOWNORMAL, WM_SETTINGCHANGE,
+    SPI_SETKEYBOARDSPEED, SPI_SETMOUSE, SPI_SETSTICKYKEYS, SPI_SETTOGGLEKEYS, SPI_SETUIEFFECTS, WM_SETTINGCHANGE,
 };
 
 pub const PRIORITY_HIGH: u32 = HIGH_PRIORITY_CLASS;
@@ -43,19 +42,6 @@ pub fn is_elevated() -> bool {
         CloseHandle(token);
         ok != 0 && elevation.TokenIsElevated != 0
     }
-}
-
-/// Start dezelfde exe opnieuw via UAC ("runas"). Blokkeert tot de gebruiker de UAC-prompt beantwoordt.
-pub fn start_elevated_copy() -> AppResult<()> {
-    let exe = std::env::current_exe()?;
-    let verb = wide("runas");
-    let file = wide(&exe.to_string_lossy());
-    let params = wide("--elevated");
-    let result = unsafe { ShellExecuteW(null_mut(), verb.as_ptr(), file.as_ptr(), params.as_ptr(), null(), SW_SHOWNORMAL) };
-    if (result as isize) <= 32 {
-        return Err(AppError::msg("UAC was declined or failed."));
-    }
-    Ok(())
 }
 
 pub fn process_exists(pid: u32) -> bool {
@@ -202,6 +188,74 @@ pub fn apply_accessibility_from_registry() {
         if SystemParametersInfoW(SPI_GETTOGGLEKEYS, tk.cbSize, &mut tk as *mut _ as *mut c_void, 0) != 0 {
             tk.dwFlags = toggle;
             SystemParametersInfoW(SPI_SETTOGGLEKEYS, tk.cbSize, &mut tk as *mut _ as *mut c_void, SPIF_SENDCHANGE);
+        }
+    }
+}
+
+/// Wat Windows nu echt gebruikt voor muis en toetsenbord (niet wat in het register staat).
+pub struct LiveInput {
+    pub mouse_acceleration: i32,
+    pub keyboard_delay: u32,
+    pub keyboard_speed: u32,
+    /// Sneltoets actief voor plak-, filter- en wisseltoetsen.
+    pub hotkeys: [bool; 3],
+}
+
+pub fn live_input() -> LiveInput {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{SPI_GETKEYBOARDDELAY, SPI_GETKEYBOARDSPEED, SPI_GETMOUSE};
+    unsafe {
+        let mut mouse = [0i32; 3];
+        SystemParametersInfoW(SPI_GETMOUSE, 0, mouse.as_mut_ptr() as *mut c_void, 0);
+        let mut delay: u32 = 1;
+        SystemParametersInfoW(SPI_GETKEYBOARDDELAY, 0, &mut delay as *mut u32 as *mut c_void, 0);
+        let mut speed: u32 = 31;
+        SystemParametersInfoW(SPI_GETKEYBOARDSPEED, 0, &mut speed as *mut u32 as *mut c_void, 0);
+        let mut sk = STICKYKEYS { cbSize: std::mem::size_of::<STICKYKEYS>() as u32, dwFlags: 0 };
+        SystemParametersInfoW(SPI_GETSTICKYKEYS, sk.cbSize, &mut sk as *mut _ as *mut c_void, 0);
+        let mut fk: FILTERKEYS = std::mem::zeroed();
+        fk.cbSize = std::mem::size_of::<FILTERKEYS>() as u32;
+        SystemParametersInfoW(SPI_GETFILTERKEYS, fk.cbSize, &mut fk as *mut _ as *mut c_void, 0);
+        let mut tk = TOGGLEKEYS { cbSize: std::mem::size_of::<TOGGLEKEYS>() as u32, dwFlags: 0 };
+        SystemParametersInfoW(SPI_GETTOGGLEKEYS, tk.cbSize, &mut tk as *mut _ as *mut c_void, 0);
+        LiveInput {
+            mouse_acceleration: mouse[2],
+            keyboard_delay: delay,
+            keyboard_speed: speed,
+            hotkeys: [sk.dwFlags & 0x4 != 0, fk.dwFlags & 0x4 != 0, tk.dwFlags & 0x4 != 0],
+        }
+    }
+}
+
+/// Geeft andere processen toestemming om een venster op de voorgrond te zetten. Een tweede start van
+/// nezty (dubbelklik terwijl hij al draait) geeft zo zijn voorgrondrecht door aan het eerste venster.
+pub fn allow_foreground_any() {
+    unsafe {
+        windows_sys::Win32::UI::WindowsAndMessaging::AllowSetForegroundWindow(windows_sys::Win32::UI::WindowsAndMessaging::ASFW_ANY);
+    }
+}
+
+/// Zet een venster echt op de voorgrond, ook als Windows dat voor een achtergrondproces tegenhoudt.
+/// Koppelt daarvoor kort de invoer aan die van het huidige voorgrondvenster. Moet op de UI-thread draaien.
+pub fn force_foreground(raw_hwnd: isize) {
+    use windows_sys::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        BringWindowToTop, GetForegroundWindow, GetWindowThreadProcessId, IsIconic, SetForegroundWindow, ShowWindow, SW_RESTORE,
+        SW_SHOW,
+    };
+    let hwnd = raw_hwnd as windows_sys::Win32::Foundation::HWND;
+    unsafe {
+        ShowWindow(hwnd, if IsIconic(hwnd) != 0 { SW_RESTORE } else { SW_SHOW });
+        let fg = GetForegroundWindow();
+        if fg == hwnd {
+            return;
+        }
+        let me = GetCurrentThreadId();
+        let other = if fg.is_null() { 0 } else { GetWindowThreadProcessId(fg, null_mut()) };
+        let attached = other != 0 && other != me && AttachThreadInput(me, other, 1) != 0;
+        BringWindowToTop(hwnd);
+        SetForegroundWindow(hwnd);
+        if attached {
+            AttachThreadInput(me, other, 0);
         }
     }
 }

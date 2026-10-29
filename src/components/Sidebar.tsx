@@ -1,17 +1,16 @@
 import {
   Crosshair,
+  FlaskConical,
   Gamepad2,
   Joystick,
   LayoutDashboard,
   Layers,
   Mouse,
+  Pickaxe,
   Power,
   ScrollText,
   Settings,
-  ShieldAlert,
-  ShieldCheck,
   SlidersHorizontal,
-  Tv,
   Wifi,
   Zap,
   type LucideIcon,
@@ -20,21 +19,39 @@ import { useT } from "@/i18n/hooks";
 import type { TKey } from "@/i18n";
 import { useApp, type PageId } from "@/store/app";
 import { cn } from "./ui";
+import { UpdateButton } from "./UpdateButton";
 
 const items: { id: PageId; key: TKey; icon: LucideIcon }[] = [
   { id: "dashboard", key: "nav.dashboard", icon: LayoutDashboard },
   { id: "games", key: "nav.games", icon: Gamepad2 },
+  { id: "fortnite", key: "nav.fortnite", icon: Pickaxe },
   { id: "tweaks", key: "nav.tweaks", icon: SlidersHorizontal },
   { id: "input", key: "nav.input", icon: Mouse },
   { id: "controller", key: "nav.controller", icon: Joystick },
-  { id: "console", key: "nav.console", icon: Tv },
   { id: "crosshair", key: "nav.crosshair", icon: Crosshair },
   { id: "background", key: "nav.background", icon: Layers },
   { id: "network", key: "nav.network", icon: Wifi },
   { id: "startup", key: "nav.startup", icon: Power },
   { id: "log", key: "nav.log", icon: ScrollText },
-  { id: "settings", key: "nav.settings", icon: Settings },
+  { id: "test", key: "nav.test", icon: FlaskConical },
 ];
+
+function NavButton({ label, icon: Icon, active, dot, onClick }: { id: PageId; label: string; icon: LucideIcon; active: boolean; dot?: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      title={label}
+      className={cn(
+        "flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors",
+        active ? "bg-accent-soft text-ink" : "text-ink-2 hover:bg-panel-2 hover:text-ink",
+      )}
+    >
+      <Icon className={cn("h-[18px] w-[18px] shrink-0", active && "text-accent")} />
+      <span className="hidden truncate min-[1120px]:inline">{label}</span>
+      {dot && <span className="ml-auto hidden h-2 w-2 rounded-full bg-ok min-[1120px]:block" />}
+    </button>
+  );
+}
 
 export function Sidebar() {
   const { t } = useT();
@@ -42,8 +59,6 @@ export function Sidebar() {
   const setPage = useApp((s) => s.setPage);
   const appInfo = useApp((s) => s.appInfo);
   const boost = useApp((s) => s.boost);
-  const relaunch = useApp((s) => s.relaunchElevated);
-  const elevated = appInfo?.isElevated ?? false;
 
   return (
     <aside className="flex h-full w-[68px] shrink-0 flex-col border-r border-line bg-panel min-[1120px]:w-[224px]">
@@ -58,27 +73,12 @@ export function Sidebar() {
       </div>
 
       <nav className="scroll-thin flex flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 py-2">
-        {items.map(({ id, key, icon: Icon }) => {
-          const active = page === id;
-          return (
-            <button
-              key={id}
-              onClick={() => setPage(id)}
-              title={t(key)}
-              className={cn(
-                "flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors",
-                active ? "bg-accent-soft text-ink" : "text-ink-2 hover:bg-panel-2 hover:text-ink",
-              )}
-            >
-              <Icon className={cn("h-[18px] w-[18px] shrink-0", active && "text-accent")} />
-              <span className="hidden truncate min-[1120px]:inline">{t(key)}</span>
-              {id === "dashboard" && boost.active && <span className="ml-auto hidden h-2 w-2 rounded-full bg-ok min-[1120px]:block" />}
-            </button>
-          );
-        })}
+        {items.map(({ id, key, icon }) => (
+          <NavButton key={id} id={id} label={t(key)} icon={icon} active={page === id} dot={id === "dashboard" && boost.active} onClick={() => setPage(id)} />
+        ))}
       </nav>
 
-      <div className="space-y-1.5 border-t border-line p-2.5">
+      <div className="space-y-0.5 border-t border-line p-2.5">
         {boost.active && (
           <button
             onClick={() => setPage("dashboard")}
@@ -89,21 +89,8 @@ export function Sidebar() {
             <span className="hidden truncate min-[1120px]:inline">{t("sidebar.boostActive")}</span>
           </button>
         )}
-        {elevated ? (
-          <div className="flex items-center gap-2 px-3 py-2 text-[13px] text-ink-3" title={t("sidebar.admin")}>
-            <ShieldCheck className="h-4 w-4 shrink-0 text-ok" />
-            <span className="hidden truncate min-[1120px]:inline">{t("sidebar.admin")}</span>
-          </div>
-        ) : (
-          <button
-            onClick={() => void relaunch()}
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] text-warn hover:bg-panel-2"
-            title={t("sidebar.limitedHint")}
-          >
-            <ShieldAlert className="h-4 w-4 shrink-0" />
-            <span className="hidden truncate min-[1120px]:inline">{t("sidebar.limited")}</span>
-          </button>
-        )}
+        <NavButton id="settings" label={t("nav.settings")} icon={Settings} active={page === "settings"} onClick={() => setPage("settings")} />
+        <UpdateButton />
       </div>
     </aside>
   );

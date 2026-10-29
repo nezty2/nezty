@@ -1,7 +1,11 @@
 //! nezty backend: Tauri-commands, opstart en achtergrondthreads.
 
+mod autostart;
 mod bigwins;
+mod checkup;
+mod bandwidth;
 mod boost;
+mod bufferbloat;
 mod controller;
 mod covers;
 mod crosshair;
@@ -9,12 +13,18 @@ mod display;
 mod error;
 mod fortnite;
 mod fps;
+mod gameconfig;
 mod games;
+mod hwaccel;
+mod ini;
+mod jsonfile;
 mod icons;
 mod journal;
+mod measure;
 mod metrics;
 mod models;
 mod netinfo;
+mod overlays;
 mod ping;
 mod powershell;
 mod processes;
@@ -23,6 +33,8 @@ mod restore;
 mod selftest;
 mod startup;
 mod state;
+mod timer;
+mod tray;
 mod tweaks;
 mod updater;
 mod watcher;
@@ -51,6 +63,12 @@ fn find_game(st: &AppState, id: &str) -> AppResult<Game> {
 }
 
 /// Taal van Windows ("nl", "en", "fr" of een andere code).
+/// Taal voor teksten in de backend (systeemvak): de gekozen taal, anders die van Windows.
+fn ui_lang(settings: &Settings) -> String {
+    let lang = settings.language.clone().unwrap_or_else(windows_ui_language);
+    if lang == "nl" || lang == "fr" { lang } else { "en".into() }
+}
+
 fn windows_ui_language() -> String {
     let id = unsafe { windows_sys::Win32::Globalization::GetUserDefaultUILanguage() } & 0x3ff;
     match id {
@@ -93,10 +111,29 @@ async fn get_app_info(app: AppHandle, state: St<'_>) -> AppResult<AppInfo> {
 }
 
 #[tauri::command]
-async fn relaunch_elevated(app: AppHandle) -> AppResult<()> {
-    blocking(winapi::start_elevated_copy).await?;
-    app.exit(0);
-    Ok(())
+async fn run_checkup(app: AppHandle, state: St<'_>) -> AppResult<Vec<checkup::Check>> {
+    let st = state.inner().clone();
+    blocking(move || Ok(checkup::run(&app, &st))).await
+}
+
+#[tauri::command]
+async fn run_tweak_test(app: AppHandle, state: St<'_>) -> AppResult<Vec<checkup::RoundtripStep>> {
+    let st = state.inner().clone();
+    blocking(move || {
+        restore_point_first(&app, &st);
+        checkup::tweak_roundtrip(&st)
+    })
+    .await
+}
+
+#[tauri::command]
+async fn get_autostart() -> bool {
+    blocking(|| Ok(autostart::is_enabled())).await.unwrap_or(false)
+}
+
+#[tauri::command]
+async fn set_autostart(enabled: bool) -> AppResult<()> {
+    blocking(move || autostart::set(enabled)).await
 }
 
 #[tauri::command]
@@ -109,6 +146,9 @@ fn save_settings(app: AppHandle, state: St<'_>, settings: Settings) -> AppResult
     let old = state.settings_clone();
     *lock(&state.settings) = settings.clone();
     state.save_settings();
+    if old.language != settings.language {
+        tray::set_language(&app, &ui_lang(&settings));
+    }
     if old.crosshair != settings.crosshair {
         crosshair::push_config(&app, &state);
     }
@@ -550,6 +590,96 @@ async fn save_fortnite_settings(state: St<'_>, settings: FortniteSettings) -> Ap
 }
 
 #[tauri::command]
+async fn measure_session(app: AppHandle, state: St<'_>, game_id: String, seconds: u32, ping_host: Option<String>) -> AppResult<Measurement> {
+    let st = state.inner().clone();
+    blocking(move || {
+        let game = find_game(&st, &game_id)?;
+        measure::run(&app, &st, &game, seconds, ping_host)
+    })
+    .await
+}
+
+#[tauri::command]
+async fn measure_bandwidth(state: St<'_>, seconds: Option<f32>) -> AppResult<BandwidthReport> {
+    let st = state.inner().clone();
+    blocking(move || Ok(bandwidth::measure(&st, seconds.unwrap_or(3.0)))).await
+}
+
+#[tauri::command]
+async fn run_bufferbloat(app: AppHandle) -> AppResult<BufferbloatResult> {
+    blocking(move || bufferbloat::run(&app)).await
+}
+
+#[tauri::command]
+async fn verify_input_live() -> AppResult<Vec<LiveCheck>> {
+    blocking(|| Ok(tweaks::input::verify_live())).await
+}
+
+#[tauri::command]
+async fn sync_input_live() -> AppResult<Vec<LiveCheck>> {
+    blocking(|| Ok(tweaks::input::sync_live())).await
+}
+
+#[tauri::command]
+async fn list_game_config(game_id: String) -> AppResult<Vec<GameConfigCheck>> {
+    blocking(move || Ok(gameconfig::list(&game_id))).await
+}
+
+#[tauri::command]
+async fn apply_game_config(app: AppHandle, state: St<'_>, game_id: String) -> AppResult<Vec<GameConfigCheck>> {
+    let st = state.inner().clone();
+    blocking(move || {
+        restore_point_first(&app, &st);
+        gameconfig::apply(&st, &game_id)
+    })
+    .await
+}
+
+#[tauri::command]
+async fn get_fortnite_overview(state: St<'_>) -> AppResult<FortniteOverview> {
+    let st = state.inner().clone();
+    blocking(move || fortnite::overview(&st)).await
+}
+
+#[tauri::command]
+async fn apply_fortnite_recommended(app: AppHandle, state: St<'_>, ids: Vec<String>) -> AppResult<FortniteOverview> {
+    let st = state.inner().clone();
+    blocking(move || {
+        restore_point_first(&app, &st);
+        fortnite::apply_recommended(&st, &ids)
+    })
+    .await
+}
+
+#[tauri::command]
+async fn list_overlays(state: St<'_>) -> AppResult<Vec<OverlayInfo>> {
+    let st = state.inner().clone();
+    blocking(move || Ok(overlays::list(&st))).await
+}
+
+#[tauri::command]
+async fn close_overlay(state: St<'_>, id: String) -> AppResult<Vec<OverlayInfo>> {
+    let st = state.inner().clone();
+    blocking(move || overlays::close(&st, &id)).await
+}
+
+#[tauri::command]
+async fn list_hw_accel(state: St<'_>) -> AppResult<Vec<HwAccelInfo>> {
+    let st = state.inner().clone();
+    blocking(move || Ok(hwaccel::list(&st))).await
+}
+
+#[tauri::command]
+async fn set_hw_accel(app: AppHandle, state: St<'_>, id: String, enabled: bool) -> AppResult<Vec<HwAccelInfo>> {
+    let st = state.inner().clone();
+    blocking(move || {
+        restore_point_first(&app, &st);
+        hwaccel::set(&st, &id, enabled)
+    })
+    .await
+}
+
+#[tauri::command]
 async fn restore_fortnite_backup(state: St<'_>, backup_path: String) -> AppResult<FortniteSettings> {
     let st = state.inner().clone();
     blocking(move || fortnite::restore_backup(&st, &backup_path)).await
@@ -608,29 +738,34 @@ fn get_crosshair_config(state: St<'_>) -> CrosshairConfig {
 pub fn run() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let args: Vec<String> = std::env::args().collect();
+    if let Some(i) = args.iter().position(|a| a == "--selftest-network") {
+        if let Some(out) = args.get(i + 1) {
+            selftest::run_network(out);
+        }
+        return;
+    }
+    if let Some(i) = args.iter().position(|a| a == "--selftest-roundtrip") {
+        if let Some(out) = args.get(i + 1) {
+            selftest::run_roundtrip(out);
+        }
+        return;
+    }
     if let Some(i) = args.iter().position(|a| a == "--selftest" || a == "--selftest-apply") {
         if let Some(out) = args.get(i + 1) {
             selftest::run(out, args[i] == "--selftest-apply");
         }
         return;
     }
-    let elevated_relaunch = args.iter().any(|a| a == "--elevated");
-    let start_minimized_arg = args.iter().any(|a| a == "--minimized");
+    // --minimized komt alleen van starten met Windows (geplande taak).
+    let autostart_launch = args.iter().any(|a| a == "--minimized");
+    // Draait nezty al, dan geeft deze tweede start zijn voorgrondrecht door aan het bestaande venster.
+    winapi::allow_foreground_any();
 
     let mut builder = tauri::Builder::default();
-    if !elevated_relaunch {
-        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Some(w) = app.get_webview_window("main") {
-                let _ = w.show();
-                let _ = w.unminimize();
-                let _ = w.set_focus();
-            }
-        }));
-    }
+    builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| tray::show_main(app)));
     builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec!["--minimized"])))
         .plugin(crosshair::plugin())
         .setup(move |app| {
             // NZTY_DATA_DIR wijst een andere gegevensmap aan: om te testen zonder echte instellingen of logboek te raken.
@@ -655,15 +790,18 @@ pub fn run() {
                 });
             }
             lock(&state.restore_point).protection_enabled = restore::protection_enabled();
-
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                if start_minimized_arg || state.settings_clone().start_minimized {
-                    let _ = window.minimize();
-                }
-            }
+            std::thread::spawn(autostart::migrate_old);
 
             let settings = state.settings_clone();
+            if let Err(e) = tray::create(app.handle(), &ui_lang(&settings)) {
+                log::warn!("systeemvak: {e}");
+            }
+            // Alleen bij starten met Windows (en als dat in Instellingen aan staat) blijft het venster in het
+            // systeemvak. Elke andere start toont het venster meteen op de voorgrond.
+            if !(autostart_launch && settings.start_minimized) {
+                tray::show_main(app.handle());
+            }
+
             if let Err(e) = crosshair::register_hotkey(app.handle(), &settings.crosshair_hotkey) {
                 log::warn!("sneltoets crosshair: {e}");
             }
@@ -689,14 +827,28 @@ pub fn run() {
         .on_window_event(|window, event| {
             // Als het hoofdvenster sluit, sluit ook de crosshair-overlay en stopt de app.
             if window.label() == "main" {
-                if let tauri::WindowEvent::CloseRequested { .. } = event {
-                    window.app_handle().exit(0);
+                match event {
+                    tauri::WindowEvent::CloseRequested { .. } => window.app_handle().exit(0),
+                    // Minimaliseren naar het systeemvak (als dat in Instellingen aan staat).
+                    tauri::WindowEvent::Resized(_) => {
+                        if window.is_minimized().unwrap_or(false) {
+                            if let Some(st) = window.app_handle().try_state::<Arc<AppState>>() {
+                                if lock(&st.settings).minimize_to_tray {
+                                    let _ = window.hide();
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
                 }
             }
         })
         .invoke_handler(tauri::generate_handler![
             get_app_info,
-            relaunch_elevated,
+            get_autostart,
+            run_checkup,
+            run_tweak_test,
+            set_autostart,
             get_settings,
             save_settings,
             open_path,
@@ -744,6 +896,19 @@ pub fn run() {
             get_fortnite_settings,
             save_fortnite_settings,
             restore_fortnite_backup,
+            get_fortnite_overview,
+            verify_input_live,
+            measure_bandwidth,
+            measure_session,
+            run_bufferbloat,
+            sync_input_live,
+            list_game_config,
+            apply_game_config,
+            apply_fortnite_recommended,
+            list_overlays,
+            close_overlay,
+            list_hw_accel,
+            set_hw_accel,
             set_crosshair_enabled,
             get_crosshair_config,
             list_controllers,

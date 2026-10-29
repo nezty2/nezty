@@ -38,6 +38,9 @@ pub fn start(app: AppHandle, state: Arc<AppState>) {
                 .map(|g| g.id.clone())
                 .collect();
             *lock(&state.running_games) = now.clone();
+            // Experimentele timerresolutie: alleen vasthouden terwijl er een game draait.
+            let timer_on = crate::tweaks::status(&state, "timer_resolution", None).state == crate::models::TweakState::On;
+            crate::timer::hold(timer_on && !now.is_empty());
             let settings = state.settings_clone();
 
             for id in now.difference(&prev) {

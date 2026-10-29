@@ -138,10 +138,141 @@ pub enum RestorePointPolicy {
     Never,
 }
 
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct FortniteCheck {
+    /// vsync | fps_limit | reflex | render_mode
+    pub id: String,
+    pub current: Option<String>,
+    pub recommended: String,
+    pub ok: bool,
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct FortniteOverview {
+    pub ini_exists: bool,
+    pub running: bool,
+    pub gpu_vendor: String,
+    pub gpu_name: Option<String>,
+    pub max_hz: u32,
+    /// performance | dx12 | dx11 | default
+    pub render_mode: String,
+    /// igpu | nvidia | amd | other: welk advies voor de rendermodus past bij deze pc.
+    pub advice: String,
+    pub checks: Vec<FortniteCheck>,
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct FpsDetail {
+    pub avg_fps: f32,
+    pub low1_fps: f32,
+    pub frames: u32,
+    pub seconds: f32,
+    pub median_ms: f32,
+    /// Frames die minstens twee keer zo lang duren als normaal.
+    pub stutters: u32,
+    pub stutters_per_min: f32,
+    /// Deel van de frametijd dat de videokaart (of processor) bezig was. Bijna 1 = daar zit de grens.
+    pub gpu_busy: Option<f32>,
+    pub cpu_busy: Option<f32>,
+    /// Langste frametijd (ms) per tijdvak, voor de grafiek.
+    pub graph: Vec<f32>,
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Measurement {
+    pub game_id: String,
+    pub game_name: String,
+    pub taken_at: i64,
+    pub boost_active: bool,
+    pub ping_host: Option<String>,
+    pub fps: FpsDetail,
+    pub ping: Option<PingResult>,
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct BandwidthUser {
+    pub name: String,
+    /// onedrive | windows_update | delivery_optimization | steam | epic | battlenet | ea | ubisoft | browser | discord | spotify
+    pub label: Option<String>,
+    pub down_kbps: f32,
+    pub up_kbps: f32,
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct BandwidthReport {
+    pub seconds: f32,
+    /// Gevonden verbindingen en hoeveel daarvan gemeten konden worden.
+    pub found: u32,
+    pub connections: u32,
+    pub total_down_kbps: f32,
+    pub total_up_kbps: f32,
+    pub users: Vec<BandwidthUser>,
+    pub elevated: bool,
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct BufferbloatResult {
+    pub idle_ms: f32,
+    pub download_ms: Option<f32>,
+    pub upload_ms: Option<f32>,
+    pub download_mbps: Option<f32>,
+    pub upload_mbps: Option<f32>,
+    pub increase_ms: f32,
+    /// A+ | A | B | C | D | F
+    pub grade: String,
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GameConfigCheck {
+    pub game_id: String,
+    pub id: String,
+    pub file: String,
+    pub current: Option<String>,
+    pub recommended: String,
+    pub ok: bool,
+}
+
+/// Staat een aangezette muis- of toetsenbordtweak ook echt actief in Windows?
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct LiveCheck {
+    pub id: String,
+    /// Aangezet (zo opgeslagen in Windows).
+    pub saved: bool,
+    /// Wat Windows nu echt gebruikt.
+    pub live: bool,
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct OverlayInfo {
+    pub id: String,
+    pub active: bool,
+    /// tweak | close | manual
+    pub fix: String,
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct HwAccelInfo {
+    pub id: String,
+    pub name: String,
+    pub enabled: bool,
+    pub running: bool,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct CrosshairConfig {
-    /// cross | dot | circle | t | cross_dot
+    /// cross | cross_dot | dot | circle | circle_dot | t | x | square
     pub shape: String,
     pub color: String,
     pub size: f32,
@@ -152,6 +283,16 @@ pub struct CrosshairConfig {
     pub outline_thickness: f32,
     pub opacity: f32,
     pub dot: bool,
+    pub dot_size: f32,
+    /// Draaiing in graden (0 tot 90).
+    pub rotation: f32,
+    /// Verschuiving ten opzichte van het midden van het scherm, in pixels.
+    pub offset_x: f32,
+    pub offset_y: f32,
+    pub show_top: bool,
+    pub show_right: bool,
+    pub show_bottom: bool,
+    pub show_left: bool,
 }
 
 impl Default for CrosshairConfig {
@@ -167,6 +308,14 @@ impl Default for CrosshairConfig {
             outline_thickness: 1.0,
             opacity: 1.0,
             dot: false,
+            dot_size: 3.0,
+            rotation: 0.0,
+            offset_x: 0.0,
+            offset_y: 0.0,
+            show_top: true,
+            show_right: true,
+            show_bottom: true,
+            show_left: true,
         }
     }
 }
@@ -192,7 +341,10 @@ pub struct Settings {
     pub close_during_gaming: Vec<String>,
     pub custom_ping_targets: Vec<PingTarget>,
     pub custom_games: Vec<Game>,
+    /// Bij starten met Windows verborgen in het systeemvak starten.
     pub start_minimized: bool,
+    /// Minimaliseren verbergt het venster in het systeemvak.
+    pub minimize_to_tray: bool,
     pub first_run_done: bool,
     pub default_profile_tweaks: HashMap<String, bool>,
     pub steam_grid_db_key: String,
@@ -223,7 +375,8 @@ impl Default for Settings {
             close_during_gaming: vec![],
             custom_ping_targets: vec![],
             custom_games: vec![],
-            start_minimized: false,
+            start_minimized: true,
+            minimize_to_tray: false,
             first_run_done: false,
             default_profile_tweaks,
             steam_grid_db_key: String::new(),

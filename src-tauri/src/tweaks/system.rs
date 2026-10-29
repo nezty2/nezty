@@ -52,6 +52,40 @@ pub fn game_bar_disable(state: &AppState) -> AppResult<()> {
     regtweak::disable(state, get("game_bar_dvr_off")?, &game_bar_specs(), None, None)
 }
 
+// ---------- Meldingen ----------
+
+/// Windows-meldingen (pop-ups rechtsonder, ook van Discord en andere apps) uit. Dezelfde schakelaar als
+/// Instellingen > Systeem > Meldingen. Meldingen komen nog wel in het meldingencentrum.
+fn notifications_specs() -> Vec<RegSpec> {
+    vec![RegSpec::dword(Hive::Hkcu, "Software\\Microsoft\\Windows\\CurrentVersion\\PushNotifications", "ToastEnabled", 0, 1)]
+}
+pub fn notifications_status() -> AppResult<Status> {
+    Ok(Status::simple(regtweak::state_of(&notifications_specs())?))
+}
+pub fn notifications_apply(state: &AppState, session: Option<&str>) -> AppResult<()> {
+    regtweak::apply(state, get("notifications_off")?, &notifications_specs(), session, None, None)
+}
+pub fn notifications_disable(state: &AppState) -> AppResult<()> {
+    regtweak::disable(state, get("notifications_off")?, &notifications_specs(), None, None)
+}
+
+// ---------- Timerresolutie (experimenteel) ----------
+
+/// Laat het timerverzoek van nezty (0,5 ms, alleen tijdens het gamen) voor alle programma's gelden.
+fn timer_specs() -> Vec<RegSpec> {
+    vec![RegSpec::dword(Hive::Hklm, r"SYSTEM\CurrentControlSet\Control\Session Manager\kernel", "GlobalTimerResolutionRequests", 1, 0).off_absent()]
+}
+pub fn timer_status() -> AppResult<Status> {
+    Ok(Status::simple(regtweak::state_of(&timer_specs())?))
+}
+pub fn timer_apply(state: &AppState, session: Option<&str>) -> AppResult<()> {
+    regtweak::apply(state, get("timer_resolution")?, &timer_specs(), session, None, None)
+}
+pub fn timer_disable(state: &AppState) -> AppResult<()> {
+    crate::timer::hold(false);
+    regtweak::disable(state, get("timer_resolution")?, &timer_specs(), None, None)
+}
+
 // ---------- HAGS ----------
 
 fn hags_specs() -> Vec<RegSpec> {

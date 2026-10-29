@@ -23,8 +23,44 @@ const delay = (ms = 120) => new Promise((r) => setTimeout(r, ms));
 const now = () => Date.now();
 const msg = (key: string, params: Record<string, string> = {}): T.Msg => ({ key, params });
 
+let fortniteOverview: T.FortniteOverview = {
+  iniExists: true,
+  running: false,
+  gpuVendor: "nvidia",
+  gpuName: "NVIDIA GeForce RTX 5070 Ti",
+  maxHz: 144,
+  renderMode: "dx12",
+  advice: "nvidia",
+  checks: [
+    { id: "vsync", current: "False", recommended: "False", ok: true },
+    { id: "fps_limit", current: "240.000000", recommended: "0", ok: false },
+    { id: "reflex", current: "1", recommended: "2", ok: false },
+    { id: "render_mode", current: "dx12", recommended: "performance", ok: false },
+  ],
+};
+let mockMeasureCount = 0;
+let liveChecks: T.LiveCheck[] = [
+  { id: "mouse_precision_off", saved: true, live: true },
+  { id: "keyboard_fast_repeat", saved: true, live: false },
+  { id: "accessibility_hotkeys_off", saved: false, live: false },
+];
+let gameConfig: T.GameConfigCheck[] = [
+  { gameId: "steam:cs2", id: "vsync", file: "C:\\Program Files (x86)\\Steam\\userdata\\123\\730\\local\\cfg\\cs2_video.txt", current: "1", recommended: "0", ok: false },
+];
+let overlays: T.OverlayInfo[] = [
+  { id: "game_bar", active: true, fix: "tweak" },
+  { id: "discord", active: true, fix: "manual" },
+  { id: "nvidia", active: true, fix: "manual" },
+  { id: "medal", active: true, fix: "close" },
+];
+let hwAccel: T.HwAccelInfo[] = [
+  { id: "discord", name: "Discord", enabled: true, running: true },
+  { id: "chrome", name: "Google Chrome", enabled: true, running: false },
+];
+
 const defaultCrosshair: T.CrosshairConfig = {
   shape: "cross", color: "#00ff7f", size: 8, thickness: 2, gap: 4, outline: true, outlineColor: "#000000", outlineThickness: 1, opacity: 1, dot: false,
+  dotSize: 3, rotation: 0, offsetX: 0, offsetY: 0, showTop: true, showRight: true, showBottom: true, showLeft: true,
 };
 
 let settings: T.Settings = {
@@ -38,6 +74,7 @@ let settings: T.Settings = {
   closeDuringGaming: ["OneDrive.exe"],
   customPingTargets: [],
   customGames: [],
+  minimizeToTray: false,
   startMinimized: false,
   firstRunDone: true,
   defaultProfileTweaks: { game_mode: true, game_bar_dvr_off: true, power_plan: true, mouse_precision_off: true },
@@ -61,6 +98,11 @@ let tweaks: T.TweakInfo[] = [
   tw({ id: "game_mode", category: "system", timing: "game_restart", state: "on" }),
   tw({ id: "game_bar_dvr_off", category: "system", gain: "measurable", timing: "game_restart", state: "off" }),
   tw({ id: "power_plan", category: "system", options: ["high", "ultimate"], currentOption: "high", detail: msg("power_current", { name: "Balanced" }) }),
+  tw({ id: "wifi_power_max", category: "network", state: "unavailable", detail: msg("wifi_none") }),
+  tw({ id: "delivery_optimization_off", category: "network", requiresAdmin: true }),
+  tw({ id: "timer_resolution", category: "system", gain: "negligible", timing: "pc_restart", experimental: true, requiresAdmin: true }),
+  tw({ id: "interrupt_moderation_off", category: "network", gain: "negligible", experimental: true, requiresAdmin: true, state: "on" }),
+  tw({ id: "notifications_off", category: "system", gain: "negligible", timing: "pc_restart" }),
   tw({ id: "hags", category: "system", risk: "medium", timing: "pc_restart", requiresAdmin: true, state: "on" }),
   tw({ id: "visual_effects", category: "system", gain: "negligible" }),
   tw({ id: "mouse_precision_off", category: "input", gain: "measurable", state: "on" }),
@@ -171,7 +213,6 @@ export const mockApi: Api = {
     await delay();
     return { version: "0.3.0", isElevated: true, dataDir: "C:\\Users\\you\\AppData\\Roaming\\com.nzty.desktop", osVersion: "Windows 11 (build 26300)", windows11: true, cpuName: "AMD Ryzen 7 9800X3D 8-Core Processor", gpuName: "NVIDIA GeForce RTX 5070 Ti", totalMemoryMb: 31861, uiLanguage: "nl" };
   },
-  async relaunchElevated() { await delay(); },
   async getSettings() { await delay(); return settings; },
   async saveSettings(s) { await delay(); settings = s; return settings; },
   async openPath() { await delay(); },
@@ -323,6 +364,109 @@ export const mockApi: Api = {
   async restoreFortniteBackup() { await delay(500); return mockApi.getFortniteSettings(); },
   async setCrosshairEnabled(enabled) { await delay(); settings = { ...settings, crosshairEnabled: enabled }; return enabled; },
   async getCrosshairConfig() { return settings.crosshair; },
+  async getFortniteOverview() {
+    await delay(300);
+    return fortniteOverview;
+  },
+  async applyFortniteRecommended(ids) {
+    await delay(600);
+    fortniteOverview = { ...fortniteOverview, renderMode: ids.includes("render_mode") ? "performance" : fortniteOverview.renderMode, checks: fortniteOverview.checks.map((c) => (ids.includes(c.id) ? { ...c, ok: true, current: c.recommended } : c)) };
+    return fortniteOverview;
+  },
+  async measureSession(gameId, seconds, pingHost) {
+    await delay(2500);
+    const boosted = mockMeasureCount++ > 0;
+    const base = boosted ? 4.6 : 5.6;
+    const graph = Array.from({ length: 240 }, (_, i) => base + Math.sin(i / 7) * 0.3 + (i % (boosted ? 61 : 23) === 0 ? base * 2.6 : 0));
+    return {
+      gameId,
+      gameName: "Fortnite",
+      takenAt: Date.now(),
+      boostActive: boosted,
+      pingHost,
+      fps: { avgFps: boosted ? 214 : 178, low1Fps: boosted ? 141 : 102, frames: seconds * 200, seconds, medianMs: base, stutters: boosted ? 4 : 11, stuttersPerMin: boosted ? 4 : 11, gpuBusy: 0.72, cpuBusy: 0.81, graph },
+      ping: pingHost ? { host: pingHost, ip: "3.120.0.1", sent: 58, received: 58, minMs: 10, avgMs: 11.4, maxMs: 14, jitterMs: 0.8, lossPct: 0, samples: [] } : null,
+    };
+  },
+  async measureBandwidth() {
+    await delay(3000);
+    return {
+      seconds: 3,
+      found: 26,
+      connections: 26,
+      totalDownKbps: 41200,
+      totalUpKbps: 3100,
+      elevated: true,
+      users: [
+        { name: "svchost.exe", label: "delivery_optimization", downKbps: 180, upKbps: 2900 },
+        { name: "steamwebhelper.exe", label: "steam", downKbps: 38000, upKbps: 120 },
+        { name: "OneDrive.exe", label: "onedrive", downKbps: 2400, upKbps: 60 },
+      ],
+    };
+  },
+  async runBufferbloat() {
+    await delay(2500);
+    return { idleMs: 9, downloadMs: 61, uploadMs: 23, downloadMbps: 480, uploadMbps: 46, increaseMs: 52, grade: "B" };
+  },
+  async verifyInputLive() {
+    await delay(200);
+    return liveChecks;
+  },
+  async syncInputLive() {
+    await delay(400);
+    liveChecks = liveChecks.map((c) => ({ ...c, live: c.saved ? true : c.live }));
+    return liveChecks;
+  },
+  async listGameConfig(gameId) {
+    await delay(200);
+    return gameConfig.filter((c) => c.gameId === gameId);
+  },
+  async applyGameConfig(gameId) {
+    await delay(400);
+    gameConfig = gameConfig.map((c) => (c.gameId === gameId ? { ...c, ok: true, current: c.recommended } : c));
+    return gameConfig.filter((c) => c.gameId === gameId);
+  },
+  async listOverlays() {
+    await delay(200);
+    return overlays;
+  },
+  async closeOverlay(id) {
+    await delay(400);
+    overlays = overlays.filter((o) => o.id !== id);
+    return overlays;
+  },
+  async listHwAccel() {
+    await delay(200);
+    return hwAccel;
+  },
+  async setHwAccel(id, enabled) {
+    await delay(400);
+    hwAccel = hwAccel.map((h) => (h.id === id ? { ...h, enabled } : h));
+    return hwAccel;
+  },
+  async runCheckup(): Promise<T.TestCheck[]> {
+    await delay(700);
+    return [
+      { id: "admin", status: "ok", key: "ok", params: {} },
+      { id: "restore", status: "ok", key: "ok", params: {} },
+      { id: "journal", status: "ok", key: "ok", params: {} },
+      { id: "data", status: "ok", key: "ok", params: {} },
+      { id: "tweaks", status: "ok", key: "ok", params: { total: "31", on: "6", unknown: "0" } },
+      { id: "games", status: "ok", key: "ok", params: { count: "5" } },
+      { id: "display", status: "warn", key: "low", params: { current: "60", max: "144" } },
+      { id: "network", status: "ok", key: "ok", params: { ms: "14" } },
+      { id: "update", status: "ok", key: "latest", params: {} },
+      { id: "autostart", status: "info", key: "off", params: {} },
+      { id: "controller", status: "info", key: "none", params: {} },
+    ];
+  },
+  async runTweakTest() {
+    await delay(900);
+    return [
+      { id: "mouse_precision_off", result: "ok", restored: true, error: null },
+      { id: "keyboard_fast_repeat", result: "skipped", restored: true, error: null },
+    ];
+  },
   async listControllers() { await delay(); return [{ id: "xinput:0", kind: "xbox", model: "xbox", slot: 0, wired: false, battery: "medium", batteryPercent: null, charging: null }, { id: "hid:mock-dualsense", kind: "playstation", model: "dualsense", slot: null, wired: true, battery: null, batteryPercent: 80, charging: true }]; },
   async measureControllerRate(id, seconds) { await delay((seconds ?? 4) * 1000); const ps = id.startsWith("hid:"); return { id, hz: ps ? 250 : 125, changes: ps ? 1000 : 480, seconds: seconds ?? 4, connected: true }; },
 };

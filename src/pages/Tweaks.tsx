@@ -169,7 +169,7 @@ export function TweaksPage() {
     }
   };
 
-  const system = tweaks.filter((tw) => tw.category === "system");
+  const system = tweaks.filter((tw) => tw.category === "system" && !tw.experimental);
   const network = tweaks.filter((tw) => tw.category === "network" && !tw.experimental);
   const experimental = tweaks.filter((tw) => tw.experimental);
   const cleanup = tweaks.filter((tw) => tw.category === "cleanup");
