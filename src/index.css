@@ -1,0 +1,83 @@
+@import "tailwindcss";
+
+/* Strak en rustig: vlakke donkere kaarten, één accentkleur, duidelijk contrast. Geen glans of gloed. */
+@theme {
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", Inter, system-ui, sans-serif;
+  --font-mono: "Cascadia Mono", Consolas, monospace;
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-bg: #0f1115;
+  --color-panel: #161920;
+  --color-panel-2: #1c2029;
+  --color-line: #272c37;
+  --color-line-2: #333946;
+  --color-ink: #eef0f5;
+  --color-ink-2: #b4bac8;
+  --color-ink-3: #7f8698;
+  --color-ok: #3ccf91;
+  --color-warn: #f2b84b;
+  --color-bad: #f2667a;
+  --color-info: #6aa7ff;
+}
+
+:root {
+  --accent: #7c6cff;
+  --accent-soft: rgb(124 108 255 / 0.14);
+  color-scheme: dark;
+}
+:root[data-accent="cyan"] { --accent: #22b8d6; --accent-soft: rgb(34 184 214 / 0.14); }
+:root[data-accent="emerald"] { --accent: #2fb67c; --accent-soft: rgb(47 182 124 / 0.14); }
+:root[data-accent="rose"] { --accent: #e5577a; --accent-soft: rgb(229 87 122 / 0.14); }
+:root[data-accent="pink"] { --accent: #f472b6; --accent-soft: rgb(244 114 182 / 0.14); }
+:root[data-accent="amber"] { --accent: #d99a1e; --accent-soft: rgb(217 154 30 / 0.14); }
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  user-select: none;
+  cursor: default;
+}
+
+/* Het crosshair-venster is volledig doorzichtig. */
+html.overlay, html.overlay body, html.overlay #root { background: transparent !important; overflow: hidden; }
+
+input, textarea, .selectable { user-select: text; }
+input[type="text"], input[type="number"], input[type="password"], textarea { cursor: text; }
+button, a, [role="button"], select, label[for] { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+
+.card {
+  background: var(--color-panel);
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+}
+.card-inset {
+  background: var(--color-panel-2);
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+}
+
+/* Scrollbalken */
+.scroll-thin::-webkit-scrollbar, .scroll-thin *::-webkit-scrollbar { width: 10px; height: 10px; }
+.scroll-thin::-webkit-scrollbar-thumb, .scroll-thin *::-webkit-scrollbar-thumb { background: #2c313c; border-radius: 10px; border: 3px solid var(--color-bg); }
+.scroll-thin::-webkit-scrollbar-thumb:hover, .scroll-thin *::-webkit-scrollbar-thumb:hover { background: #3a404d; }
+.scroll-thin::-webkit-scrollbar-track { background: transparent; }
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+
+.tnum { font-variant-numeric: tabular-nums; }
+
+@keyframes live-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.live-dot { animation: live-dot 1.6s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .live-dot { animation: none; } }
+
+/* Schuifregelaars in de accentkleur */
+input[type="range"] { accent-color: var(--accent); }
+input[type="checkbox"] { accent-color: var(--accent); }

@@ -1,0 +1,9 @@
+{
+  "method": "certstore",
+  "thumbprint": "PLAK-HIER-DE-THUMBPRINT-VAN-JE-CERTIFICAAT",
+  "timestampUrl": "http://timestamp.digicert.com",
+
+  "endpoint": "https://weu.codesigning.azure.net",
+  "account": "naam-van-je-artifact-signing-account",
+  "profile": "naam-van-je-certificaatprofiel"
+}

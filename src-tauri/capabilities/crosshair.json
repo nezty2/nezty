@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "crosshair",
+  "description": "Minimale rechten voor het crosshair-overlayvenster: alleen events ontvangen en de config lezen.",
+  "windows": ["crosshair"],
+  "permissions": ["core:event:default", "core:app:default"]
+}

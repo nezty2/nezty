@@ -1,0 +1,79 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "nezty",
+  "mainBinaryName": "nezty",
+  "version": "0.3.1",
+  "identifier": "com.nzty.desktop",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "label": "main",
+        "title": "nezty",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 960,
+        "minHeight": 620,
+        "center": true,
+        "resizable": true,
+        "backgroundColor": "#0f1115",
+        "theme": "Dark",
+        "dragDropEnabled": false,
+        "visible": false
+      }
+    ],
+    "security": {
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "$APPDATA/covers/*"
+        ]
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.ico"
+    ],
+    "resources": {
+      "resources/PresentMon.exe": "resources/PresentMon.exe",
+      "resources/PresentMon-LICENSE.txt": "resources/PresentMon-LICENSE.txt"
+    },
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": [
+          "English",
+          "Dutch",
+          "French"
+        ],
+        "displayLanguageSelector": true,
+        "installerHooks": "./installer-hooks.nsh"
+      }
+    },
+    "licenseFile": "installer-info.txt"
+  },
+  "plugins": {
+    "nezty-update": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQ3NUVBNTk0ODczNDY1MjgKUldRb1pUU0hsS1ZlMTg2eEY3WUtiM3ZmK1g1cEF6OXIxcDd0M3pPaldmNVhxMjAvU1d1RDIreGoK",
+      "endpoints": []
+    }
+  }
+}

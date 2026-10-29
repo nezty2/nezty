@@ -1,0 +1,56 @@
+# Controleerbare build van nezty op GitHub Actions (vereist voor gratis ondertekening via SignPath Foundation).
+# Bouwt bij een versietag (v1.2.3) of met de hand, en bewaart de installer en de losse exe als artefact.
+# Het ondertekenen via SignPath wordt toegevoegd zodra het project is goedgekeurd (zie ONDERTEKENEN.md).
+name: build
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Afhankelijkheden
+        run: npm ci
+
+      - name: Updatebron instellen
+        shell: pwsh
+        run: |
+          $cfg = @{ plugins = @{ "nezty-update" = @{ endpoints = @("https://github.com/${{ github.repository }}/releases/latest/download/latest.json") } } }
+          $cfg | ConvertTo-Json -Depth 6 | Set-Content -Path "$env:RUNNER_TEMP\nezty-ci.conf.json" -Encoding utf8
+
+      - name: Bouwen
+        shell: pwsh
+        run: npm run tauri build -- --config "$env:RUNNER_TEMP\nezty-ci.conf.json"
+
+      - name: Bestanden verzamelen
+        shell: pwsh
+        run: |
+          $version = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          New-Item -ItemType Directory out | Out-Null
+          Copy-Item "src-tauri/target/release/bundle/nsis/nezty_${version}_x64-setup.exe" out/
+          Copy-Item "src-tauri/target/release/nezty.exe" out/
+          Get-ChildItem out | ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName).Hash, $_.Name }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nezty-unsigned
+          path: out/

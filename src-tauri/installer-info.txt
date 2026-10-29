@@ -1,0 +1,38 @@
+nezty - honest, reversible game tweaks for Windows
+https://github.com/nezty2/nezty
+
+PRIVACY
+nezty does not collect, store or send any personal data. No accounts, no analytics, no tracking.
+nezty only connects to:
+- GitHub Releases of nezty2/nezty, to check for updates (can be turned off in Settings > Updates)
+- Steam, Epic and optionally SteamGridDB, to fetch game images (can be turned off in Settings > Covers)
+- ping test servers, only when you use the Network page or the dashboard ping
+
+CHANGES TO WINDOWS
+Every tweak is explained before you apply it, is logged with its old value and can be undone with "Undo all".
+Before the first change nezty creates a Windows restore point. Uninstall nezty through Windows Settings > Apps.
+
+PRIVACY (NEDERLANDS)
+nezty verzamelt, bewaart en verstuurt geen persoonlijke gegevens. Geen accounts, geen analyse, geen tracking.
+nezty maakt alleen verbinding met GitHub (updates, uit te zetten in Instellingen), Steam, Epic en eventueel
+SteamGridDB (game-afbeeldingen, uit te zetten in Instellingen) en testservers voor ping (alleen als je die test gebruikt).
+
+------------------------------------------------------------------------------
+
+MIT License
+
+Copyright (c) 2026 nezty2
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and
+to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+IN THE SOFTWARE.
