@@ -14,6 +14,7 @@ import { BackgroundAppsPage } from "@/pages/BackgroundApps";
 import { CrosshairPage } from "@/pages/Crosshair";
 import { DashboardPage } from "@/pages/Dashboard";
 import { InputPage } from "@/pages/Input";
+import { LaptopPage } from "@/pages/Laptop";
 import { ControllerPage } from "@/pages/Controller";
 import { LogPage } from "@/pages/Log";
 import { NetworkPage } from "@/pages/Network";
@@ -25,6 +26,7 @@ import { useApp } from "@/store/app";
 const pages = {
   dashboard: DashboardPage,
   tweaks: TweaksPage,
+  laptop: LaptopPage,
   input: InputPage,
   controller: ControllerPage,
   crosshair: CrosshairPage,
