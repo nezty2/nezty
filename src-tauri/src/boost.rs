@@ -21,11 +21,21 @@ pub fn snapshot(state: &AppState) -> BoostSnapshot {
     std::thread::sleep(Duration::from_millis(300));
     sys.refresh_cpu_usage();
     sys.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::nothing());
+    let free_ram_mb = sys.available_memory() / 1_048_576;
+    let process_count = sys.processes().len() as u32;
+    let cpu_pct = (sys.global_cpu_usage() * 10.0).round() / 10.0;
+    drop(sys);
+    // Temperatuur en terugschakeling door hitte over de laatste halve minuut (eerlijker op een laptop).
+    let (last, throttling) = state.recent_heat(30);
     BoostSnapshot {
         ts: now_ms(),
-        free_ram_mb: sys.available_memory() / 1_048_576,
-        process_count: sys.processes().len() as u32,
-        cpu_pct: (sys.global_cpu_usage() * 10.0).round() / 10.0,
+        free_ram_mb,
+        process_count,
+        cpu_pct,
+        cpu_temp_c: last.as_ref().and_then(|s| s.cpu_temp_c),
+        gpu_temp_c: last.as_ref().and_then(|s| s.gpu_temp_c),
+        throttling,
+        on_ac: crate::metrics::battery().1,
     }
 }
 
@@ -66,6 +76,11 @@ pub fn run_boost(app: &AppHandle, state: &Arc<AppState>, game_id: Option<&str>, 
         return Err(AppError::NotFound("game".into()));
     }
     let settings = state.settings_clone();
+    let laptop = crate::device::is_laptop(state);
+    // Laptop op batterij: boost alleen als de gebruiker dat toestaat.
+    if laptop && settings.boost_requires_charger && crate::metrics::battery().1 == Some(false) {
+        return Err(AppError::coded("boost_needs_charger"));
+    }
     let profile = game.as_ref().map(|g| state.profile_for(&g.id));
     let game_running = game.as_ref().map(|g| !per_game::running_pids(state, g).is_empty()).unwrap_or(false);
     let session_id = uuid::Uuid::new_v4().to_string();
@@ -118,7 +133,13 @@ pub fn run_boost(app: &AppHandle, state: &Arc<AppState>, game_id: Option<&str>, 
     //    boost (ze worden aan het eind weer teruggezet en zouden dus nooit effect hebben).
     let tweak_map = profile.as_ref().map(|p| p.global_tweaks.clone()).unwrap_or_else(|| settings.default_profile_tweaks.clone());
     for d in tweaks::CATALOG.iter().filter(|d| d.scope == TweakScope::Global && d.kind == TweakKind::Toggle) {
-        if !tweak_map.get(d.id).copied().unwrap_or(false) {
+        let laptop_default = laptop && tweaks::LAPTOP_BOOST_DEFAULTS.contains(&d.id);
+        if !tweak_map.get(d.id).copied().unwrap_or(laptop_default) {
+            continue;
+        }
+        // Past niet bij dit apparaat (pc of laptop): overslaan, niet toepassen.
+        if tweaks::platform_locked(state, d) {
+            report.skipped.push(SkippedTweak { id: d.id.into(), reason: Msg::new("platform_locked") });
             continue;
         }
         if d.timing == Timing::PcRestart {
@@ -130,7 +151,11 @@ pub fn run_boost(app: &AppHandle, state: &Arc<AppState>, game_id: Option<&str>, 
             report.already_ok.push(d.id.into());
             continue;
         }
-        let option = st.current_option.clone();
+        let mut option = st.current_option.clone();
+        // Op een laptop nooit het Ultimate-plan: dan het gewone plan voor hoge prestaties.
+        if laptop && d.id == "power_plan" && option.as_deref() == Some("ultimate") {
+            option = Some("high".into());
+        }
         match tweaks::apply(state, d.id, option.as_deref(), Some(&session_id), None).and_then(|_| tweaks::verify(state, d.id, true, None)) {
             Ok(()) => report.applied.push(AppliedTweak { id: d.id.into(), timing: d.timing, option, count: None }),
             Err(e) => report.skipped.push(SkippedTweak { id: d.id.into(), reason: reason_of(&e) }),

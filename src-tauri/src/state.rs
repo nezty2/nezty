@@ -118,6 +118,15 @@ impl AppState {
         self.save_profiles();
     }
 
+    /// De laatste meting en of er in de laatste `secs` seconden terugschakeling door hitte was.
+    pub fn recent_heat(&self, secs: usize) -> (Option<MetricsSample>, Option<bool>) {
+        let m = lock(&self.metrics);
+        let last = m.history.back().cloned();
+        let recent: Vec<Option<bool>> = m.history.iter().rev().take(secs).map(|s| s.thermal_throttle).collect();
+        let throttle = if recent.iter().all(|t| t.is_none()) { None } else { Some(recent.iter().any(|t| *t == Some(true))) };
+        (last, throttle)
+    }
+
     pub fn push_sample(&self, sample: MetricsSample) {
         let mut m = lock(&self.metrics);
         if m.history.len() >= HISTORY_LEN {

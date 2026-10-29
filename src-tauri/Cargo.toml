@@ -1,6 +1,6 @@
 [package]
 name = "nezty"
-version = "0.3.10"
+version = "0.3.11"
 description = "nezty: eerlijke, omkeerbare game-tweaks voor Windows 10 en 11"
 authors = ["nezty2"]
 edition = "2021"
@@ -41,6 +41,8 @@ windows-sys = { version = "0.61", features = [
   "Win32_Security",
   "Win32_System_Threading",
   "Win32_System_Power",
+  "Win32_System_LibraryLoader",
+  "Win32_System_RemoteDesktop",
   "Win32_Globalization",
   "Win32_Graphics_Gdi",
   "Win32_Storage_FileSystem",

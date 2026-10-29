@@ -11,7 +11,24 @@ export interface Msg {
 
 export type Risk = "low" | "medium";
 export type Gain = "big" | "measurable" | "small" | "negligible";
-export type TweakCategory = "system" | "network" | "input" | "cleanup" | "game";
+export type TweakCategory = "system" | "network" | "input" | "cleanup" | "game" | "laptop";
+export type Platform = "all" | "pc_only" | "laptop_only";
+export type DeviceKind = "pc" | "laptop";
+export type DeviceSetting = "auto" | "pc" | "laptop";
+
+export interface DeviceInfo {
+  detected: DeviceKind;
+  effective: DeviceKind;
+  setting: DeviceSetting;
+  chassis: number[];
+  hasBattery: boolean;
+  manufacturer: string;
+  model: string;
+  vendorApp: string | null;
+  hybrid: boolean;
+  displayGpu: string | null;
+  fastGpu: string | null;
+}
 export type TweakScope = "global" | "per_game";
 export type TweakKind = "toggle" | "action";
 export type Timing = "instant" | "game_restart" | "pc_restart";
@@ -29,6 +46,8 @@ export interface TweakInfo {
   requiresAdmin: boolean;
   state: TweakState;
   appliedByApp: boolean;
+  platform: Platform;
+  platformLocked: boolean;
   active: "now" | "after_pc_restart" | "after_game_restart" | null;
   options: string[] | null;
   currentOption: string | null;
@@ -200,6 +219,8 @@ export interface Settings {
   crosshairHotkey: string;
   autoUpdateCheck: boolean;
   onlineCovers: boolean;
+  deviceType: DeviceSetting;
+  boostRequiresCharger: boolean;
 }
 
 export interface MetricsSample {
@@ -216,6 +237,9 @@ export interface MetricsSample {
   processCount: number;
   pingMs: number | null;
   pingHost: string;
+  batteryPct: number | null;
+  onAc: boolean | null;
+  thermalThrottle: boolean | null;
 }
 
 export interface MetricsSnapshot {
@@ -258,6 +282,10 @@ export interface BoostSnapshot {
   freeRamMb: number;
   processCount: number;
   cpuPct: number;
+  cpuTempC?: number | null;
+  gpuTempC?: number | null;
+  throttling?: boolean | null;
+  onAc?: boolean | null;
 }
 
 export interface AppliedTweak {
@@ -377,6 +405,7 @@ export type ProcessCategory =
   | "system"
   | "security"
   | "anticheat"
+  | "vendor"
   | "other";
 
 export interface ProcessInfo {
@@ -485,7 +514,7 @@ export type CheckStatus = "ok" | "issue" | "info" | "unavailable";
 export type CheckAction = "none" | "fix" | "open_page" | "link";
 
 export interface BigWin {
-  id: "refresh_rate" | "gpu_choice" | "power_source" | "ram_speed" | "gpu_driver" | "heavy_apps";
+  id: "refresh_rate" | "gpu_choice" | "power_source" | "ram_speed" | "gpu_driver" | "heavy_apps" | "laptop_heat" | "laptop_gpu_mode" | "laptop_wifi" | "laptop_display" | "vendor_apps";
   status: CheckStatus;
   gain: Gain;
   variant: string;

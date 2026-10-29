@@ -22,6 +22,8 @@ pub enum PostAction {
     AccessibilitySpi,
     /// Sneltoetsen voor taal- en indelingswissel opnieuw inlezen.
     LangToggleSpi,
+    /// Windows-energiemodus (overlay) opnieuw toepassen vanuit het register.
+    PowerOverlay,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -336,6 +338,7 @@ pub fn execute_revert(payload: &RevertPayload) -> AppResult<()> {
                 Some(PostAction::KeyboardSpi) => winapi::apply_keyboard_from_registry(),
                 Some(PostAction::AccessibilitySpi) => winapi::apply_accessibility_from_registry(),
                 Some(PostAction::LangToggleSpi) => winapi::apply_lang_toggle_from_registry(),
+                Some(PostAction::PowerOverlay) => crate::tweaks::laptop::apply_overlay_from_registry(),
                 None => {}
             }
             Ok(())

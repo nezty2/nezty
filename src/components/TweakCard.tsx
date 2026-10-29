@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, ChevronDown, FlaskConical, Lock, Power, RotateCcw, Sparkles, Zap } from "lucide-react";
+import { Check, ChevronDown, FlaskConical, Laptop, Lock, Monitor, Power, RotateCcw, Sparkles, Zap } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { useT } from "@/i18n/hooks";
 import type { Gain, Timing, TweakInfo } from "@/lib/types";
@@ -53,22 +53,32 @@ export function TweakCard({
 }) {
   const { t, td, tl } = useT();
   const [open, setOpen] = useState(false);
+  const [why, setWhy] = useState(false);
   const isOn = tweak.state === "on";
+  // Past niet bij dit apparaat: grijs en niet te bedienen. Heeft nezty hem eerder zelf aangezet, dan mag hij wel uit.
+  const platformBlocked = tweak.platformLocked && !(isOn && tweak.appliedByApp);
   const unavailable = tweak.state === "unavailable";
   const locked = tweak.requiresAdmin && !elevated;
   const base = `tweak.${tweak.id}`;
 
   return (
-    <div className={cn("card flex flex-col p-5", unavailable && "opacity-70")}>
+    <div className={cn("card flex flex-col p-5", (unavailable || platformBlocked) && "opacity-70", platformBlocked && "grayscale")}>
       {/* Kop: naam links, schakelaar rechts op een vaste plek */}
       <div className="grid grid-cols-[1fr_auto] items-center gap-4">
         <h3 className="text-[15px] font-semibold leading-snug">{td(`${base}.name`, undefined, tweak.id)}</h3>
         {action ?? (
-          <Toggle checked={isOn} onChange={(v) => onToggle(v, tweak.currentOption)} loading={busy} disabled={unavailable || locked} label={td(`${base}.name`)} />
+          <Toggle checked={isOn} onChange={(v) => onToggle(v, tweak.currentOption)} loading={busy} disabled={unavailable || locked || platformBlocked} label={td(`${base}.name`)} />
         )}
       </div>
 
       <div className="mt-2.5 flex flex-wrap gap-1.5">
+        {tweak.platform !== "all" && (
+          <button type="button" onClick={() => setWhy((v) => !v)} title={t("platform.whyHint")} className="rounded-md">
+            <Badge variant={tweak.platformLocked ? "neutral" : "info"} icon={tweak.platformLocked ? Lock : tweak.platform === "laptop_only" ? Laptop : Monitor}>
+              {t(`platform.${tweak.platform}` as "platform.pc_only")}
+            </Badge>
+          </button>
+        )}
         {tweak.kind === "toggle" && <TimingBadge timing={tweak.timing} />}
         <GainBadge gain={tweak.gain} />
         <StateBadge tweak={tweak} />
@@ -76,6 +86,13 @@ export function TweakCard({
         {tweak.experimental && <Badge variant="warn" icon={FlaskConical}>{t("tweakCard.experimental")}</Badge>}
         {locked && <Badge variant="warn" icon={Lock} title={t("tweakCard.adminHint")}>{t("tweakCard.adminNeeded")}</Badge>}
       </div>
+
+      {why && tweak.platform !== "all" && (
+        <p className="mt-2.5 flex items-start gap-2 text-[12px] leading-relaxed text-ink-2">
+          <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-3" />
+          {td(`${base}.platformWhy`, undefined, t(`platform.why.${tweak.platform}` as "platform.why.pc_only"))}
+        </p>
+      )}
 
       <dl className="mt-3.5 space-y-2 text-[13px] leading-relaxed">
         <div>

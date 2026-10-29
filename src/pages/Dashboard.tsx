@@ -1,4 +1,4 @@
-import { Activity, AlertTriangle, ChevronRight, Cpu, Gamepad2, History, MemoryStick, Monitor, Pickaxe, Play, ShieldCheck, Sparkles, Thermometer, Undo2, Zap, type LucideIcon } from "lucide-react";
+import { Activity, AlertTriangle, BatteryCharging, BatteryWarning, ChevronRight, Cpu, Flame, Gamepad2, History, Laptop, MemoryStick, Monitor, Pickaxe, Play, ShieldCheck, Sparkles, Thermometer, Undo2, Zap, type LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { GameCover } from "@/components/GameCover";
 import { Sparkline } from "@/components/Sparkline";
@@ -307,11 +307,67 @@ function GamesStrip() {
   );
 }
 
+const shortGpu = (name: string | null | undefined) => (name ?? "").replace(/\((R|TM)\)/gi, "").replace(/\s+/g, " ").trim();
+
+/** Alleen op een laptop: lader, batterij, hitte en welke videokaart het scherm aanstuurt. */
+function LaptopRow() {
+  const { t, lang } = useT();
+  const metrics = useApp((s) => s.metrics);
+  const device = useApp((s) => s.device);
+  const latest = metrics.latest;
+  const h = metrics.history;
+  const temps = [latest?.cpuTempC != null ? `CPU ${formatTemp(lang, latest.cpuTempC)}` : null, latest?.gpuTempC != null ? `GPU ${formatTemp(lang, latest.gpuTempC)}` : null].filter(Boolean).join(" · ");
+  const throttle = latest?.thermalThrottle ?? null;
+  const fast = shortGpu(device?.fastGpu);
+  const display = shortGpu(device?.displayGpu) || "-";
+  const fastSub = device?.hybrid && fast ? (latest?.gpuPct != null && latest.gpuPct >= 5 ? t("dashboard.fastBusy", { gpu: fast, pct: formatPct(lang, latest.gpuPct) }) : t("dashboard.fastIdle", { gpu: fast })) : t("dashboard.displayVia");
+  return (
+    <div className="space-y-3">
+      {latest?.onAc === false && (
+        <div className="flex items-center gap-3 rounded-lg border border-warn/40 bg-warn/10 px-4 py-3 text-[13px]">
+          <BatteryWarning className="h-5 w-5 shrink-0 text-warn" />
+          <div>
+            <div className="font-semibold text-ink">{t("dashboard.chargerBanner")}</div>
+            <div className="text-ink-2">{t("dashboard.chargerBannerSub")}</div>
+          </div>
+        </div>
+      )}
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <StatTile
+          icon={BatteryCharging}
+          label={t("dashboard.battery")}
+          value={latest?.batteryPct != null ? `${latest.batteryPct}%` : "-"}
+          sub={latest?.onAc == null ? "" : latest.onAc ? t("dashboard.charging") : t("dashboard.onBattery")}
+          series={h.map((s) => s.batteryPct)}
+          min={0}
+          max={100}
+          format={(v) => `${Math.round(v)}%`}
+          tone={latest?.onAc === false ? "warn" : "normal"}
+        />
+        <StatTile
+          icon={Flame}
+          label={t("dashboard.heat")}
+          value={temps || "-"}
+          sub={throttle == null ? t("dashboard.heatUnknown") : throttle ? t("dashboard.heatThrottle") : t("dashboard.heatOk")}
+          series={h.map((s) => s.cpuTempC ?? s.gpuTempC)}
+          min={20}
+          max={100}
+          format={(v) => formatTemp(lang, v)}
+          tone={throttle ? "bad" : "normal"}
+        />
+        <StatTile icon={Monitor} label={t("dashboard.gpuActive")} value={display} sub={fastSub} series={h.map((s) => s.gpuPct)} min={0} max={100} format={(v) => formatPct(lang, v)} />
+      </div>
+    </div>
+  );
+}
+
 export function DashboardPage() {
   const { t, lang } = useT();
   const metrics = useApp((s) => s.metrics);
   const appInfo = useApp((s) => s.appInfo);
   const settings = useApp((s) => s.settings);
+  const device = useApp((s) => s.device);
+  const isLaptop = device?.effective === "laptop";
   const latest = metrics.latest;
   const h = metrics.history;
   const series = useMemo(
@@ -321,6 +377,7 @@ export function DashboardPage() {
       ram: h.map((s) => s.ramUsedMb),
       temp: h.map((s) => s.gpuTempC ?? s.cpuTempC),
       ping: h.map((s) => s.pingMs),
+      battery: h.map((s) => s.batteryPct),
     }),
     [h],
   );
@@ -337,6 +394,12 @@ export function DashboardPage() {
           <span className="inline-flex items-center gap-2">
             <span className="live-dot h-2 w-2 rounded-full bg-ok" />
             {t("dashboard.live")} · {appInfo?.cpuName} · {appInfo?.gpuName}
+            {device && (
+              <span className="ml-1 inline-flex items-center gap-1.5 rounded-md border border-line bg-panel-2 px-2 py-0.5 text-[12px] font-medium text-ink">
+                {isLaptop ? <Laptop className="h-3.5 w-3.5 text-accent" /> : <Monitor className="h-3.5 w-3.5 text-accent" />}
+                {t("device.label", { kind: t(`device.${device.effective}` as "device.pc") })}
+              </span>
+            )}
           </span>
         }
       />
@@ -376,6 +439,8 @@ export function DashboardPage() {
           tone={tone(latest?.pingMs, 60, 120)}
         />
       </div>
+
+      {isLaptop && <LaptopRow />}
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,1fr)]">
         <BoostCard />

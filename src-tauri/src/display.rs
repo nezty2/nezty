@@ -24,6 +24,40 @@ pub struct DisplayInfo {
     pub height: u32,
     pub current_hz: u32,
     pub max_hz: u32,
+    /// Videokaart die dit scherm aanstuurt (bv. "Intel(R) UHD Graphics" of "NVIDIA GeForce RTX 4060 Laptop GPU").
+    pub adapter: String,
+    /// Het ingebouwde scherm van een laptop (eDP, LVDS of intern).
+    pub internal: bool,
+}
+
+/// Modelcodes (bv. BOE0A3F) van ingebouwde schermen, volgens WmiMonitorConnectionParams.
+fn internal_model_codes() -> Vec<String> {
+    std::thread::spawn(|| {
+        let Ok(conn) = wmi::WMIConnection::with_namespace_path("root\\WMI") else {
+            return vec![];
+        };
+        let rows: Vec<HashMap<String, wmi::Variant>> =
+            conn.raw_query("SELECT InstanceName, VideoOutputTechnology FROM WmiMonitorConnectionParams").unwrap_or_default();
+        rows.iter()
+            .filter_map(|r| {
+                let tech = match r.get("VideoOutputTechnology")? {
+                    wmi::Variant::UI4(v) => *v as i64,
+                    wmi::Variant::I4(v) => *v as i64,
+                    _ => return None,
+                };
+                // 0x80000000 = intern, 6 = LVDS, 11 = DisplayPort embedded, 13 = UDI embedded.
+                let internal = tech & 0x8000_0000 != 0 || tech == 6 || tech == 11 || tech == 13;
+                let name = match r.get("InstanceName")? {
+                    wmi::Variant::String(s) => s.clone(),
+                    _ => return None,
+                };
+                internal.then(|| name.split('\\').nth(1).unwrap_or_default().to_uppercase())
+            })
+            .filter(|s| !s.is_empty())
+            .collect()
+    })
+    .join()
+    .unwrap_or_default()
 }
 
 fn from_wide(buf: &[u16]) -> String {
@@ -85,6 +119,7 @@ fn friendly_names() -> Vec<(String, String)> {
 
 pub fn list() -> Vec<DisplayInfo> {
     let friendly = friendly_names();
+    let internal_codes = internal_model_codes();
     let mut out = vec![];
     let mut i = 0u32;
     loop {
@@ -117,10 +152,11 @@ pub fn list() -> Vec<DisplayInfo> {
         }
         // Naam van het aangesloten scherm: eerst de echte modelnaam via WMI, anders wat Windows meldt.
         let mut mon = DISPLAY_DEVICEW { cb: std::mem::size_of::<DISPLAY_DEVICEW>() as u32, ..Default::default() };
+        let mut model = String::new();
         let monitor = if unsafe { EnumDisplayDevicesW(dev_w.as_ptr(), 0, &mut mon, EDD_GET_DEVICE_INTERFACE_NAME) } != 0 {
             // DeviceID ziet eruit als \\?\DISPLAY#AOC2402#5&...#{...}; het model staat na "DISPLAY#".
             let id = from_wide(&mon.DeviceID);
-            let model = id.split('#').nth(1).unwrap_or_default().to_uppercase();
+            model = id.split('#').nth(1).unwrap_or_default().to_uppercase();
             friendly.iter().find(|(code, _)| *code == model).map(|(_, n)| n.clone()).unwrap_or_else(|| from_wide(&mon.DeviceString))
         } else {
             device.clone()
@@ -133,6 +169,8 @@ pub fn list() -> Vec<DisplayInfo> {
             height: h,
             current_hz: cur.dmDisplayFrequency,
             max_hz,
+            adapter: from_wide(&dd.DeviceString),
+            internal: !model.is_empty() && internal_codes.contains(&model),
         });
     }
     out
