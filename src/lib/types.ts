@@ -29,6 +29,7 @@ export interface TweakInfo {
   requiresAdmin: boolean;
   state: TweakState;
   appliedByApp: boolean;
+  active: "now" | "after_pc_restart" | "after_game_restart" | null;
   options: string[] | null;
   currentOption: string | null;
   detail: Msg | null;
@@ -87,6 +88,15 @@ export interface FortniteOverview {
   renderMode: "performance" | "dx12" | "dx11" | "default";
   advice: "igpu" | "nvidia" | "amd" | "other";
   checks: FortniteCheck[];
+}
+
+export interface MouseRate {
+  hz: number;
+  rawHz: number;
+  reports: number;
+  seconds: number;
+  wmInput: number;
+  wakeups: number;
 }
 
 export interface FpsDetail {

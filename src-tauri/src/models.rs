@@ -97,6 +97,8 @@ pub struct TweakInfo {
     pub requires_admin: bool,
     pub state: TweakState,
     pub applied_by_app: bool,
+    /// Werkt de tweak nu echt? "now", of nog niet: "after_pc_restart" of "after_game_restart". Leeg als hij uit staat.
+    pub active: Option<String>,
     pub options: Option<Vec<String>>,
     pub current_option: Option<String>,
     pub detail: Option<Msg>,
@@ -161,6 +163,19 @@ pub struct FortniteOverview {
     /// igpu | nvidia | amd | other: welk advies voor de rendermodus past bij deze pc.
     pub advice: String,
     pub checks: Vec<FortniteCheck>,
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct MouseRate {
+    /// Afgerond naar een gangbare stand (125 tot 8000 Hz). 0 als de muis niet bewoog.
+    pub hz: u32,
+    pub raw_hz: f32,
+    pub reports: u32,
+    pub seconds: f32,
+    /// Alle WM_INPUT-berichten (ook zonder beweging) en het aantal keren dat de lus wakker werd.
+    pub wm_input: u32,
+    pub wakeups: u32,
 }
 
 #[derive(Serialize, Clone, Debug)]

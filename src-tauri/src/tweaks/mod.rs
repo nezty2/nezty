@@ -146,9 +146,47 @@ fn effective_gain(d: &TweakDef) -> Gain {
     d.gain
 }
 
+/// Is een aangezette tweak ook echt al actief? Een tweak die een herstart nodig heeft, is pas actief als de pc
+/// (of de game) na het aanzetten opnieuw gestart is. Dat lezen we af aan de opstarttijd van Windows en van de game.
+fn active_state(state: &AppState, d: &TweakDef, game: Option<&Game>, applied_ts: Option<i64>) -> &'static str {
+    let Some(ts) = applied_ts else { return "now" };
+    let applied_secs = (ts / 1000) as u64;
+    match d.timing {
+        Timing::Instant => "now",
+        Timing::PcRestart => {
+            if sysinfo::System::boot_time() > applied_secs {
+                "now"
+            } else {
+                "after_pc_restart"
+            }
+        }
+        Timing::GameRestart => {
+            // Draait er een game (deze game, of bij een algemene tweak welke dan ook) die al liep toen de tweak aanging?
+            let games: Vec<Game> = match game {
+                Some(g) => vec![g.clone()],
+                None => {
+                    let running = lock(&state.running_games).clone();
+                    state.all_games().into_iter().filter(|g| running.contains(&g.id)).collect()
+                }
+            };
+            let pids: Vec<u32> = games.iter().flat_map(|g| per_game::running_pids(state, g)).collect();
+            let sys = lock(&state.procs);
+            let stale = pids.iter().any(|pid| sys.process(sysinfo::Pid::from_u32(*pid)).is_some_and(|p| p.start_time() < applied_secs));
+            if stale {
+                "after_game_restart"
+            } else {
+                "now"
+            }
+        }
+    }
+}
+
 pub fn info(state: &AppState, d: &TweakDef, game: Option<&Game>) -> TweakInfo {
     let st = status(state, d.id, game);
-    let applied_by_app = lock(&state.journal).has_active(d.id, game.map(|g| g.id.as_str()));
+    let game_id = game.map(|g| g.id.as_str());
+    let applied_ts = lock(&state.journal).latest_active_ts(d.id, game_id);
+    let applied_by_app = applied_ts.is_some();
+    let active = (st.state == TweakState::On).then(|| active_state(state, d, game, applied_ts).to_string());
     TweakInfo {
         id: d.id.to_string(),
         category: d.category,
@@ -161,6 +199,7 @@ pub fn info(state: &AppState, d: &TweakDef, game: Option<&Game>) -> TweakInfo {
         requires_admin: d.requires_admin,
         state: st.state,
         applied_by_app,
+        active,
         options: if d.options.is_empty() { None } else { Some(d.options.iter().map(|s| s.to_string()).collect()) },
         current_option: st.current_option,
         detail: st.detail,

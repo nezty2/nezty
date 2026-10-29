@@ -4,6 +4,7 @@ import { LiveInputCard } from "@/components/LiveInputCard";
 import { TweakCard } from "@/components/TweakCard";
 import { Button, Card, PageHeader, SectionTitle, Skeleton, cn } from "@/components/ui";
 import { useT } from "@/i18n/hooks";
+import { api, isTauri } from "@/lib/ipc";
 import type { TweakInfo } from "@/lib/types";
 import { useApp } from "@/store/app";
 
@@ -20,6 +21,8 @@ function PollingTester() {
   const stamps = useRef<number[]>([]);
   const [hz, setHz] = useState<number | null>(null);
   const [measuring, setMeasuring] = useState(false);
+  const [reports, setReports] = useState<number | null>(null);
+  const backendBusy = useRef(false);
 
   const compute = useCallback(() => {
     const s = stamps.current;
@@ -36,8 +39,30 @@ function PollingTester() {
     setHz((prev) => Math.max(prev ?? 0, snap(1000 / median)));
   }, []);
 
+  // In de echte app: zodra je in het vak beweegt, telt de backend 3 seconden elk muisrapport (raw input).
+  const startBackend = useCallback(() => {
+    if (backendBusy.current) return;
+    backendBusy.current = true;
+    setMeasuring(true);
+    api
+      .measureMouseRate(3)
+      .then((r) => {
+        setReports(r.reports);
+        setHz(r.hz > 0 ? r.hz : null);
+      })
+      .catch(() => setHz(null))
+      .finally(() => {
+        backendBusy.current = false;
+        setMeasuring(false);
+      });
+  }, []);
+
   const onEvent = useCallback(
     (e: RPointerEvent<HTMLDivElement>) => {
+      if (isTauri) {
+        if (hz == null) startBackend();
+        return;
+      }
       const native = e.nativeEvent as PointerEvent & { getCoalescedEvents?: () => PointerEvent[] };
       const list = native.getCoalescedEvents ? native.getCoalescedEvents() : [native];
       for (const ev of list.length ? list : [native]) stamps.current.push(ev.timeStamp);
@@ -45,13 +70,14 @@ function PollingTester() {
       if (!measuring) setMeasuring(true);
       if (stamps.current.length % 50 === 0) compute();
     },
-    [compute, measuring],
+    [compute, measuring, hz, startBackend],
   );
 
   const reset = () => {
     stamps.current = [];
     setHz(null);
-    setMeasuring(false);
+    setReports(null);
+    if (!backendBusy.current) setMeasuring(false);
   };
 
   const advice = hz == null ? null : hz < 900 ? t("input.pollingLow", { hz }) : t("input.pollingGood", { hz });
@@ -86,7 +112,7 @@ function PollingTester() {
         </div>
       </div>
       {advice && <p className="mt-3 text-[13px] leading-relaxed text-ink">{advice}</p>}
-      <p className="mt-2 text-[12px] text-ink-3">{t("input.pollingNote")}</p>
+      <p className="mt-2 text-[12px] text-ink-3">{isTauri ? (reports != null ? t("input.pollingNoteRaw", { reports }) : t("input.pollingNoteRawIdle")) : t("input.pollingNote")}</p>
     </Card>
   );
 }
