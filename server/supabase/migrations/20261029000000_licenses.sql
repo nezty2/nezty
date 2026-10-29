@@ -57,6 +57,12 @@ insert into public.settings (key, value) values
   ('contact', '{"discord": "", "email": "", "website": "", "note": ""}'::jsonb)
 on conflict (key) do nothing;
 
+-- Rechten: alleen de serverfunctie (service_role) mag bij de tabellen. De publieke rollen (anon en
+-- authenticated) krijgen niets, ook als "Automatically expose new tables" aan stond.
+grant usage on schema public to service_role;
+grant select, insert, update, delete on public.users, public.licenses, public.sessions, public.demo_devices, public.settings to service_role;
+revoke all on public.users, public.licenses, public.sessions, public.demo_devices, public.settings from anon, authenticated;
+
 alter table public.users enable row level security;
 alter table public.licenses enable row level security;
 alter table public.sessions enable row level security;
