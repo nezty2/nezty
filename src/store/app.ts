@@ -4,7 +4,7 @@ import { api, asBackendError, listenEvent } from "@/lib/ipc";
 import type * as T from "@/lib/types";
 import { EVENTS } from "@/lib/types";
 
-export type PageId = "dashboard" | "tweaks" | "laptop" | "input" | "controller" | "crosshair" | "background" | "network" | "startup" | "log" | "settings";
+export type PageId = "dashboard" | "tweaks" | "license" | "laptop" | "input" | "controller" | "crosshair" | "background" | "network" | "startup" | "log" | "settings";
 
 export interface Toast {
   id: number;
@@ -24,6 +24,10 @@ interface AppStore {
   lang: T.Lang;
   appInfo: T.AppInfo | null;
   device: T.DeviceInfo | null;
+  license: T.LicenseStatus | null;
+  /** Date.now() toen de laatste licentiestand binnenkwam, om de servertijd door te tellen. */
+  licenseReceivedAt: number;
+  licenseConfig: T.LicenseConfig | null;
   settings: T.Settings | null;
   metrics: T.MetricsSnapshot;
   tweaks: T.TweakInfo[];
@@ -58,6 +62,8 @@ interface AppStore {
   refreshRestorePoint: () => Promise<void>;
   refreshBigWins: () => Promise<void>;
   refreshDevice: () => Promise<void>;
+  setLicense: (l: T.LicenseStatus) => void;
+  loadLicenseConfig: () => Promise<void>;
   setTweak: (id: string, enabled: boolean, option?: string | null, gameId?: string | null) => Promise<T.TweakInfo | null>;
   runBoost: (gameId: string | null, measureFps: boolean) => Promise<T.BoostReport | null>;
   runUnboost: () => Promise<void>;
@@ -77,6 +83,9 @@ export const useApp = create<AppStore>()((set, get) => ({
   lang: resolveLang(null),
   appInfo: null,
   device: null,
+  license: null,
+  licenseReceivedAt: Date.now(),
+  licenseConfig: null,
   settings: null,
   metrics: { latest: null, history: [] },
   tweaks: [],
@@ -119,6 +128,12 @@ export const useApp = create<AppStore>()((set, get) => ({
     void get().refreshJournal();
     void get().refreshBigWins();
 
+    try {
+      get().setLicense(await api.licenseStatus());
+    } catch {
+      /* oudere backend zonder licentie */
+    }
+    void listenEvent<T.LicenseStatus>(EVENTS.licenseState, (l) => get().setLicense(l));
     void listenEvent<T.MetricsSample>(EVENTS.metrics, (s) =>
       set((st) => ({ metrics: { latest: s, history: [...st.metrics.history.slice(-119), s] } })),
     );
@@ -220,6 +235,24 @@ export const useApp = create<AppStore>()((set, get) => ({
       set({ settings: cur, lang: resolveLang(cur.language, get().appInfo?.uiLanguage) });
       get().handleError(e);
       return false;
+    }
+  },
+
+  setLicense(l) {
+    const prev = get().license;
+    set({ license: l, licenseReceivedAt: Date.now() });
+    // Net (weer) geldig: lijsten opnieuw ophalen, want vergrendelde acties gaan weer open.
+    if (prev && prev.mode !== l.mode && l.mode === "active") {
+      void get().refreshTweaks();
+      void get().refreshBigWins();
+    }
+  },
+
+  async loadLicenseConfig() {
+    try {
+      set({ licenseConfig: await api.licenseConfig() });
+    } catch {
+      /* geen server: de login laat dat zelf zien */
     }
   },
 
