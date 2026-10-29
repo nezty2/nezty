@@ -1,4 +1,4 @@
-import { Award, Cable, Globe, Info, RefreshCw, ShieldQuestion, Wifi } from "lucide-react";
+import { Award, Cable, Eye, EyeOff, Globe, Info, RefreshCw, ShieldQuestion, Wifi } from "lucide-react";
 import { BandwidthCard } from "@/components/BandwidthCard";
 import { BufferbloatCard } from "@/components/BufferbloatCard";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -68,6 +68,9 @@ export function NetworkPage() {
   const [overview, setOverview] = useState<ConnectionOverview | null>(null);
   const [flushing, setFlushing] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  // IP-adres, router en DNS blijven verborgen tot je ze zelf toont (handig als je streamt).
+  const [showDetails, setShowDetails] = useState(false);
+  const hide = (v: string) => (showDetails ? v : "••••••");
 
   const test = useCallback(
     async (id: string, host: string) => {
@@ -231,7 +234,15 @@ export function NetworkPage() {
       </section>
 
       <section>
-        <SectionTitle>{t("network.connection")}</SectionTitle>
+        <SectionTitle
+          right={
+            <Button size="sm" variant="ghost" icon={showDetails ? EyeOff : Eye} onClick={() => setShowDetails((v) => !v)}>
+              {showDetails ? t("network.hideDetails") : t("network.showDetails")}
+            </Button>
+          }
+        >
+          {t("network.connection")}
+        </SectionTitle>
         {onWifi && (
           <div className="mb-3 flex items-start gap-2 rounded-lg border border-warn/30 bg-warn/10 px-3 py-2.5 text-[13px] text-warn">
             <Wifi className="mt-0.5 h-4 w-4 shrink-0" />
@@ -256,9 +267,9 @@ export function NetworkPage() {
                   <div className="mb-2 truncate text-[12px] text-ink-3">{a.description}</div>
                   <div className="divide-y divide-line">
                     <Kv k={t("network.speed")} v={a.linkSpeedMbps ? (a.linkSpeedMbps >= 1000 ? `${a.linkSpeedMbps / 1000} Gbit/s` : `${a.linkSpeedMbps} Mbit/s`) : "-"} />
-                    <Kv k={t("network.ip")} v={a.ipv4 ?? "-"} mono />
-                    <Kv k={t("network.gateway")} v={a.gateway ?? "-"} mono />
-                    <Kv k={t("network.dns")} v={a.dns.length ? a.dns.join(", ") : "-"} mono />
+                    <Kv k={t("network.ip")} v={hide(a.ipv4 ?? "-")} mono />
+                    <Kv k={t("network.gateway")} v={hide(a.gateway ?? "-")} mono />
+                    <Kv k={t("network.dns")} v={hide(a.dns.length ? a.dns.join(", ") : "-")} mono />
                   </div>
                 </Card>
               );

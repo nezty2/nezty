@@ -1,9 +1,10 @@
 import { AnimatePresence, MotionConfig, motion } from "framer-motion";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BoostResultModal } from "@/components/BoostResultModal";
 import { Sidebar } from "@/components/Sidebar";
 import { Toasts } from "@/components/Toasts";
-import { Spinner } from "@/components/ui";
+import { AppBackground } from "@/components/AppBackground";
+import { Splash } from "@/components/Splash";
 import { WelcomeModal } from "@/components/WelcomeModal";
 import { useT } from "@/i18n/hooks";
 import { LOCALES } from "@/i18n";
@@ -54,9 +55,28 @@ export default function App() {
     void init();
   }, [init]);
 
+  // Openingsanimatie: minstens even zichtbaar, en tot de app klaar is.
+  const [intro, setIntro] = useState(true);
   useEffect(() => {
-    document.documentElement.dataset.accent = settings?.accent ?? "violet";
-  }, [settings?.accent]);
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const id = setTimeout(() => setIntro(false), reduce ? 0 : 1100);
+    return () => clearTimeout(id);
+  }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.dataset.accent = settings?.accent ?? "violet";
+    root.dataset.theme = settings?.theme ?? "midnight";
+    root.dataset.motion = settings?.reduceMotion ? "reduce" : "full";
+    const custom = settings?.accentCustom;
+    if (custom && /^#[0-9a-f]{6}$/i.test(custom)) {
+      root.style.setProperty("--accent", custom);
+      root.style.setProperty("--accent-soft", `color-mix(in srgb, ${custom} 16%, transparent)`);
+    } else {
+      root.style.removeProperty("--accent");
+      root.style.removeProperty("--accent-soft");
+    }
+  }, [settings?.accent, settings?.accentCustom, settings?.theme, settings?.reduceMotion]);
 
   useEffect(() => {
     document.documentElement.lang = LOCALES[lang].slice(0, 2);
@@ -70,25 +90,24 @@ export default function App() {
 
   return (
     <MotionConfig reducedMotion={settings?.reduceMotion ? "always" : "user"}>
-      <div className="flex h-full">
+      <AppBackground />
+      <div className="relative flex h-full">
         <Sidebar />
         <main ref={mainRef} className="scroll-thin relative min-w-0 flex-1 overflow-y-auto">
           {!isTauri && <div className="sticky top-0 z-20 border-b border-warn/30 bg-[#2a2416] px-4 py-1 text-center text-[12px] text-warn">{t("common.browserPreview")}</div>}
-          {!ready ? (
-            <div className="flex h-full items-center justify-center">
-              <Spinner className="h-8 w-8" />
-            </div>
-          ) : (
+          {ready && (
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 key={page}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.12 }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
                 className="mx-auto w-full max-w-[1400px] px-6 py-6 md:px-8"
               >
-                <Page />
+                <div className="stagger">
+                  <Page />
+                </div>
               </motion.div>
             </AnimatePresence>
           )}
@@ -96,6 +115,7 @@ export default function App() {
         <Toasts />
         <WelcomeModal />
         <BoostResultModal report={lastReport} open={showResult} onClose={() => setShowResult(false)} />
+        <Splash show={intro || !ready} />
       </div>
     </MotionConfig>
   );

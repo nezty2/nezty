@@ -66,6 +66,11 @@ const defaultCrosshair: T.CrosshairConfig = {
 let settings: T.Settings = {
   language: null,
   accent: "violet",
+  accentCustom: null,
+  theme: "midnight",
+  backgroundImage: null,
+  backgroundDim: 55,
+  backgroundBlur: 6,
   reduceMotion: false,
   autoBoostEnabled: true,
   restorePointPolicy: "auto",
@@ -387,6 +392,14 @@ export const mockApi: Api = {
       fps: { avgFps: boosted ? 214 : 178, low1Fps: boosted ? 141 : 102, frames: seconds * 200, seconds, medianMs: base, stutters: boosted ? 4 : 11, stuttersPerMin: boosted ? 4 : 11, gpuBusy: 0.72, cpuBusy: 0.81, graph },
       ping: pingHost ? { host: pingHost, ip: "3.120.0.1", sent: 58, received: 58, minMs: 10, avgMs: 11.4, maxMs: 14, jitterMs: 0.8, lossPct: 0, samples: [] } : null,
     };
+  },
+  async setBackground(path) {
+    await delay(200);
+    settings = { ...settings, backgroundImage: path ? "background.png" : null };
+    return settings;
+  },
+  async getBackgroundFile() {
+    return null;
   },
   async measureBandwidth() {
     await delay(3000);

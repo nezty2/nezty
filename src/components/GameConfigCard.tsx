@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useT } from "@/i18n/hooks";
 import type { TKey } from "@/i18n";
 import { api } from "@/lib/ipc";
+import { prettyPath } from "@/lib/privacy";
 import type { GameConfigCheck } from "@/lib/types";
 import { useApp } from "@/store/app";
 import { Badge, Button, Card, SectionTitle } from "./ui";
@@ -34,8 +35,8 @@ export function GameConfigCard({ gameId }: { gameId: string }) {
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium">{t(`gameConfig.check.${c.id}.name` as TKey)}</div>
                 <div className="mt-0.5 text-[13px] text-ink-2">{t(`gameConfig.check.${c.id}.why` as TKey)}</div>
-                <div className="mt-0.5 truncate text-[12px] text-ink-3" title={c.file}>
-                  {c.file}
+                <div className="mt-0.5 truncate text-[12px] text-ink-3">
+                  {prettyPath(c.file)}
                 </div>
               </div>
               <div className="shrink-0 text-right text-[13px]">{c.ok ? t("fn.off") : t("fn.on")}</div>

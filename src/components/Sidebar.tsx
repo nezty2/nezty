@@ -15,6 +15,7 @@ import {
   Zap,
   type LucideIcon,
 } from "lucide-react";
+import { motion } from "framer-motion";
 import { useT } from "@/i18n/hooks";
 import type { TKey } from "@/i18n";
 import { useApp, type PageId } from "@/store/app";
@@ -42,13 +43,20 @@ function NavButton({ label, icon: Icon, active, dot, onClick }: { id: PageId; la
       onClick={onClick}
       title={label}
       className={cn(
-        "flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors",
-        active ? "bg-accent-soft text-ink" : "text-ink-2 hover:bg-panel-2 hover:text-ink",
+        "relative flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors",
+        active ? "text-ink" : "text-ink-2 hover:bg-panel-2 hover:text-ink",
       )}
     >
-      <Icon className={cn("h-[18px] w-[18px] shrink-0", active && "text-accent")} />
-      <span className="hidden truncate min-[1120px]:inline">{label}</span>
-      {dot && <span className="ml-auto hidden h-2 w-2 rounded-full bg-ok min-[1120px]:block" />}
+      {active && (
+        <motion.span
+          layoutId="nav-active"
+          className="absolute inset-0 rounded-lg bg-accent-soft ring-1 ring-accent/30"
+          transition={{ type: "spring", stiffness: 520, damping: 40 }}
+        />
+      )}
+      <Icon className={cn("relative h-[18px] w-[18px] shrink-0", active && "text-accent")} />
+      <span className="relative hidden truncate min-[1120px]:inline">{label}</span>
+      {dot && <span className="relative ml-auto hidden h-2 w-2 rounded-full bg-ok min-[1120px]:block" />}
     </button>
   );
 }
@@ -61,9 +69,9 @@ export function Sidebar() {
   const boost = useApp((s) => s.boost);
 
   return (
-    <aside className="flex h-full w-[68px] shrink-0 flex-col border-r border-line bg-panel min-[1120px]:w-[224px]">
+    <aside className="glass relative z-10 flex h-full w-[68px] shrink-0 flex-col border-r border-line min-[1120px]:w-[224px]">
       <div className="flex h-16 items-center gap-3 px-4 min-[1120px]:px-5">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent">
+        <div className="btn-primary flex h-9 w-9 shrink-0 items-center justify-center rounded-lg">
           <Zap className="h-5 w-5 text-white" fill="currentColor" />
         </div>
         <div className="hidden min-w-0 min-[1120px]:block">

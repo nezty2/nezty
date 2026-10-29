@@ -1,22 +1,14 @@
 import { ExternalLink, FolderOpen, Image, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Button, Card, Kv, PageHeader, Row, SectionTitle, SegmentedControl, TextInput, Toggle, cn } from "@/components/ui";
+import { Button, Card, Kv, PageHeader, Row, SectionTitle, SegmentedControl, TextInput, Toggle } from "@/components/ui";
 import { useT } from "@/i18n/hooks";
 import { LANGS } from "@/i18n";
 import { api, autostart, isTauri } from "@/lib/ipc";
 import { formatMb, timeAgo } from "@/lib/format";
-import type { Accent, Lang } from "@/lib/types";
+import type { Lang } from "@/lib/types";
+import { AppearanceRows } from "@/components/AppearanceRows";
 import { useApp } from "@/store/app";
 import { useUpdate } from "@/store/update";
-
-const accents: { id: Accent; color: string }[] = [
-  { id: "violet", color: "#7c6cff" },
-  { id: "cyan", color: "#22b8d6" },
-  { id: "emerald", color: "#2fb67c" },
-  { id: "rose", color: "#e5577a" },
-  { id: "pink", color: "#f472b6" },
-  { id: "amber", color: "#d99a1e" },
-];
 
 export function SettingsPage() {
   const { t, lang } = useT();
@@ -74,19 +66,7 @@ export function SettingsPage() {
                   options={[{ value: "system", label: t("settings.languageSystem") }, ...LANGS.map((l) => ({ value: l.id, label: l.label }))]}
                 />
               </Row>
-              <Row title={t("settings.accent")}>
-                <div className="flex gap-2">
-                  {accents.map((a) => (
-                    <button
-                      key={a.id}
-                      aria-label={a.id}
-                      onClick={() => void updateSettings({ accent: a.id })}
-                      className={cn("h-7 w-7 rounded-full border-2 transition-transform", settings.accent === a.id ? "scale-110 border-white" : "border-transparent hover:scale-105")}
-                      style={{ background: a.color }}
-                    />
-                  ))}
-                </div>
-              </Row>
+              <AppearanceRows settings={settings} />
               <Row title={t("settings.reduceMotion")} desc={t("settings.reduceMotionDesc")}>
                 <Toggle checked={settings.reduceMotion} onChange={(v) => void updateSettings({ reduceMotion: v })} label={t("settings.reduceMotion")} />
               </Row>

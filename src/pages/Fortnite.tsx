@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Cpu, Hammer, Info, MonitorPlay, Pickaxe, RefreshCw, Sparkles, Wifi, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Cpu, Hammer, Info, MonitorPlay, Pickaxe, RefreshCw, Sparkles, Wifi, XCircle } from "lucide-react";
 import { OverlaysCard } from "@/components/OverlaysCard";
 import { useCallback, useEffect, useState } from "react";
 import { Badge, Button, Card, EmptyState, PageHeader, SectionTitle, Skeleton, Toggle, cn } from "@/components/ui";
@@ -27,6 +27,7 @@ export function FortnitePage() {
   const [ov, setOv] = useState<FortniteOverview | null>(null);
   const [hw, setHw] = useState<HwAccelInfo[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [advanced, setAdvanced] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -256,10 +257,21 @@ export function FortnitePage() {
 
       {/* Zelf aanpassen (bestaande editor met back-ups) */}
       <section>
-        <SectionTitle sub={t("fn.advancedSub")}>{t("fn.advancedTitle")}</SectionTitle>
-        <Card>
-          <FortniteIniTab />
-        </Card>
+        <SectionTitle
+          sub={t("fn.advancedSub")}
+          right={
+            <Button size="sm" variant="ghost" icon={advanced ? ChevronUp : ChevronDown} onClick={() => setAdvanced((v) => !v)}>
+              {advanced ? t("fn.advancedHide") : t("fn.advancedShow")}
+            </Button>
+          }
+        >
+          {t("fn.advancedTitle")}
+        </SectionTitle>
+        {advanced && (
+          <Card>
+            <FortniteIniTab />
+          </Card>
+        )}
       </section>
     </div>
   );

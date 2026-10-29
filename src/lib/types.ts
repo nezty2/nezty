@@ -191,6 +191,11 @@ export interface CrosshairPreset {
 export interface Settings {
   language: Lang | null;
   accent: Accent;
+  accentCustom: string | null;
+  theme: "midnight" | "oled" | "slate" | "tinted";
+  backgroundImage: string | null;
+  backgroundDim: number;
+  backgroundBlur: number;
   reduceMotion: boolean;
   autoBoostEnabled: boolean;
   restorePointPolicy: "auto" | "never";

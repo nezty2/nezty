@@ -53,8 +53,8 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 export function Button({ variant = "secondary", size = "md", loading, icon: Icon, children, className, disabled, ...rest }: ButtonProps) {
   const sizes = { sm: "h-8 px-3 text-[13px]", md: "h-9 px-4 text-sm", lg: "h-11 px-5 text-[15px]" }[size];
   const variants = {
-    primary: "bg-accent text-white hover:brightness-110",
-    secondary: "bg-panel-2 border border-line text-ink hover:border-line-2 hover:bg-[#222733]",
+    primary: "btn-primary text-white",
+    secondary: "bg-panel-2 border border-line text-ink hover:border-line-2 hover:brightness-110",
     ghost: "text-ink-2 hover:bg-panel-2 hover:text-ink",
     danger: "bg-panel-2 border border-bad/40 text-bad hover:bg-bad/10",
   }[variant];
@@ -99,13 +99,13 @@ export function Toggle({ checked, onChange, disabled, loading, label }: { checke
       }}
       className={cn(
         "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors",
-        checked ? "border-accent bg-accent" : "border-line-2 bg-[#252a35]",
+        checked ? "border-accent bg-accent shadow-[0_0_14px_-3px_var(--accent)]" : "border-line-2 bg-panel-2",
         (disabled || loading) && "opacity-50",
       )}
     >
       <span
         className={cn(
-          "absolute left-[2px] flex h-[18px] w-[18px] items-center justify-center rounded-full bg-white transition-transform duration-150",
+          "absolute left-[2px] flex h-[18px] w-[18px] items-center justify-center rounded-full bg-white shadow-sm transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)]",
           checked ? "translate-x-[20px]" : "translate-x-0",
         )}
       >
