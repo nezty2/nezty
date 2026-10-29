@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { create } from "zustand";
 import { checkForUpdate, installUpdate, updateConfigured, type UpdateInfo } from "@/lib/updater";
 
@@ -49,3 +50,33 @@ export const useUpdate = create<UpdateStore>()((set, get) => ({
     set({ dismissed: true });
   },
 }));
+
+/**
+ * Updates zijn verplicht: zoek meteen bij het openen (ook tijdens de opstartanimatie en op het inlogscherm),
+ * daarna elke 30 minuten en als het venster na een kwartier terugkomt. Een gevonden update installeert
+ * ForceUpdate direct.
+ */
+export function useAutoUpdateCheck(ready: boolean) {
+  const check = useUpdate((s) => s.check);
+  useEffect(() => {
+    if (!ready) return;
+    let last = 0;
+    const run = () => {
+      const s = useUpdate.getState().status;
+      if (s === "available" || s === "installing" || s === "checking") return;
+      last = Date.now();
+      void check();
+    };
+    const first = setTimeout(run, 1000);
+    const every = setInterval(run, 30 * 60 * 1000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && Date.now() - last > 15 * 60 * 1000) run();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearTimeout(first);
+      clearInterval(every);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [ready, check]);
+}

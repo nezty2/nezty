@@ -1,44 +1,18 @@
 import { Download, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useT } from "@/i18n/hooks";
-import { useApp } from "@/store/app";
 import { useUpdate } from "@/store/update";
 import { Button, Spinner } from "./ui";
 
 /**
  * Blauw rond pictogram linksonder in de zijbalk zodra er een nieuwe versie is. Een klik toont wat er nieuw is
- * en laat je met één klik bijwerken. Zoekt zelf kort na het starten (als dat aan staat).
+ * en laat je met één klik bijwerken. Zoeken gebeurt in useAutoUpdateCheck (altijd, ook op het inlogscherm).
  */
 export function UpdateButton() {
   const { t } = useT();
-  const ready = useApp((s) => s.ready);
-  const { status, info, progress, check, install } = useUpdate();
+  const { status, info, progress, install } = useUpdate();
   const [open, setOpen] = useState(false);
 
-  useEffect(() => {
-    if (!ready) return;
-    let last = 0;
-    // Niet opnieuw zoeken als er al een update klaarstaat of wordt geïnstalleerd.
-    const run = () => {
-      const s = useUpdate.getState().status;
-      if (s === "available" || s === "installing" || s === "checking") return;
-      last = Date.now();
-      void check();
-    };
-    const first = setTimeout(run, 8000);
-    // Daarna elke 30 minuten zolang nezty openstaat (updates zijn verplicht).
-    const every = setInterval(run, 30 * 60 * 1000);
-    // En als het venster terugkomt na minstens een uur op de achtergrond.
-    const onVisible = () => {
-      if (document.visibilityState === "visible" && Date.now() - last > 15 * 60 * 1000) run();
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => {
-      clearTimeout(first);
-      clearInterval(every);
-      document.removeEventListener("visibilitychange", onVisible);
-    };
-  }, [ready, check]);
 
   const show = info && (status === "available" || status === "installing" || status === "installError");
   if (!show) return null;
