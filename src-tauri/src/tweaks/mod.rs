@@ -7,6 +7,7 @@ pub mod network_extra;
 pub mod network;
 pub mod per_game;
 pub mod input_extra;
+pub mod laptop;
 pub mod regtweak;
 pub mod system;
 
@@ -27,6 +28,7 @@ pub struct TweakDef {
     pub experimental: bool,
     pub requires_admin: bool,
     pub options: &'static [&'static str],
+    pub platform: Platform,
 }
 
 const fn def(
@@ -50,6 +52,7 @@ const fn def(
         experimental: false,
         requires_admin,
         options: &[],
+        platform: Platform::All,
     }
 }
 
@@ -72,7 +75,7 @@ pub const CATALOG: &[TweakDef] = &[
     def("mouse_precision_off", "Enhance pointer precision off", C::Input, S::Global, Measurable, Instant, false),
     def("keyboard_fast_repeat", "Fastest keyboard repeat", C::Input, S::Global, Small, Instant, false),
     def("accessibility_hotkeys_off", "Sticky/Filter/Toggle keys shortcuts off", C::Input, S::Global, Small, Instant, false),
-    def("usb_suspend_off", "USB selective suspend off", C::Input, S::Global, Small, Instant, false),
+    TweakDef { platform: Platform::PcOnly, ..def("usb_suspend_off", "USB selective suspend off", C::Input, S::Global, Small, Instant, false) },
     def("input_device_power_off", "Mouse and keyboard power saving off", C::Input, S::Global, Small, Instant, true),
     def("lang_hotkey_off", "Language switch shortcuts off", C::Input, S::Global, Small, Instant, false),
     // Netwerk
@@ -82,6 +85,9 @@ pub const CATALOG: &[TweakDef] = &[
     def("delivery_optimization_off", "Delivery Optimization uploads off", C::Network, S::Global, Small, Instant, true),
     TweakDef { experimental: true, ..def("interrupt_moderation_off", "Interrupt moderation off", C::Network, S::Global, Negligible, Instant, true) },
     TweakDef { experimental: true, ..def("network_throttling_off", "Network throttling off", C::Network, S::Global, Negligible, PcRestart, true) },
+    // Alleen laptop
+    TweakDef { platform: Platform::LaptopOnly, ..def("power_mode_best", "Power mode best performance", C::Laptop, S::Global, Measurable, Instant, true) },
+    TweakDef { platform: Platform::LaptopOnly, ..def("battery_saver_off", "Battery saver off while gaming", C::Laptop, S::Global, Measurable, Instant, false) },
     // Per game
     def("fullscreen_opt_off", "Fullscreen optimizations off", C::Game, S::PerGame, Small, GameRestart, false),
     def("gpu_high_perf", "GPU preference high performance", C::Game, S::PerGame, Small, GameRestart, false),
@@ -129,6 +135,8 @@ pub fn status(state: &AppState, id: &str, game: Option<&Game>) -> Status {
         "usb_suspend_off" => input::usb_suspend_status(),
         "input_device_power_off" => input_extra::device_power_status(),
         "lang_hotkey_off" => input_extra::lang_hotkey_status(),
+        "power_mode_best" => laptop::power_mode_status(),
+        "battery_saver_off" => laptop::battery_saver_status(),
         "adapter_power_saving_off" => network::adapter_power_status(state.elevated),
         "nagle_off" => network::nagle_status(),
         "network_throttling_off" => network::throttling_status(),
@@ -186,6 +194,18 @@ fn active_state(state: &AppState, d: &TweakDef, game: Option<&Game>, applied_ts:
     }
 }
 
+/// Past deze tweak niet bij het apparaat (pc of laptop)?
+pub fn platform_locked(state: &AppState, d: &TweakDef) -> bool {
+    match d.platform {
+        Platform::All => false,
+        Platform::PcOnly => crate::device::is_laptop(state),
+        Platform::LaptopOnly => !crate::device::is_laptop(state),
+    }
+}
+
+/// Tweaks die Game Boost op een laptop standaard meeneemt als de gebruiker er niets voor gekozen heeft.
+pub const LAPTOP_BOOST_DEFAULTS: [&str; 2] = ["power_mode_best", "battery_saver_off"];
+
 pub fn info(state: &AppState, d: &TweakDef, game: Option<&Game>) -> TweakInfo {
     let st = status(state, d.id, game);
     let game_id = game.map(|g| g.id.as_str());
@@ -205,7 +225,16 @@ pub fn info(state: &AppState, d: &TweakDef, game: Option<&Game>) -> TweakInfo {
         state: st.state,
         applied_by_app,
         active,
-        options: if d.options.is_empty() { None } else { Some(d.options.iter().map(|s| s.to_string()).collect()) },
+        platform: d.platform,
+        platform_locked: platform_locked(state, d),
+        // Het Ultimate-plan hoort niet op een laptop: die optie verdwijnt daar (tenzij hij nu aan staat).
+        options: if d.options.is_empty() {
+            None
+        } else {
+            let laptop = crate::device::is_laptop(state);
+            let cur = st.current_option.clone();
+            Some(d.options.iter().filter(|o| !(laptop && **o == "ultimate" && cur.as_deref() != Some("ultimate"))).map(|s| s.to_string()).collect())
+        },
         current_option: st.current_option,
         detail: st.detail,
     }
@@ -242,6 +271,9 @@ fn admin_check(state: &AppState, d: &TweakDef) -> AppResult<()> {
 pub fn apply(state: &AppState, id: &str, option: Option<&str>, session: Option<&str>, game: Option<&Game>) -> AppResult<()> {
     let d = get(id)?;
     admin_check(state, d)?;
+    if platform_locked(state, d) || (id == "power_plan" && option == Some("ultimate") && crate::device::is_laptop(state)) {
+        return Err(AppError::coded("platform_locked"));
+    }
     match id {
         "game_mode" => system::game_mode_apply(state, session),
         "game_bar_dvr_off" => system::game_bar_apply(state, session),
@@ -260,6 +292,8 @@ pub fn apply(state: &AppState, id: &str, option: Option<&str>, session: Option<&
         "usb_suspend_off" => input::usb_suspend_apply(state, session),
         "input_device_power_off" => input_extra::device_power_apply(state, session),
         "lang_hotkey_off" => input_extra::lang_hotkey_apply(state, session),
+        "power_mode_best" => laptop::power_mode_apply(state, session),
+        "battery_saver_off" => laptop::battery_saver_apply(state, session),
         "adapter_power_saving_off" => network::adapter_power_apply(state, session),
         "nagle_off" => network::nagle_apply(state, session),
         "network_throttling_off" => network::throttling_apply(state, session),
@@ -292,6 +326,8 @@ pub fn disable(state: &AppState, id: &str, game: Option<&Game>) -> AppResult<()>
         "usb_suspend_off" => input::usb_suspend_disable(state),
         "input_device_power_off" => input_extra::device_power_disable(state),
         "lang_hotkey_off" => input_extra::lang_hotkey_disable(state),
+        "power_mode_best" => laptop::power_mode_disable(state),
+        "battery_saver_off" => laptop::battery_saver_disable(state),
         "adapter_power_saving_off" => network::adapter_power_disable(state),
         "nagle_off" => network::nagle_disable(state),
         "network_throttling_off" => network::throttling_disable(state),

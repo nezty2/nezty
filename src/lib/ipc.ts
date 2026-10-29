@@ -53,6 +53,7 @@ export interface Api {
   listStartupItems(): Promise<T.StartupItem[]>;
   setStartupItem(itemId: string, enabled: boolean): Promise<T.StartupItem>;
   getGameRegions(): Promise<T.GameRegion[]>;
+  getDeviceInfo(): Promise<T.DeviceInfo>;
   pingHost(host: string, count: number): Promise<T.PingResult>;
   getConnectionOverview(): Promise<T.ConnectionOverview>;
   flushDns(): Promise<void>;
@@ -121,6 +122,7 @@ const tauriApi: Api = {
   listStartupItems: () => call("list_startup_items"),
   setStartupItem: (itemId, enabled) => call("set_startup_item", { itemId, enabled }),
   getGameRegions: () => call("get_game_regions"),
+  getDeviceInfo: () => call("get_device_info"),
   pingHost: (host, count) => call("ping_host", { host, count }),
   getConnectionOverview: () => call("get_connection_overview"),
   flushDns: () => call("flush_dns"),

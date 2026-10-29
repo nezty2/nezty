@@ -38,6 +38,7 @@ function BigWinCard({ win, onFixed }: { win: BigWin; onFixed: (list: BigWin[]) =
   const params: Record<string, string> = { ...win.params };
   if (params.mb) params.size = formatMb(lang, Number(params.mb));
   if (params.date) params.date = formatDate(lang, params.date);
+  if (!params.app) params.app = t("bigwin.brandApp");
 
   const fix = async () => {
     setBusy(true);
@@ -97,7 +98,7 @@ function BigWinCard({ win, onFixed }: { win: BigWin; onFixed: (list: BigWin[]) =
         )}
         {win.action === "open_page" && win.status !== "ok" && (
           <Button size="sm" onClick={() => setPage("background")}>
-            {t("bigwin.heavy_apps.open")}
+            {td(`${base}.open`, undefined, t("bigwin.heavy_apps.open"))}
           </Button>
         )}
         <span className={cn("ml-auto text-[12px]", statusColor[win.status])}>{t(`bigwin.status.${win.status}`)}</span>
@@ -170,6 +171,7 @@ function readTab(fromParams: string | undefined): TweaksTab {
 export function TweaksPage() {
   const { t, td } = useT();
   const tweaks = useApp((s) => s.tweaks);
+  const device = useApp((s) => s.device);
   const loading = useApp((s) => s.tweaksLoading);
   const refreshTweaks = useApp((s) => s.refreshTweaks);
   const refreshBigWins = useApp((s) => s.refreshBigWins);
@@ -211,7 +213,16 @@ export function TweaksPage() {
   const network = tweaks.filter((tw) => tw.category === "network" && !tw.experimental);
   const experimental = tweaks.filter((tw) => tw.experimental);
   const cleanup = tweaks.filter((tw) => tw.category === "cleanup");
+  const isLaptop = device?.effective === "laptop";
   const grid = (list: TweakInfo[]) => <TweakGrid list={list} busy={busy} onToggle={onToggle} elevated={elevated} onCleanup={() => setCleanupOpen(true)} />;
+  const laptopTweaks = tweaks.filter((tw) => tw.category === "laptop");
+  const laptopSection = laptopTweaks.length > 0 && (
+    <section>
+      <SectionTitle>{t("tweaks.laptop")}</SectionTitle>
+      <p className="-mt-1 mb-3 text-[13px] text-ink-3">{isLaptop ? t("tweaks.laptopNote") : t("tweaks.laptopNotePc")}</p>
+      {grid(laptopTweaks)}
+    </section>
+  );
 
   return (
     <div className="space-y-6">
@@ -257,6 +268,7 @@ export function TweaksPage() {
 
       {tab === "windows" && (
         <div className="space-y-8">
+          {isLaptop && laptopSection}
           <section>
             <SectionTitle>{t("tweaks.system")}</SectionTitle>
             {loading && tweaks.length === 0 ? <Skeleton className="h-48" /> : grid(system)}
@@ -282,6 +294,7 @@ export function TweaksPage() {
             <SectionTitle>{t("tweaks.cleanup")}</SectionTitle>
             {grid(cleanup)}
           </section>
+          {!isLaptop && laptopSection}
         </div>
       )}
 

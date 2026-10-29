@@ -8,6 +8,7 @@ mod boost;
 mod bufferbloat;
 mod controller;
 mod covers;
+mod device;
 mod crosshair;
 mod display;
 mod error;
@@ -580,6 +581,11 @@ async fn set_background(state: St<'_>, path: Option<String>) -> AppResult<Settin
 }
 
 #[tauri::command]
+fn get_device_info(state: St<'_>) -> DeviceInfo {
+    device::info(&state)
+}
+
+#[tauri::command]
 fn get_background_file(state: St<'_>) -> Option<String> {
     background::current(&state).map(|p| p.to_string_lossy().to_string())
 }
@@ -723,6 +729,17 @@ fn get_crosshair_config(state: St<'_>) -> CrosshairConfig {
 pub fn run() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let args: Vec<String> = std::env::args().collect();
+    if let Some(i) = args.iter().position(|a| a == "--selftest-device") {
+        if let Some(out) = args.get(i + 1) {
+            let st = AppState::new(std::env::temp_dir().join("nezty-selftest-device"), false);
+            let info = device::info(&st);
+            let displays: Vec<serde_json::Value> = display::list().iter().map(|d| serde_json::json!({ "monitor": d.monitor, "adapter": d.adapter, "internal": d.internal, "hz": d.current_hz, "max": d.max_hz })).collect();
+            let tweaks: Vec<serde_json::Value> = tweaks::list(&st).iter().filter(|t| t.platform != Platform::All).map(|t| serde_json::json!({ "id": t.id, "platform": t.platform, "locked": t.platform_locked, "state": t.state, "detail": t.detail })).collect();
+            let v = serde_json::json!({ "device": info, "battery": metrics::battery(), "displays": displays, "tweaks": tweaks, "bigwins": bigwins::all(&st) });
+            let _ = std::fs::write(out, serde_json::to_string_pretty(&v).unwrap_or_default());
+        }
+        return;
+    }
     if let Some(i) = args.iter().position(|a| a == "--selftest-network") {
         if let Some(out) = args.get(i + 1) {
             selftest::run_network(out);
@@ -877,6 +894,7 @@ pub fn run() {
             list_startup_items,
             set_startup_item,
             get_game_regions,
+            get_device_info,
             ping_host,
             get_connection_overview,
             flush_dns,

@@ -95,9 +95,62 @@ fn category(name_lower: &str) -> ProcessCategory {
     }
 }
 
-/// Apps die tijdens het gamen veilig dicht kunnen: browsers, cloud-sync en updaters.
+/// Mappen van laptopfabrikanten (Program Files en Store-pakketten op uitgeversnaam).
+const VENDOR_DIRS: &[&str] = &[
+    "\\program files\\asus\\",
+    "\\program files (x86)\\asus\\",
+    "\\program files\\lenovo\\",
+    "\\program files (x86)\\lenovo\\",
+    "\\program files\\hp\\",
+    "\\program files (x86)\\hp\\",
+    "\\program files\\hewlett-packard\\",
+    "\\program files (x86)\\hewlett-packard\\",
+    "\\program files\\dell\\",
+    "\\program files (x86)\\dell\\",
+    "\\program files\\acer\\",
+    "\\program files (x86)\\acer\\",
+    "\\program files\\samsung\\",
+    "\\program files (x86)\\samsung\\",
+    "\\program files\\huawei\\",
+    "\\windowsapps\\b9eced6f.",
+    "\\windowsapps\\e046963f.",
+    "\\windowsapps\\ad2f1837.",
+    "\\windowsapps\\dellinc.",
+    "\\windowsapps\\acerincorporated.",
+    "\\windowsapps\\samsungelectronicsco",
+];
+
+/// Fabrikant-apps die we nooit voorstellen om te sluiten: ze regelen ventilatoren, prestatiemodus,
+/// stroom, geluid, toetsenbord of het scherm.
+const VENDOR_KEEP: &[&str] = &[
+    "armoury", "armoury crate", "omen", "legion", "vantage", "imcontroller", "msi", "dragon center", "alienware", "awcc",
+    "nitrosense", "predatorsense", "control center", "command center", "gaming hub", "fan", "thermal", "power", "battery",
+    "charge", "audio", "sound", "realtek", "dolby", "nahimic", "waves", "maxx", "display", "screen", "keyboard", "touchpad",
+    "hotkey", "hot key", "osd", "wlan", "wireless", "bluetooth", "service", "svc", "agent", "driver", "smartsense",
+];
+
+fn session_of(pid: u32) -> Option<u32> {
+    let mut sid = 0u32;
+    let ok = unsafe { windows_sys::Win32::System::RemoteDesktop::ProcessIdToSessionId(pid, &mut sid) } != 0;
+    ok.then_some(sid)
+}
+
+/// Een hulp-app van de laptopfabrikant die tijdens het gamen dicht kan: in de map van het merk, in de
+/// sessie van de gebruiker (geen Windows-service) en niet iets dat ventilatoren of stroom regelt.
+fn is_vendor_helper(pid: u32, name_lower: &str, exe_lower: Option<&str>, title_lower: &str) -> bool {
+    let Some(exe) = exe_lower else { return false };
+    if !VENDOR_DIRS.iter().any(|d| exe.contains(d)) {
+        return false;
+    }
+    if VENDOR_KEEP.iter().any(|k| name_lower.contains(k) || title_lower.contains(k)) {
+        return false;
+    }
+    matches!(session_of(pid), Some(s) if s != 0)
+}
+
+/// Apps die tijdens het gamen veilig dicht kunnen: browsers, cloud-sync, updaters en hulp-apps van de fabrikant.
 fn is_unneeded(cat: ProcessCategory) -> bool {
-    matches!(cat, ProcessCategory::Browser | ProcessCategory::Cloud | ProcessCategory::Updater)
+    matches!(cat, ProcessCategory::Browser | ProcessCategory::Cloud | ProcessCategory::Updater | ProcessCategory::Vendor)
 }
 
 fn refresh_kind() -> ProcessRefreshKind {
@@ -160,8 +213,11 @@ pub fn list(state: &AppState) -> Vec<ProcessInfo> {
             existing.instances += 1;
             continue;
         }
-        let cat = if games.contains(&name_lower) { ProcessCategory::Game } else { category(&name_lower) };
         let title = exe.as_deref().map(|e| title_for(state, e, &name)).unwrap_or_else(|| name.clone());
+        let mut cat = if games.contains(&name_lower) { ProcessCategory::Game } else { category(&name_lower) };
+        if cat == ProcessCategory::Other && is_vendor_helper(pid, &name_lower, exe_lower.as_deref(), &title.to_lowercase()) {
+            cat = ProcessCategory::Vendor;
+        }
         out.push(ProcessInfo {
             pid,
             name,

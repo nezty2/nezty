@@ -1,11 +1,11 @@
-import { ExternalLink, FolderOpen, Image, RefreshCw } from "lucide-react";
+import { AlertTriangle, ExternalLink, FolderOpen, Image, Laptop, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button, Card, Kv, PageHeader, Row, SectionTitle, SegmentedControl, TextInput, Toggle } from "@/components/ui";
 import { useT } from "@/i18n/hooks";
 import { LANGS } from "@/i18n";
 import { api, autostart, isTauri } from "@/lib/ipc";
 import { formatMb, timeAgo } from "@/lib/format";
-import type { Lang } from "@/lib/types";
+import type { DeviceSetting, Lang } from "@/lib/types";
 import { AppearanceRows } from "@/components/AppearanceRows";
 import { useApp } from "@/store/app";
 import { useUpdate } from "@/store/update";
@@ -23,6 +23,8 @@ export function SettingsPage() {
   const [creating, setCreating] = useState(false);
   const [pingHost, setPingHost] = useState(settings?.dashboardPingHost ?? "");
   const [sgdb, setSgdb] = useState(settings?.steamGridDbKey ?? "");
+  const device = useApp((s) => s.device);
+  const [pendingDevice, setPendingDevice] = useState<DeviceSetting | null>(null);
 
   useEffect(() => {
     autostart.isEnabled().then(setStartWithWindows).catch(() => setStartWithWindows(false));
@@ -70,6 +72,59 @@ export function SettingsPage() {
               <Row title={t("settings.reduceMotion")} desc={t("settings.reduceMotionDesc")}>
                 <Toggle checked={settings.reduceMotion} onChange={(v) => void updateSettings({ reduceMotion: v })} label={t("settings.reduceMotion")} />
               </Row>
+            </Card>
+          </section>
+
+          <section>
+            <SectionTitle>{t("settings.device")}</SectionTitle>
+            <Card className="divide-y divide-line !py-1">
+              <Row title={t("settings.deviceType")} desc={device ? t("settings.deviceTypeDesc", { detected: t(`device.${device.detected}` as "device.pc") }) : undefined}>
+                <SegmentedControl<DeviceSetting>
+                  value={pendingDevice ?? settings.deviceType}
+                  onChange={(v) => {
+                    // Automatisch mag altijd. Handmatig alleen na een duidelijke waarschuwing.
+                    if (v === "auto") {
+                      setPendingDevice(null);
+                      void updateSettings({ deviceType: "auto" });
+                    } else if (v !== settings.deviceType) {
+                      setPendingDevice(v);
+                    }
+                  }}
+                  options={[
+                    { value: "auto", label: t("settings.deviceAuto") },
+                    { value: "pc", label: t("device.pc") },
+                    { value: "laptop", label: t("device.laptop") },
+                  ]}
+                />
+              </Row>
+              {pendingDevice && (
+                <div className="flex flex-col gap-3 py-3">
+                  <p className="flex items-start gap-2 text-[13px] text-warn">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                    {t("settings.deviceWarn")}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      onClick={() => {
+                        void updateSettings({ deviceType: pendingDevice });
+                        setPendingDevice(null);
+                      }}
+                    >
+                      {t("settings.deviceConfirm", { kind: t(`device.${pendingDevice}` as "device.pc") })}
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setPendingDevice(null)}>
+                      {t("common.cancel")}
+                    </Button>
+                  </div>
+                </div>
+              )}
+              {device?.effective === "laptop" && (
+                <Row title={<span className="flex items-center gap-2"><Laptop className="h-4 w-4 text-ink-3" />{t("settings.boostCharger")}</span>} desc={t("settings.boostChargerDesc")}>
+                  <Toggle checked={settings.boostRequiresCharger} onChange={(v) => void updateSettings({ boostRequiresCharger: v })} label={t("settings.boostCharger")} />
+                </Row>
+              )}
             </Card>
           </section>
 

@@ -49,6 +49,7 @@ pub enum TweakCategory {
     Input,
     Cleanup,
     Game,
+    Laptop,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
@@ -97,6 +98,10 @@ pub struct TweakInfo {
     pub requires_admin: bool,
     pub state: TweakState,
     pub applied_by_app: bool,
+    /// Op welk apparaat de tweak hoort: all | pc_only | laptop_only.
+    pub platform: Platform,
+    /// Past niet bij dit apparaat: aanzetten kan niet (uitzetten wel).
+    pub platform_locked: bool,
     /// Werkt de tweak nu echt? "now", of nog niet: "after_pc_restart" of "after_game_restart". Leeg als hij uit staat.
     pub active: Option<String>,
     pub options: Option<Vec<String>>,
@@ -130,6 +135,56 @@ pub enum Accent {
     Rose,
     Pink,
     Amber,
+}
+
+/// Voor welk apparaat een tweak bedoeld is.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum Platform {
+    #[default]
+    All,
+    PcOnly,
+    LaptopOnly,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum DeviceKind {
+    #[default]
+    Pc,
+    Laptop,
+}
+
+/// Keuze in Instellingen: automatisch herkennen of handmatig vastzetten.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum DeviceSetting {
+    #[default]
+    Auto,
+    Pc,
+    Laptop,
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceInfo {
+    /// Wat nezty zelf herkent.
+    pub detected: DeviceKind,
+    /// Waar nezty mee rekent (handmatige keuze gaat voor).
+    pub effective: DeviceKind,
+    pub setting: DeviceSetting,
+    pub chassis: Vec<u32>,
+    pub has_battery: bool,
+    pub manufacturer: String,
+    pub model: String,
+    /// App van het merk voor videokaartmodus, ventilatorprofiel en prestatiemodus.
+    pub vendor_app: Option<String>,
+    /// Twee videokaarten (zuinig en snel).
+    pub hybrid: bool,
+    /// Videokaart die het ingebouwde scherm (of anders het hoofdscherm) aanstuurt.
+    pub display_gpu: Option<String>,
+    /// De snelle videokaart, als die er is.
+    pub fast_gpu: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -356,6 +411,10 @@ pub struct Settings {
     pub auto_update_check: bool,
     /// Game-afbeeldingen online ophalen (Steam, Epic, SteamGridDB). Uit = alleen wat de launchers lokaal hebben.
     pub online_covers: bool,
+    /// Pc of laptop: automatisch, of handmatig vastgezet.
+    pub device_type: DeviceSetting,
+    /// Laptop: Game Boost alleen als de lader is aangesloten.
+    pub boost_requires_charger: bool,
 }
 
 impl Default for Settings {
@@ -391,6 +450,8 @@ impl Default for Settings {
             crosshair_hotkey: "ctrl+alt+c".to_string(),
             auto_update_check: true,
             online_covers: true,
+            device_type: DeviceSetting::Auto,
+            boost_requires_charger: false,
         }
     }
 }
@@ -413,6 +474,12 @@ pub struct MetricsSample {
     pub process_count: u32,
     pub ping_ms: Option<f32>,
     pub ping_host: String,
+    /// Batterij in procent (alleen met een batterij).
+    pub battery_pct: Option<u8>,
+    /// Lader aangesloten (alleen met een batterij).
+    pub on_ac: Option<bool>,
+    /// Schakelt de processor of videokaart nu terug door hitte? None: niet uit te lezen.
+    pub thermal_throttle: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -505,6 +572,15 @@ pub struct BoostSnapshot {
     pub free_ram_mb: u64,
     pub process_count: u32,
     pub cpu_pct: f32,
+    #[serde(default)]
+    pub cpu_temp_c: Option<f32>,
+    #[serde(default)]
+    pub gpu_temp_c: Option<f32>,
+    /// Was er tijdens de meting terugschakeling door hitte?
+    #[serde(default)]
+    pub throttling: Option<bool>,
+    #[serde(default)]
+    pub on_ac: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -619,6 +695,8 @@ pub enum ProcessCategory {
     System,
     Security,
     Anticheat,
+    /// Hulp-apps van de laptopfabrikant die tijdens het gamen niet nodig zijn.
+    Vendor,
     Other,
 }
 

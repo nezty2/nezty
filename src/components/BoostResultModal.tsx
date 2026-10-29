@@ -1,8 +1,8 @@
-import { AlertTriangle, ArrowRight, CheckCircle2, Clock, Play, ShieldCheck, Zap } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, Clock, Flame, Play, ShieldCheck, Zap } from "lucide-react";
 import { useState } from "react";
 import { useT } from "@/i18n/hooks";
 import { api } from "@/lib/ipc";
-import { formatMb, formatNumber } from "@/lib/format";
+import { formatMb, formatNumber, formatTemp } from "@/lib/format";
 import type { BoostReport, FpsResult } from "@/lib/types";
 import { useApp } from "@/store/app";
 import { Button, Modal, cn } from "./ui";
@@ -52,7 +52,10 @@ export function BoostResultModal({ report, open, onClose }: { report: BoostRepor
   const toast = useApp((s) => s.toast);
   const handleError = useApp((s) => s.handleError);
   const [restarting, setRestarting] = useState(false);
+  const isLaptop = useApp((s) => s.device?.effective === "laptop");
   if (!report) return null;
+  const heat = report.after;
+  const showHeat = isLaptop && (heat.throttling != null || heat.cpuTempC != null || heat.gpuTempC != null || heat.onAc === false);
 
   const closedMb = report.closedProcesses.reduce((a, b) => a + b.memoryMb, 0);
   const applied = report.applied;
@@ -112,6 +115,20 @@ export function BoostResultModal({ report, open, onClose }: { report: BoostRepor
           </ul>
         ) : (
           <p className="text-sm text-ink-2">{t("result.nothingNew")}</p>
+        )}
+
+        {showHeat && (
+          <div className="card-inset space-y-1 px-4 py-3 text-[13px]">
+            <div className="flex items-center gap-2 font-semibold">
+              <Flame className="h-4 w-4 text-ink-3" />
+              {t("result.heatTitle")}
+            </div>
+            {(heat.cpuTempC != null || heat.gpuTempC != null) && (
+              <p className="text-ink-2">{t("result.heatTemps", { cpu: formatTemp(lang, heat.cpuTempC ?? null), gpu: formatTemp(lang, heat.gpuTempC ?? null) })}</p>
+            )}
+            {heat.throttling != null && <p className={heat.throttling ? "text-warn" : "text-ink-2"}>{heat.throttling ? t("result.heatThrottle") : t("result.heatOk")}</p>}
+            {heat.onAc === false && <p className="text-warn">{t("result.heatBattery")}</p>}
+          </div>
         )}
 
         {report.fpsBefore && report.fpsAfter && (

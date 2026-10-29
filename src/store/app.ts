@@ -23,6 +23,7 @@ interface AppStore {
   ready: boolean;
   lang: T.Lang;
   appInfo: T.AppInfo | null;
+  device: T.DeviceInfo | null;
   settings: T.Settings | null;
   metrics: T.MetricsSnapshot;
   tweaks: T.TweakInfo[];
@@ -56,6 +57,7 @@ interface AppStore {
   refreshJournal: () => Promise<void>;
   refreshRestorePoint: () => Promise<void>;
   refreshBigWins: () => Promise<void>;
+  refreshDevice: () => Promise<void>;
   setTweak: (id: string, enabled: boolean, option?: string | null, gameId?: string | null) => Promise<T.TweakInfo | null>;
   runBoost: (gameId: string | null, measureFps: boolean) => Promise<T.BoostReport | null>;
   runUnboost: () => Promise<void>;
@@ -74,6 +76,7 @@ export const useApp = create<AppStore>()((set, get) => ({
   ready: false,
   lang: resolveLang(null),
   appInfo: null,
+  device: null,
   settings: null,
   metrics: { latest: null, history: [] },
   tweaks: [],
@@ -110,6 +113,7 @@ export const useApp = create<AppStore>()((set, get) => ({
       set({ ready: true });
       get().handleError(e);
     }
+    void get().refreshDevice();
     void get().refreshTweaks();
     void get().refreshGames();
     void get().refreshJournal();
@@ -205,11 +209,25 @@ export const useApp = create<AppStore>()((set, get) => ({
     try {
       const saved = await api.saveSettings(next);
       set({ settings: saved });
+      // Ander apparaattype: sloten, laptopcontroles en tegels opnieuw bepalen.
+      if ("deviceType" in patch) {
+        void get().refreshDevice();
+        void get().refreshTweaks();
+        void get().refreshBigWins();
+      }
       return true;
     } catch (e) {
       set({ settings: cur, lang: resolveLang(cur.language, get().appInfo?.uiLanguage) });
       get().handleError(e);
       return false;
+    }
+  },
+
+  async refreshDevice() {
+    try {
+      set({ device: await api.getDeviceInfo() });
+    } catch {
+      /* niet kritisch: zonder apparaatinfo rekent de app als pc */
     }
   },
 

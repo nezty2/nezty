@@ -12,6 +12,9 @@ import { formatMb } from "@/lib/format";
 import type { FortniteSettings, Game, GameProfile, ProcessInfo, TweakInfo } from "@/lib/types";
 import { useApp } from "@/store/app";
 
+/** Tweaks die Game Boost op een laptop standaard meeneemt (zelfde lijst als in de backend). */
+const LAPTOP_BOOST_DEFAULTS = ["power_mode_best", "battery_saver_off"];
+
 /* ---------- Boost-instellingen per game ---------- */
 
 export function ProfileTab({ game, profile, onChange }: { game: Game; profile: GameProfile; onChange: (p: GameProfile) => void }) {
@@ -20,7 +23,11 @@ export function ProfileTab({ game, profile, onChange }: { game: Game; profile: G
   const settings = useApp((s) => s.settings);
   const [procs, setProcs] = useState<ProcessInfo[] | null>(null);
   const [newApp, setNewApp] = useState("");
-  const boostable = tweaks.filter((tw) => tw.scope === "global" && tw.kind === "toggle" && tw.timing !== "pc_restart");
+  const device = useApp((s) => s.device);
+  const isLaptop = device?.effective === "laptop";
+  // Tweaks die niet bij dit apparaat passen slaat Game Boost toch over: dan ook niet tonen.
+  const boostable = tweaks.filter((tw) => tw.scope === "global" && tw.kind === "toggle" && tw.timing !== "pc_restart" && !tw.platformLocked);
+  const boostOn = (id: string) => profile.globalTweaks[id] ?? (isLaptop && LAPTOP_BOOST_DEFAULTS.includes(id));
   const icons = useAppIcons((procs ?? []).map((p) => p.exePath));
 
   useEffect(() => {
@@ -83,7 +90,7 @@ export function ProfileTab({ game, profile, onChange }: { game: Game; profile: G
               }
               desc={td(`tweak.${tw.id}.what`)}
             >
-              <Toggle checked={!!profile.globalTweaks[tw.id]} onChange={(v) => set({ globalTweaks: { ...profile.globalTweaks, [tw.id]: v } })} label={td(`tweak.${tw.id}.name`)} />
+              <Toggle checked={boostOn(tw.id)} onChange={(v) => set({ globalTweaks: { ...profile.globalTweaks, [tw.id]: v } })} label={td(`tweak.${tw.id}.name`)} />
             </Row>
           ))}
         </div>

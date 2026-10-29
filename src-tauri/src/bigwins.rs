@@ -353,8 +353,121 @@ fn heavy_check(state: &AppState) -> BigWin {
     w
 }
 
+// ---------- Alleen laptop ----------
+
+fn vendor_app_param(w: BigWin) -> BigWin {
+    let d = crate::device::detected();
+    match crate::device::vendor_app(&d.manufacturer, &d.model) {
+        Some(app) => p(w, "app", app),
+        None => w,
+    }
+}
+
+/// Twee videokaarten: loopt het ingebouwde scherm via de snelle kaart (MUX of "alleen dGPU") of via de
+/// zuinige? Of een laptop een MUX-switch heeft, kan Windows niet zeggen; we leggen uit waar je het vindt.
+fn laptop_gpu_mode_check() -> BigWin {
+    let layout = gpu_layout();
+    if !layout.hybrid {
+        return check("laptop_gpu_mode", CheckStatus::Ok, Gain::Big, "single");
+    }
+    let dgpu = layout.gpus.iter().find(|g| g.discrete).map(|g| g.name.clone()).unwrap_or_default();
+    let displays = display::list();
+    let Some(panel) = displays.iter().find(|d| d.internal) else {
+        return vendor_app_param(p(check("laptop_gpu_mode", CheckStatus::Info, Gain::Big, "no_internal"), "dgpu", dgpu));
+    };
+    let on_dgpu = layout.gpus.iter().any(|g| g.discrete && g.name.eq_ignore_ascii_case(panel.adapter.trim()));
+    if on_dgpu {
+        return p(check("laptop_gpu_mode", CheckStatus::Ok, Gain::Big, "dgpu"), "dgpu", dgpu);
+    }
+    let mut w = check("laptop_gpu_mode", CheckStatus::Info, Gain::Big, "hybrid");
+    w = p(w, "dgpu", dgpu);
+    w = p(w, "igpu", panel.adapter.trim());
+    vendor_app_param(w)
+}
+
+/// Energiebesparing van het ingebouwde scherm (Intel DPST, AMD Vari-Bright) en dynamische verversingssnelheid.
+/// Die staan in de app van Intel of AMD en in Windows; we kunnen ze niet veilig zelf uitlezen.
+fn laptop_display_check() -> BigWin {
+    let layout = gpu_layout();
+    let igpu = layout.gpus.iter().find(|g| !g.discrete).map(|g| g.vendor.clone()).unwrap_or_default();
+    let variant = match igpu.as_str() {
+        "intel" => "intel",
+        "amd" => "amd",
+        _ => "other",
+    };
+    let mut w = check("laptop_display", CheckStatus::Info, Gain::Small, variant);
+    if let Some(panel) = display::list().into_iter().find(|d| d.internal) {
+        w = p(w, "hz", panel.current_hz);
+        w = p(w, "max", panel.max_hz);
+    }
+    w.action = CheckAction::Link;
+    w.link = Some("ms-settings:display-advanced".into());
+    w
+}
+
+/// Hitte: temperatuur en of Windows of de videokaart terugschakelt. Alleen uitlezen, nooit ventilatoren aansturen.
+fn laptop_heat_check(state: &AppState) -> BigWin {
+    let (last, throttle) = state.recent_heat(120);
+    let cpu = last.as_ref().and_then(|s| s.cpu_temp_c);
+    let gpu = last.as_ref().and_then(|s| s.gpu_temp_c);
+    let mut w = match throttle {
+        Some(true) => check("laptop_heat", CheckStatus::Issue, Gain::Big, "throttling"),
+        Some(false) => check("laptop_heat", CheckStatus::Ok, Gain::Big, "ok"),
+        None => check("laptop_heat", CheckStatus::Info, Gain::Big, "unknown"),
+    };
+    if let Some(t) = cpu {
+        w = p(w, "cpu", t.round() as i32);
+    }
+    if let Some(t) = gpu {
+        w = p(w, "gpu", t.round() as i32);
+    }
+    vendor_app_param(w)
+}
+
+/// Wifi of kabel. Op een laptop speelt bijna iedereen via wifi; een kabel is de grootste ping-winst.
+fn laptop_wifi_check() -> BigWin {
+    let out = crate::powershell::run_ps(
+        "@(Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'Up' } | ForEach-Object { [string]$_.PhysicalMediaType }) -join '|'",
+    )
+    .unwrap_or_default()
+    .to_lowercase();
+    let wifi = out.contains("802.11") || out.contains("wireless");
+    let cable = out.contains("802.3") || out.contains("ethernet");
+    if cable {
+        return check("laptop_wifi", CheckStatus::Ok, Gain::Big, "cable");
+    }
+    if wifi {
+        return check("laptop_wifi", CheckStatus::Issue, Gain::Big, "wifi");
+    }
+    check("laptop_wifi", CheckStatus::Unavailable, Gain::Big, "none")
+}
+
+/// Hulp-apps van de fabrikant die nu draaien en tijdens het gamen dicht kunnen.
+fn vendor_apps_check(state: &AppState) -> BigWin {
+    let list: Vec<ProcessInfo> = crate::processes::list(state).into_iter().filter(|p| p.category == ProcessCategory::Vendor).collect();
+    if list.is_empty() {
+        return check("vendor_apps", CheckStatus::Ok, Gain::Small, "none");
+    }
+    let mem: f32 = list.iter().map(|p| p.memory_mb).sum();
+    let names: Vec<String> = list.iter().take(3).map(|p| p.title.clone()).collect();
+    let mut w = check("vendor_apps", CheckStatus::Info, Gain::Small, "found");
+    w = p(w, "names", names.join(", "));
+    w = p(w, "count", list.len());
+    w = p(w, "mb", mem.round() as u64);
+    w.action = CheckAction::OpenPage;
+    w
+}
+
 pub fn all(state: &AppState) -> Vec<BigWin> {
-    vec![refresh_check(), gpu_choice_check(state), power_check(), ram_check(), driver_check(), heavy_check(state)]
+    let mut out = vec![refresh_check(), gpu_choice_check(state), power_check(), ram_check(), driver_check(), heavy_check(state)];
+    if crate::device::is_laptop(state) {
+        out.push(laptop_heat_check(state));
+        out.push(laptop_gpu_mode_check());
+        out.push(laptop_wifi_check());
+        out.push(laptop_display_check());
+        out.push(vendor_apps_check(state));
+    }
+    out
 }
 
 pub fn fix(state: &AppState, id: &str) -> AppResult<()> {

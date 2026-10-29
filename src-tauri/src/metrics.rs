@@ -72,6 +72,33 @@ fn wmi_cpu_temp(conn: &WMIConnection) -> Option<f32> {
     best
 }
 
+/// Thermische terugschakeling volgens Windows: een thermische zone die de processor passief begrenst
+/// (PercentPassiveLimit onder 100). None als de teller niet bestaat.
+fn wmi_thermal_limit(conn: &WMIConnection) -> Option<bool> {
+    let rows: Vec<HashMap<String, Variant>> =
+        conn.raw_query("SELECT PercentPassiveLimit FROM Win32_PerfFormattedData_Counters_ThermalZoneInformation").ok()?;
+    if rows.is_empty() {
+        return None;
+    }
+    Some(rows.iter().filter_map(|r| r.get("PercentPassiveLimit").and_then(variant_f64)).any(|v| v > 0.0 && v < 100.0))
+}
+
+/// Batterij in procent en lader ja/nee. None zonder batterij.
+pub fn battery() -> (Option<u8>, Option<bool>) {
+    use windows_sys::Win32::System::Power::{GetSystemPowerStatus, SYSTEM_POWER_STATUS};
+    let mut ps: SYSTEM_POWER_STATUS = unsafe { std::mem::zeroed() };
+    if unsafe { GetSystemPowerStatus(&mut ps) } == 0 || ps.BatteryFlag == 128 || ps.BatteryFlag == 255 {
+        return (None, None);
+    }
+    let pct = (ps.BatteryLifePercent <= 100).then_some(ps.BatteryLifePercent);
+    let ac = match ps.ACLineStatus {
+        0 => Some(false),
+        1 => Some(true),
+        _ => None,
+    };
+    (pct, ac)
+}
+
 /// Namen van CPU en GPU voor het infopaneel. Draait in een eigen thread vanwege COM.
 pub fn hardware_names() -> (String, String) {
     let mut sys = System::new();
@@ -138,6 +165,9 @@ pub fn start(app: AppHandle, state: Arc<AppState>) {
         let mut cpu_temp_ok = wmi_acpi.is_some();
         let mut last_cpu_temp: Option<f32> = None;
         let mut last_gpu: (Option<f32>, Option<f32>, Option<u64>, Option<u64>) = (None, None, None, None);
+        let mut gpu_thermal: Option<bool> = None;
+        let mut cpu_thermal: Option<bool> = None;
+        let mut cpu_thermal_ok = true;
         let mut tick: u64 = 0;
         loop {
             std::thread::sleep(Duration::from_secs(1));
@@ -154,6 +184,13 @@ pub fn start(app: AppHandle, state: Arc<AppState>) {
                     let temp = d.temperature(TemperatureSensor::Gpu).ok().map(|t| t as f32);
                     let mem = d.memory_info().ok();
                     last_gpu = (util, temp, mem.as_ref().map(|m| m.used / 1_048_576), mem.as_ref().map(|m| m.total / 1_048_576));
+                    if tick % 5 == 2 {
+                        use nvml_wrapper::bitmasks::device::ThrottleReasons;
+                        gpu_thermal = d
+                            .current_throttle_reasons()
+                            .ok()
+                            .map(|r| r.intersects(ThrottleReasons::SW_THERMAL_SLOWDOWN | ThrottleReasons::HW_THERMAL_SLOWDOWN));
+                    }
                 }
             } else if tick % 2 == 0 {
                 if let Some(conn) = &wmi_cimv2 {
@@ -172,6 +209,17 @@ pub fn start(app: AppHandle, state: Arc<AppState>) {
                     }
                 }
             }
+            if cpu_thermal_ok && tick % 5 == 3 {
+                if let Some(conn) = &wmi_cimv2 {
+                    cpu_thermal = wmi_thermal_limit(conn);
+                    cpu_thermal_ok = cpu_thermal.is_some();
+                }
+            }
+            let thermal_throttle = match (cpu_thermal, gpu_thermal) {
+                (None, None) => None,
+                (a, b) => Some(a.unwrap_or(false) || b.unwrap_or(false)),
+            };
+            let (battery_pct, on_ac) = battery();
             let (ping_ms, ping_host) = ping_shared.lock().map(|g| g.clone()).unwrap_or((None, String::new()));
             let total = sys.total_memory() / 1_048_576;
             let used = sys.used_memory() / 1_048_576;
@@ -189,6 +237,9 @@ pub fn start(app: AppHandle, state: Arc<AppState>) {
                 process_count: sys.processes().len() as u32,
                 ping_ms,
                 ping_host,
+                battery_pct,
+                on_ac,
+                thermal_throttle,
             };
             state.push_sample(sample.clone());
             let _ = app.emit("metrics", sample);

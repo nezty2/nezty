@@ -63,6 +63,8 @@ const defaultCrosshair: T.CrosshairConfig = {
 };
 
 let settings: T.Settings = {
+  deviceType: "auto",
+  boostRequiresCharger: false,
   language: null,
   accent: "violet",
   accentCustom: null,
@@ -94,7 +96,7 @@ let settings: T.Settings = {
 function tw(p: Partial<T.TweakInfo> & { id: string; category: T.TweakCategory }): T.TweakInfo {
   return {
     scope: "global", kind: "toggle", risk: "low", gain: "small", timing: "instant", experimental: false, requiresAdmin: false,
-    state: "off", appliedByApp: false, active: null, options: null, currentOption: null, detail: null, ...p,
+    state: "off", appliedByApp: false, active: null, platform: "all", platformLocked: false, options: null, currentOption: null, detail: null, ...p,
   };
 }
 
@@ -114,7 +116,9 @@ let tweaks: T.TweakInfo[] = [
   tw({ id: "accessibility_hotkeys_off", category: "input", state: "on", active: "now" }),
   tw({ id: "input_device_power_off", category: "input", requiresAdmin: true, state: "off", detail: { key: "device_power_count", params: { n: "3" } } }),
   tw({ id: "lang_hotkey_off", category: "input", state: "off" }),
-  tw({ id: "usb_suspend_off", category: "input" }),
+  tw({ id: "usb_suspend_off", category: "input", platform: "pc_only" }),
+  tw({ id: "power_mode_best", category: "laptop", gain: "measurable", requiresAdmin: true, platform: "laptop_only" }),
+  tw({ id: "battery_saver_off", category: "laptop", gain: "measurable", platform: "laptop_only", detail: { key: "battery_saver_threshold", params: { pct: "20" } } }),
   tw({ id: "adapter_power_saving_off", category: "network", requiresAdmin: true, state: "unknown", detail: msg("adapter_needs_admin") }),
   tw({ id: "nagle_off", category: "network", gain: "negligible", timing: "pc_restart", experimental: true, requiresAdmin: true, detail: msg("nagle_ifaces", { count: "1" }) }),
   tw({ id: "network_throttling_off", category: "network", gain: "negligible", timing: "pc_restart", experimental: true, requiresAdmin: true }),
@@ -152,6 +156,11 @@ let journal: T.JournalEntry[] = [
 ];
 
 let boostState: T.BoostState = { active: false, report: null };
+function mockDevice(): T.DeviceInfo {
+  const detected: T.DeviceKind = "laptop";
+  const effective: T.DeviceKind = settings.deviceType === "auto" ? detected : settings.deviceType;
+  return { detected, effective, setting: settings.deviceType, chassis: [10], hasBattery: true, manufacturer: "ASUSTeK COMPUTER INC.", model: "ROG Strix G16", vendorApp: "Armoury Crate", hybrid: true, displayGpu: "Intel(R) UHD Graphics", fastGpu: "NVIDIA GeForce RTX 4060 Laptop GPU" };
+}
 let running: string[] = ["epic:fortnite"];
 let history: T.MetricsSample[] = [];
 let cpu = 18;
@@ -168,6 +177,7 @@ function sample(): T.MetricsSample {
     ts: now(), cpuPct: Math.round(cpu * 10) / 10, ramUsedMb: used, ramTotalMb: total, ramFreeMb: total - used,
     gpuPct: Math.round(gpu), gpuTempC: 44 + Math.round(gpu / 6), cpuTempC: null, gpuMemUsedMb: 5300, gpuMemTotalMb: 16303,
     processCount: 212 - (boostState.active ? 3 : 0), pingMs: Math.round(ping * 10) / 10, pingHost: settings.dashboardPingHost,
+    batteryPct: 64, onAc: false, thermalThrottle: gpu > 80,
   };
 }
 for (let i = 0; i < 60; i++) history.push(sample());
@@ -206,6 +216,9 @@ const regions: T.GameRegion[] = [
 ];
 
 let bigWins: T.BigWin[] = [
+  { id: "laptop_heat", status: "issue", gain: "big", variant: "throttling", params: { cpu: "94", gpu: "87", app: "Armoury Crate" }, action: "none", link: null },
+  { id: "laptop_gpu_mode", status: "info", gain: "big", variant: "hybrid", params: { igpu: "Intel(R) UHD Graphics", dgpu: "NVIDIA GeForce RTX 4060 Laptop GPU", app: "Armoury Crate" }, action: "none", link: null },
+  { id: "laptop_wifi", status: "issue", gain: "big", variant: "wifi", params: {}, action: "none", link: null },
   { id: "refresh_rate", status: "issue", gain: "big", variant: "one", params: { monitor: "AOC 24G2W1G4", current: "60", max: "144", count: "1" }, action: "fix", link: null },
   { id: "gpu_choice", status: "issue", gain: "big", variant: "missing", params: { gpu: "NVIDIA GeForce RTX 5070 Ti", count: "5", names: "Apex Legends, Call of Duty, Counter-Strike 2" }, action: "fix", link: null },
   { id: "power_source", status: "ok", gain: "big", variant: "desktop", params: { plan: "High performance" }, action: "none", link: null },
@@ -226,7 +239,12 @@ export const mockApi: Api = {
   async getRestorePointStatus() { await delay(); return { protectionEnabled: true, lastResult: null }; },
   async createRestorePoint() { await delay(900); settings = { ...settings, restorePointDone: true }; return { ok: true, key: "created", detail: null, ts: now() }; },
   async getMetrics() { return { latest: history[history.length - 1] ?? null, history }; },
-  async listTweaks() { await delay(200); return tweaks; },
+  async listTweaks() {
+    await delay(200);
+    const laptop = mockDevice().effective === "laptop";
+    return tweaks.map((x) => ({ ...x, platformLocked: x.platform === "pc_only" ? laptop : x.platform === "laptop_only" ? !laptop : false }));
+  },
+  async getDeviceInfo() { await delay(); return mockDevice(); },
   async getGameTweaks(gameId) {
     await delay(200);
     const game = games.find((x) => x.id === gameId);
