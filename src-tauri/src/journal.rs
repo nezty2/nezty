@@ -71,6 +71,12 @@ pub enum RevertPayload {
         instance: String,
         enable: bool,
     },
+    /// Wifi-gamestand van nezty (achtergrondzoektocht uit zolang nezty draait).
+    WifiGaming,
+    /// Touchpad-instelling "aan laten als er een muis is".
+    TouchpadMouse {
+        allow: bool,
+    },
     /// Eén sleutel in een ini-bestand. `old` leeg: de sleutel stond er niet en wordt weer weggehaald.
     IniKey {
         path: String,
@@ -388,6 +394,11 @@ pub fn execute_revert(payload: &RevertPayload) -> AppResult<()> {
             Ok(())
         }
         RevertPayload::DevicePower { instance, enable } => crate::tweaks::input_extra::set_device_power(instance, *enable),
+        RevertPayload::WifiGaming => {
+            crate::tweaks::wifi_gaming::stop();
+            Ok(())
+        }
+        RevertPayload::TouchpadMouse { allow } => crate::tweaks::laptop::touchpad_set_allow(*allow),
         RevertPayload::IniKey { path, section, key, old } => {
             let p = Path::new(path);
             let (mut text, utf16) = crate::ini::read_text(p)?;

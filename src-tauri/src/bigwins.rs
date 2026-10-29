@@ -442,6 +442,22 @@ fn laptop_wifi_check() -> BigWin {
     check("laptop_wifi", CheckStatus::Unavailable, Gain::Big, "none")
 }
 
+/// Op de accu remt de driver van de snelle videokaart vaak zelf de FPS (NVIDIA Battery Boost houdt standaard
+/// 30 FPS aan). Dat zit in de app van NVIDIA of AMD; nezty legt uit waar.
+fn gpu_battery_limit_check() -> Option<BigWin> {
+    let layout = gpu_layout();
+    let dgpu = layout.gpus.iter().find(|g| g.discrete)?;
+    let variant = match dgpu.vendor.as_str() {
+        "nvidia" => "nvidia",
+        "amd" => "amd",
+        _ => return None,
+    };
+    let on_battery = crate::metrics::battery().1 == Some(false);
+    let mut w = check("gpu_battery_limit", if on_battery { CheckStatus::Issue } else { CheckStatus::Info }, Gain::Big, variant);
+    w = p(w, "gpu", &dgpu.name);
+    Some(w)
+}
+
 /// Hulp-apps van de fabrikant die nu draaien en tijdens het gamen dicht kunnen.
 fn vendor_apps_check(state: &AppState) -> BigWin {
     let list: Vec<ProcessInfo> = crate::processes::list(state).into_iter().filter(|p| p.category == ProcessCategory::Vendor).collect();
@@ -465,6 +481,9 @@ pub fn all(state: &AppState) -> Vec<BigWin> {
         out.push(laptop_gpu_mode_check());
         out.push(laptop_wifi_check());
         out.push(laptop_display_check());
+        if let Some(w) = gpu_battery_limit_check() {
+            out.push(w);
+        }
         out.push(vendor_apps_check(state));
     }
     out

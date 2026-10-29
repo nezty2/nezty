@@ -155,7 +155,8 @@ const USB_SETTING: &str = "48e6b7a6-50f5-4782-a5d4-53bb8f07e226";
 /// Leest (AC, DC) van een energie-instelling in het opgegeven schema. De labels van powercfg zijn
 /// vertaald, daarom lezen we de laatste twee hexadecimale waarden (huidige AC- en DC-index).
 pub fn read_power_setting(scheme: &str, sub: &str, setting: &str) -> AppResult<Option<(u32, u32)>> {
-    let (ok, out, _) = run_cmd("powercfg", &["/query", scheme, sub, setting])?;
+    // /qh toont ook verborgen instellingen (zoals EPP en turbostand); /query slaat die over.
+    let (ok, out, _) = run_cmd("powercfg", &["/qh", scheme, sub, setting])?;
     if !ok {
         return Ok(None);
     }

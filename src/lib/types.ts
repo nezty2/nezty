@@ -514,7 +514,7 @@ export type CheckStatus = "ok" | "issue" | "info" | "unavailable";
 export type CheckAction = "none" | "fix" | "open_page" | "link";
 
 export interface BigWin {
-  id: "refresh_rate" | "gpu_choice" | "power_source" | "ram_speed" | "gpu_driver" | "heavy_apps" | "laptop_heat" | "laptop_gpu_mode" | "laptop_wifi" | "laptop_display" | "vendor_apps";
+  id: "refresh_rate" | "gpu_choice" | "power_source" | "ram_speed" | "gpu_driver" | "heavy_apps" | "laptop_heat" | "laptop_gpu_mode" | "laptop_wifi" | "laptop_display" | "vendor_apps" | "gpu_battery_limit";
   status: CheckStatus;
   gain: Gain;
   variant: string;

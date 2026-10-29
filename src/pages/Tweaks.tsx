@@ -26,7 +26,7 @@ const TABS: { id: TweaksTab; icon: LucideIcon }[] = [
 ];
 const TAB_KEY = "nezty.tweaks.tab";
 /** Controles die alleen op de laptoppagina staan. */
-export const LAPTOP_CHECKS = ["laptop_heat", "laptop_gpu_mode", "laptop_wifi", "laptop_display", "vendor_apps"];
+export const LAPTOP_CHECKS = ["laptop_heat", "laptop_gpu_mode", "laptop_wifi", "laptop_display", "vendor_apps", "gpu_battery_limit"];
 
 export function BigWinCard({ win, onFixed }: { win: BigWin; onFixed: (list: BigWin[]) => void }) {
   const { t, td, tl, lang } = useT();
