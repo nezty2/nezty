@@ -1,5 +1,6 @@
 import { Gauge, Info, Mouse, RotateCcw } from "lucide-react";
 import { useCallback, useRef, useState, type PointerEvent as RPointerEvent } from "react";
+import { LiveInputCard } from "@/components/LiveInputCard";
 import { TweakCard } from "@/components/TweakCard";
 import { Button, Card, PageHeader, SectionTitle, Skeleton, cn } from "@/components/ui";
 import { useT } from "@/i18n/hooks";
@@ -127,6 +128,8 @@ export function InputPage() {
         <Info className="mt-0.5 h-4 w-4 shrink-0 text-info" />
         {t("input.honest")}
       </div>
+
+      <LiveInputCard />
 
       <section>
         <SectionTitle>{t("input.settings")}</SectionTitle>

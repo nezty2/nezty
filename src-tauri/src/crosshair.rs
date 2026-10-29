@@ -10,7 +10,7 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
 pub const LABEL: &str = "crosshair";
 /// Logische grootte van het overlayvenster (ruim genoeg voor de grootste crosshair).
-const SIZE: f64 = 220.0;
+const SIZE: f64 = 400.0;
 
 fn place(app: &AppHandle, win: &tauri::WebviewWindow) -> AppResult<()> {
     let monitor = app

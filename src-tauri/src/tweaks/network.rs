@@ -153,3 +153,86 @@ pub fn throttling_apply(state: &AppState, session: Option<&str>) -> AppResult<()
 pub fn throttling_disable(state: &AppState) -> AppResult<()> {
     regtweak::disable(state, get("network_throttling_off")?, &throttling_specs(), None, None)
 }
+
+// ---------- Interrupt moderation (experimenteel) ----------
+
+#[derive(Deserialize)]
+struct AdapterProp {
+    #[serde(rename = "Name")]
+    name: String,
+    #[serde(rename = "v")]
+    value: String,
+}
+
+/// Fysieke, verbonden adapters met de standaardeigenschap *InterruptModeration (1 = aan, 0 = uit).
+fn adapters_im() -> AppResult<Vec<AdapterProp>> {
+    let out = run_ps(
+        "$up = Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object Status -eq 'Up' | Select-Object -ExpandProperty Name; $a = foreach ($n in $up) { Get-NetAdapterAdvancedProperty -Name $n -RegistryKeyword '*InterruptModeration' -ErrorAction SilentlyContinue | Select-Object Name, @{n='v';e={[string]($_.RegistryValue | Select-Object -First 1)}} }; ConvertTo-Json -InputObject @($a) -Compress",
+    )?;
+    let trimmed = out.trim();
+    if trimmed.is_empty() {
+        return Ok(vec![]);
+    }
+    Ok(serde_json::from_str::<Vec<AdapterProp>>(trimmed).unwrap_or_default())
+}
+
+pub fn interrupt_status(elevated: bool) -> AppResult<Status> {
+    let list = adapters_im()?;
+    if list.is_empty() {
+        return Ok(if elevated {
+            Status::with_detail(TweakState::Unavailable, Msg::new("adapter_no_im"))
+        } else {
+            Status::with_detail(TweakState::Unknown, Msg::new("adapter_needs_admin"))
+        });
+    }
+    let names: Vec<&str> = list.iter().map(|a| a.name.as_str()).collect();
+    Ok(Status::with_detail(
+        if list.iter().all(|a| a.value == "0") { TweakState::On } else { TweakState::Off },
+        Msg::new("adapter_list").with("names", names.join(", ")),
+    ))
+}
+
+fn set_im(name: &str, value: &str) -> AppResult<()> {
+    run_ps(&format!(
+        "Set-NetAdapterAdvancedProperty -Name {} -RegistryKeyword '*InterruptModeration' -RegistryValue {}",
+        ps_quote(name),
+        ps_quote(value)
+    ))?;
+    Ok(())
+}
+
+pub fn interrupt_apply(state: &AppState, session: Option<&str>) -> AppResult<()> {
+    if !state.elevated {
+        return Err(AppError::NeedsAdmin("Set-NetAdapterAdvancedProperty".into()));
+    }
+    let d = get("interrupt_moderation_off")?;
+    for a in adapters_im()? {
+        if a.value == "0" {
+            continue;
+        }
+        set_im(&a.name, "0")?;
+        let mut e = JournalEntry::new(d.id, d.name, JournalKind::Adapter, &a.name);
+        e.old_value = Some(a.value.clone());
+        e.new_value = Some("0".into());
+        e.revertable = true;
+        e.session_id = session.map(|s| s.to_string());
+        e.payload = RevertPayload::AdapterProperty { name: a.name.clone(), keyword: "*InterruptModeration".into(), old_value: a.value.clone() };
+        lock(&state.journal).record(e)?;
+    }
+    Ok(())
+}
+
+pub fn interrupt_disable(state: &AppState) -> AppResult<()> {
+    if !state.elevated {
+        return Err(AppError::NeedsAdmin("Set-NetAdapterAdvancedProperty".into()));
+    }
+    if revert_via_journal(state, "interrupt_moderation_off", None)? {
+        return Ok(());
+    }
+    for a in adapters_im()? {
+        if a.value == "0" {
+            set_im(&a.name, "1")?;
+        }
+    }
+    Ok(())
+}

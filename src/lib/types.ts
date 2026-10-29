@@ -48,8 +48,10 @@ export interface AppInfo {
 
 export type Accent = "violet" | "cyan" | "emerald" | "rose" | "pink" | "amber";
 
+export type CrosshairShapeId = "cross" | "cross_dot" | "dot" | "circle" | "circle_dot" | "t" | "x" | "square";
+
 export interface CrosshairConfig {
-  shape: "cross" | "dot" | "circle" | "t" | "cross_dot";
+  shape: CrosshairShapeId;
   color: string;
   size: number;
   thickness: number;
@@ -59,6 +61,126 @@ export interface CrosshairConfig {
   outlineThickness: number;
   opacity: number;
   dot: boolean;
+  dotSize: number;
+  rotation: number;
+  offsetX: number;
+  offsetY: number;
+  showTop: boolean;
+  showRight: boolean;
+  showBottom: boolean;
+  showLeft: boolean;
+}
+
+export interface FortniteCheck {
+  id: string;
+  current: string | null;
+  recommended: string;
+  ok: boolean;
+}
+
+export interface FortniteOverview {
+  iniExists: boolean;
+  running: boolean;
+  gpuVendor: string;
+  gpuName: string | null;
+  maxHz: number;
+  renderMode: "performance" | "dx12" | "dx11" | "default";
+  advice: "igpu" | "nvidia" | "amd" | "other";
+  checks: FortniteCheck[];
+}
+
+export interface FpsDetail {
+  avgFps: number;
+  low1Fps: number;
+  frames: number;
+  seconds: number;
+  medianMs: number;
+  stutters: number;
+  stuttersPerMin: number;
+  gpuBusy: number | null;
+  cpuBusy: number | null;
+  graph: number[];
+}
+
+export interface Measurement {
+  gameId: string;
+  gameName: string;
+  takenAt: number;
+  boostActive: boolean;
+  pingHost: string | null;
+  fps: FpsDetail;
+  ping: PingResult | null;
+}
+
+export interface BandwidthUser {
+  name: string;
+  label: string | null;
+  downKbps: number;
+  upKbps: number;
+}
+
+export interface BandwidthReport {
+  seconds: number;
+  found: number;
+  connections: number;
+  totalDownKbps: number;
+  totalUpKbps: number;
+  users: BandwidthUser[];
+  elevated: boolean;
+}
+
+export interface BufferbloatResult {
+  idleMs: number;
+  downloadMs: number | null;
+  uploadMs: number | null;
+  downloadMbps: number | null;
+  uploadMbps: number | null;
+  increaseMs: number;
+  grade: string;
+}
+
+export interface GameConfigCheck {
+  gameId: string;
+  id: string;
+  file: string;
+  current: string | null;
+  recommended: string;
+  ok: boolean;
+}
+
+export interface LiveCheck {
+  id: string;
+  saved: boolean;
+  live: boolean;
+}
+
+export interface OverlayInfo {
+  id: string;
+  active: boolean;
+  fix: "tweak" | "close" | "manual";
+}
+
+export interface HwAccelInfo {
+  id: string;
+  name: string;
+  enabled: boolean;
+  running: boolean;
+}
+
+export type TestStatus = "ok" | "warn" | "fail" | "info";
+
+export interface TestCheck {
+  id: string;
+  status: TestStatus;
+  key: string;
+  params: Record<string, string>;
+}
+
+export interface TweakTestStep {
+  id: string;
+  result: "ok" | "skipped" | "error";
+  restored: boolean;
+  error: string | null;
 }
 
 export interface CrosshairPreset {
@@ -78,6 +200,7 @@ export interface Settings {
   customPingTargets: unknown[];
   customGames: Game[];
   startMinimized: boolean;
+  minimizeToTray: boolean;
   firstRunDone: boolean;
   defaultProfileTweaks: Record<string, boolean>;
   steamGridDbKey: string;

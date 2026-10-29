@@ -1,4 +1,4 @@
-import { Activity, AlertTriangle, ChevronRight, Cpu, Gauge, History, MemoryStick, Monitor, Play, ShieldAlert, ShieldCheck, Sparkles, Thermometer, Undo2, Zap, type LucideIcon } from "lucide-react";
+import { Activity, AlertTriangle, ChevronRight, Cpu, Gauge, History, MemoryStick, Monitor, Play, ShieldCheck, Sparkles, Thermometer, Undo2, Zap, type LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { GameCover } from "@/components/GameCover";
 import { Sparkline } from "@/components/Sparkline";
@@ -168,16 +168,13 @@ function BigWinsTeaser() {
 
 function StatusCard() {
   const { t, lang } = useT();
-  const appInfo = useApp((s) => s.appInfo);
   const settings = useApp((s) => s.settings);
   const restorePoint = useApp((s) => s.restorePoint);
-  const relaunch = useApp((s) => s.relaunchElevated);
   const refreshRestorePoint = useApp((s) => s.refreshRestorePoint);
   const updateSettings = useApp((s) => s.updateSettings);
   const toast = useApp((s) => s.toast);
   const handleError = useApp((s) => s.handleError);
   const [creating, setCreating] = useState(false);
-  const elevated = appInfo?.isElevated ?? false;
   const last = restorePoint?.lastResult ?? null;
 
   const createRp = async () => {
@@ -204,18 +201,6 @@ function StatusCard() {
 
   return (
     <div className="card divide-y divide-line px-4">
-      <div className="flex items-center gap-3 py-3.5">
-        {elevated ? <ShieldCheck className="h-4 w-4 shrink-0 text-ok" /> : <ShieldAlert className="h-4 w-4 shrink-0 text-warn" />}
-        <div className="min-w-0 flex-1">
-          <div className="text-[12px] text-ink-3">{t("dashboard.rights")}</div>
-          <div className="text-[13px]">{elevated ? t("dashboard.rightsAdmin") : t("dashboard.rightsLimited")}</div>
-        </div>
-        {!elevated && (
-          <Button size="sm" onClick={() => void relaunch()}>
-            {t("common.restartAdmin")}
-          </Button>
-        )}
-      </div>
       <div className="flex items-center gap-3 py-3.5">
         <History className={cn("h-4 w-4 shrink-0", settings?.restorePointDone ? "text-ok" : "text-ink-3")} />
         <div className="min-w-0 flex-1">

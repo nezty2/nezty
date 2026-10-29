@@ -4,7 +4,7 @@ import { api, asBackendError, listenEvent } from "@/lib/ipc";
 import type * as T from "@/lib/types";
 import { EVENTS } from "@/lib/types";
 
-export type PageId = "dashboard" | "games" | "tweaks" | "input" | "controller" | "console" | "crosshair" | "background" | "network" | "startup" | "log" | "settings";
+export type PageId = "dashboard" | "games" | "fortnite" | "tweaks" | "input" | "controller" | "crosshair" | "background" | "network" | "startup" | "log" | "test" | "settings";
 
 export interface Toast {
   id: number;
@@ -61,7 +61,6 @@ interface AppStore {
   runUnboost: () => Promise<void>;
   setShowResult: (v: boolean) => void;
   saveProfile: (p: T.GameProfile) => Promise<void>;
-  relaunchElevated: () => Promise<void>;
   profileFor: (gameId: string) => T.GameProfile;
 }
 
@@ -183,7 +182,6 @@ export const useApp = create<AppStore>()((set, get) => ({
         level: "warning",
         title: tr("notice.warning"),
         message: tr("msg.needs_admin"),
-        action: { label: tr("common.restartAdmin"), onClick: () => void get().relaunchElevated() },
       });
       return;
     }
@@ -327,14 +325,6 @@ export const useApp = create<AppStore>()((set, get) => ({
     try {
       await api.saveProfile(p);
       void api.getWatcherStatus().then((w) => set({ watcher: w })).catch(() => undefined);
-    } catch (e) {
-      get().handleError(e);
-    }
-  },
-
-  async relaunchElevated() {
-    try {
-      await api.relaunchElevated();
     } catch (e) {
       get().handleError(e);
     }

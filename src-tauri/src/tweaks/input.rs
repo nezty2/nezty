@@ -35,6 +35,27 @@ pub fn mouse_disable(state: &AppState) -> AppResult<()> {
     Ok(())
 }
 
+// ---------- Echt actief? ----------
+
+/// Vergelijkt per aangezette tweak wat in het register staat met wat Windows nu echt gebruikt.
+pub fn verify_live() -> Vec<crate::models::LiveCheck> {
+    let live = winapi::live_input();
+    let on = |r: AppResult<Status>| r.map(|s| s.state == TweakState::On).unwrap_or(false);
+    vec![
+        crate::models::LiveCheck { id: "mouse_precision_off".into(), saved: on(mouse_status()), live: live.mouse_acceleration == 0 },
+        crate::models::LiveCheck { id: "keyboard_fast_repeat".into(), saved: on(keyboard_status()), live: live.keyboard_delay == 0 && live.keyboard_speed == 31 },
+        crate::models::LiveCheck { id: "accessibility_hotkeys_off".into(), saved: on(accessibility_status()), live: !live.hotkeys.iter().any(|h| *h) },
+    ]
+}
+
+/// Past de opgeslagen waarden opnieuw direct toe, zodat Windows ze meteen gebruikt.
+pub fn sync_live() -> Vec<crate::models::LiveCheck> {
+    winapi::apply_mouse_from_registry();
+    winapi::apply_keyboard_from_registry();
+    winapi::apply_accessibility_from_registry();
+    verify_live()
+}
+
 // ---------- Toetsherhaling ----------
 
 fn keyboard_specs() -> Vec<RegSpec> {

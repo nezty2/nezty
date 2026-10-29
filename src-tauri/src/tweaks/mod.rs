@@ -3,6 +3,7 @@
 
 pub mod cleanup;
 pub mod input;
+pub mod network_extra;
 pub mod network;
 pub mod per_game;
 pub mod regtweak;
@@ -64,6 +65,8 @@ pub const CATALOG: &[TweakDef] = &[
     TweakDef { risk: Risk::Medium, ..def("hags", "Hardware-accelerated GPU scheduling", C::System, S::Global, Small, PcRestart, true) },
     def("visual_effects", "Visual effects for best performance", C::System, S::Global, Negligible, Instant, false),
     def("windowed_opt", "Optimizations for windowed games", C::System, S::Global, Measurable, GameRestart, false),
+    TweakDef { experimental: true, ..def("timer_resolution", "Higher timer resolution while gaming", C::System, S::Global, Negligible, PcRestart, true) },
+    def("notifications_off", "Notification banners off", C::System, S::Global, Negligible, PcRestart, false),
     // Muis en toetsenbord
     def("mouse_precision_off", "Enhance pointer precision off", C::Input, S::Global, Measurable, Instant, false),
     def("keyboard_fast_repeat", "Fastest keyboard repeat", C::Input, S::Global, Small, Instant, false),
@@ -72,6 +75,9 @@ pub const CATALOG: &[TweakDef] = &[
     // Netwerk
     def("adapter_power_saving_off", "Network adapter power saving off", C::Network, S::Global, Small, Instant, true),
     TweakDef { experimental: true, ..def("nagle_off", "Nagle's algorithm off", C::Network, S::Global, Negligible, PcRestart, true) },
+    def("wifi_power_max", "Wi-Fi power saving off", C::Network, S::Global, Small, Instant, false),
+    def("delivery_optimization_off", "Delivery Optimization uploads off", C::Network, S::Global, Small, Instant, true),
+    TweakDef { experimental: true, ..def("interrupt_moderation_off", "Interrupt moderation off", C::Network, S::Global, Negligible, Instant, true) },
     TweakDef { experimental: true, ..def("network_throttling_off", "Network throttling off", C::Network, S::Global, Negligible, PcRestart, true) },
     // Per game
     def("fullscreen_opt_off", "Fullscreen optimizations off", C::Game, S::PerGame, Small, GameRestart, false),
@@ -109,6 +115,11 @@ pub fn status(state: &AppState, id: &str, game: Option<&Game>) -> Status {
         "hags" => system::hags_status(),
         "visual_effects" => system::visual_effects_status(),
         "windowed_opt" => system::windowed_opt_status(),
+        "notifications_off" => system::notifications_status(),
+        "timer_resolution" => system::timer_status(),
+        "interrupt_moderation_off" => network::interrupt_status(state.elevated),
+        "wifi_power_max" => network_extra::wifi_status(network_extra::has_wifi()),
+        "delivery_optimization_off" => network_extra::delivery_status(),
         "mouse_precision_off" => input::mouse_status(),
         "keyboard_fast_repeat" => input::keyboard_status(),
         "accessibility_hotkeys_off" => input::accessibility_status(),
@@ -194,6 +205,11 @@ pub fn apply(state: &AppState, id: &str, option: Option<&str>, session: Option<&
         "hags" => system::hags_apply(state, session),
         "visual_effects" => system::visual_effects_apply(state, session),
         "windowed_opt" => system::windowed_opt_apply(state, session),
+        "notifications_off" => system::notifications_apply(state, session),
+        "timer_resolution" => system::timer_apply(state, session),
+        "interrupt_moderation_off" => network::interrupt_apply(state, session),
+        "wifi_power_max" => network_extra::wifi_apply(state, session),
+        "delivery_optimization_off" => network_extra::delivery_apply(state, session),
         "mouse_precision_off" => input::mouse_apply(state, session),
         "keyboard_fast_repeat" => input::keyboard_apply(state, session),
         "accessibility_hotkeys_off" => input::accessibility_apply(state, session),
@@ -219,6 +235,11 @@ pub fn disable(state: &AppState, id: &str, game: Option<&Game>) -> AppResult<()>
         "hags" => system::hags_disable(state),
         "visual_effects" => system::visual_effects_disable(state),
         "windowed_opt" => system::windowed_opt_disable(state),
+        "notifications_off" => system::notifications_disable(state),
+        "timer_resolution" => system::timer_disable(state),
+        "interrupt_moderation_off" => network::interrupt_disable(state),
+        "wifi_power_max" => network_extra::wifi_disable(state),
+        "delivery_optimization_off" => network_extra::delivery_disable(state),
         "mouse_precision_off" => input::mouse_disable(state),
         "keyboard_fast_repeat" => input::keyboard_disable(state),
         "accessibility_hotkeys_off" => input::accessibility_disable(state),

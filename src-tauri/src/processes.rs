@@ -182,6 +182,13 @@ pub fn list(state: &AppState) -> Vec<ProcessInfo> {
     out
 }
 
+/// Namen (kleine letters) van alle processen die nu draaien.
+pub fn running_names(state: &AppState) -> HashSet<String> {
+    let mut sys = lock(&state.procs);
+    sys.refresh_processes_specifics(ProcessesToUpdate::All, true, refresh_kind());
+    sys.processes().values().map(|p| p.name().to_string_lossy().to_lowercase()).collect()
+}
+
 /// Beëindigt alle processen met deze naam. Beschermde processen en games worden geweigerd.
 pub fn kill_by_name(state: &AppState, name: &str) -> AppResult<Vec<ClosedProcess>> {
     let lower = name.to_lowercase();

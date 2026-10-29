@@ -1,4 +1,4 @@
-import { ExternalLink, FolderOpen, Image, RefreshCw, Shield, ShieldCheck } from "lucide-react";
+import { ExternalLink, FolderOpen, Image, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button, Card, Kv, PageHeader, Row, SectionTitle, SegmentedControl, TextInput, Toggle, cn } from "@/components/ui";
 import { useT } from "@/i18n/hooks";
@@ -25,7 +25,6 @@ export function SettingsPage() {
   const appInfo = useApp((s) => s.appInfo);
   const restorePoint = useApp((s) => s.restorePoint);
   const refreshRestorePoint = useApp((s) => s.refreshRestorePoint);
-  const relaunch = useApp((s) => s.relaunchElevated);
   const toast = useApp((s) => s.toast);
   const handleError = useApp((s) => s.handleError);
   const [startWithWindows, setStartWithWindows] = useState<boolean | null>(null);
@@ -115,8 +114,11 @@ export function SettingsPage() {
                   }}
                 />
               </Row>
-              <Row title={t("settings.startMinimized")}>
+              <Row title={t("settings.startMinimized")} desc={t("settings.startMinimizedDesc")}>
                 <Toggle checked={settings.startMinimized} onChange={(v) => void updateSettings({ startMinimized: v })} label={t("settings.startMinimized")} />
+              </Row>
+              <Row title={t("settings.minimizeToTray")} desc={t("settings.minimizeToTrayDesc")}>
+                <Toggle checked={settings.minimizeToTray} onChange={(v) => void updateSettings({ minimizeToTray: v })} label={t("settings.minimizeToTray")} />
               </Row>
               <Row title={t("settings.dashboardPing")} desc={t("settings.dashboardPingDesc")}>
                 <TextInput value={pingHost} onChange={setPingHost} className="w-40" mono />
@@ -214,15 +216,6 @@ export function SettingsPage() {
                   </Button>
                 </div>
               </div>
-              <Row title={t("settings.rights")} desc={appInfo?.isElevated ? t("settings.rightsAdmin") : t("settings.rightsLimited")}>
-                {appInfo?.isElevated ? (
-                  <ShieldCheck className="h-5 w-5 text-ok" />
-                ) : (
-                  <Button size="sm" icon={Shield} onClick={() => void relaunch()}>
-                    {t("common.restartAdmin")}
-                  </Button>
-                )}
-              </Row>
               <div className="py-3.5 text-[12px] leading-relaxed text-ink-3">{t("settings.neverTouch")}</div>
             </Card>
           </section>

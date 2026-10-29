@@ -36,6 +36,12 @@ fn process_name(state: &AppState, game: &Game) -> Option<String> {
 
 /// Meet `seconds` seconden de framerate van de draaiende game.
 pub fn measure(app: &AppHandle, state: &AppState, game: &Game, seconds: u32) -> AppResult<FpsResult> {
+    let text = capture(app, state, game, seconds)?;
+    parse_csv(&text, seconds).ok_or_else(|| AppError::coded("fps_no_frames"))
+}
+
+/// Laat PresentMon `seconds` seconden meten en geeft de ruwe CSV terug.
+pub fn capture(app: &AppHandle, state: &AppState, game: &Game, seconds: u32) -> AppResult<String> {
     if !state.elevated {
         return Err(AppError::coded("fps_needs_admin"));
     }
@@ -63,7 +69,7 @@ pub fn measure(app: &AppHandle, state: &AppState, game: &Game, seconds: u32) -> 
     if !status.success() && text.is_empty() {
         return Err(AppError::coded("fps_failed").with("detail", format!("PresentMon exit {:?}", status.code())));
     }
-    parse_csv(&text, seconds).ok_or_else(|| AppError::coded("fps_no_frames"))
+    Ok(text)
 }
 
 /// Haalt de frametijden uit de CSV en rekent gemiddelde FPS en 1%-low uit.
