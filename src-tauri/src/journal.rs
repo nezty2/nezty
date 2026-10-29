@@ -324,6 +324,11 @@ impl Journal {
         result
     }
 
+    /// Staat er nog iets aan dat terug te zetten is?
+    pub fn has_any_active(&self) -> bool {
+        self.entries.iter().any(|e| !e.reverted && e.revertable)
+    }
+
     pub fn revert_all(&mut self) -> RevertResult {
         let ids: Vec<String> = self.entries.iter().filter(|e| !e.reverted).map(|e| e.id.clone()).collect();
         self.revert_ids(&ids)

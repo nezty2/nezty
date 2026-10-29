@@ -423,6 +423,64 @@ pub fn refresh(state: &AppState) -> AppResult<LicenseStatus> {
     }
 }
 
+/// Geen toegang meer (verlopen, ingetrokken, te lang offline of uitgelogd): alles terug naar de Windows-standaard.
+/// Stopt Game Boost, zet de crosshair en de wifi-gamestand uit en zet elke gelogde wijziging terug.
+/// Doet niets als de licentie uit staat bij het bouwen, of als er niets meer aan staat.
+pub fn enforce(app: &AppHandle, state: &AppState) {
+    if !enabled() || status(state).mode == "active" {
+        return;
+    }
+    let boosting = lock(&state.boost).is_some();
+    let crosshair = state.settings_clone().crosshair_enabled;
+    let wifi = crate::tweaks::wifi_gaming::is_active();
+    let changes = lock(&state.journal).has_any_active();
+    if !boosting && !crosshair && !wifi && !changes {
+        return;
+    }
+    if boosting {
+        let _ = crate::boost::unboost(app, state);
+    }
+    if crosshair {
+        let _ = crate::crosshair::set_enabled(app, state, false);
+    }
+    let result = reset_changes(state);
+    log::info!("licentie niet geldig: {} wijzigingen teruggezet", result.reverted);
+    let msg = crate::models::Msg::new("license_reverted").with("count", result.reverted);
+    let _ = app.emit("notice", crate::models::Notice::new("warning", msg));
+    crate::boost::emit_state(app, state);
+}
+
+/// Wifi-gamestand uit en elke gelogde wijziging terug. Los van de app, zodat de zelftest het ook kan.
+pub fn reset_changes(state: &AppState) -> crate::models::RevertResult {
+    crate::tweaks::wifi_gaming::stop();
+    let result = lock(&state.journal).revert_all();
+    lock(&state.priority_applied).clear();
+    result
+}
+
+/// Zelftest: zonder licentie zet nezty een gelogde wijziging terug. Gebruikt een eigen testwaarde in HKCU.
+pub fn selftest_enforce() -> serde_json::Value {
+    use crate::journal::{JournalEntry, RevertPayload};
+    let dir = std::env::temp_dir().join("nezty-selftest-enforce");
+    let _ = std::fs::remove_dir_all(&dir);
+    let state = AppState::new(dir, false);
+    lock(&state.license).cred_target = "nezty/license-selftest".into();
+    init(&state);
+    let path = r"Software\nezty-selftest";
+    let wrote = registry::write(Hive::Hkcu, path, "Probe", &RegData::Dword(1)).is_ok();
+    let mut e = JournalEntry::new("selftest", "Selftest", crate::models::JournalKind::Registry, r"HKCU\Software\nezty-selftest\Probe");
+    e.revertable = true;
+    e.payload = RevertPayload::Registry { hive: Hive::Hkcu, path: path.into(), name: "Probe".into(), old: RegData::Absent, post: None };
+    let recorded = lock(&state.journal).record(e).is_ok();
+    let before = registry::read(Hive::Hkcu, path, "Probe").map(|v| v != RegData::Absent).unwrap_or(false);
+    let mode = status(&state).mode;
+    let reverted = if mode != "active" { reset_changes(&state).reverted } else { 0 };
+    let after = registry::read(Hive::Hkcu, path, "Probe").map(|v| v != RegData::Absent).unwrap_or(false);
+    let left = lock(&state.journal).has_any_active();
+    let _ = crate::powershell::run_cmd("reg", &["delete", r"HKCU\Software\nezty-selftest", "/f"]);
+    serde_json::json!({ "enabled": enabled(), "mode": mode, "wroteTestValue": wrote && recorded, "valueBefore": before, "reverted": reverted, "valueAfter": after, "stillActiveInLog": left })
+}
+
 /// Achtergrondcontrole: demo elke minuut, anders elke 10 minuten. Stuurt de stand naar de frontend.
 pub fn start(app: AppHandle, state: std::sync::Arc<AppState>) {
     if !enabled() {
@@ -432,6 +490,7 @@ pub fn start(app: AppHandle, state: std::sync::Arc<AppState>) {
         let mut since_refresh = Duration::from_secs(0);
         let mut last_mode = String::new();
         let _ = refresh(&state);
+        enforce(&app, &state);
         let _ = app.emit("license-state", status(&state));
         loop {
             std::thread::sleep(Duration::from_secs(15));
@@ -442,6 +501,7 @@ pub fn start(app: AppHandle, state: std::sync::Arc<AppState>) {
                 since_refresh = Duration::from_secs(0);
                 let _ = refresh(&state);
             }
+            enforce(&app, &state);
             let st = status(&state);
             // Alleen sturen als er iets verandert, plus elke minuut voor de klok.
             if st.mode != last_mode || since_refresh.as_secs() % 60 == 0 {

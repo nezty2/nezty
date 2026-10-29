@@ -12,12 +12,11 @@ import { Button, Spinner } from "./ui";
 export function UpdateButton() {
   const { t } = useT();
   const ready = useApp((s) => s.ready);
-  const autoCheck = useApp((s) => s.settings?.autoUpdateCheck ?? true);
   const { status, info, progress, check, install } = useUpdate();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (!ready || !autoCheck) return;
+    if (!ready) return;
     let last = 0;
     // Niet opnieuw zoeken als er al een update klaarstaat of wordt geïnstalleerd.
     const run = () => {
@@ -27,11 +26,11 @@ export function UpdateButton() {
       void check();
     };
     const first = setTimeout(run, 8000);
-    // Daarna elke 3 uur zolang nezty openstaat.
-    const every = setInterval(run, 3 * 60 * 60 * 1000);
+    // Daarna elke 30 minuten zolang nezty openstaat (updates zijn verplicht).
+    const every = setInterval(run, 30 * 60 * 1000);
     // En als het venster terugkomt na minstens een uur op de achtergrond.
     const onVisible = () => {
-      if (document.visibilityState === "visible" && Date.now() - last > 60 * 60 * 1000) run();
+      if (document.visibilityState === "visible" && Date.now() - last > 15 * 60 * 1000) run();
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => {
@@ -39,7 +38,7 @@ export function UpdateButton() {
       clearInterval(every);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [ready, autoCheck, check]);
+  }, [ready, check]);
 
   const show = info && (status === "available" || status === "installing" || status === "installError");
   if (!show) return null;

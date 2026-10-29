@@ -23,6 +23,7 @@ import { StartupPage } from "@/pages/Startup";
 import { TweaksPage } from "@/pages/Tweaks";
 import { useApp, type PageId } from "@/store/app";
 import { LoginScreen } from "@/components/license/LoginScreen";
+import { ForceUpdate } from "@/components/ForceUpdate";
 import { LicenseGate } from "@/components/license/LicenseGate";
 import { LicensePage } from "@/pages/License";
 import { isLocked, remainingMs, warnThresholds, parts } from "@/lib/license";
@@ -150,6 +151,7 @@ export default function App() {
         <WelcomeModal />
         <BoostResultModal report={lastReport} open={showResult} onClose={() => setShowResult(false)} />
         {!intro && ready && signedOut && <LoginScreen />}
+        {!intro && <ForceUpdate />}
         {intro && <Intro onDone={() => setIntro(false)} />}
         <Splash show={!intro && !ready} />
       </div>

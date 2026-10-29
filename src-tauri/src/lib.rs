@@ -634,7 +634,13 @@ async fn license_demo(app: AppHandle, state: St<'_>) -> AppResult<license::Licen
 #[tauri::command]
 async fn license_logout(app: AppHandle, state: St<'_>) -> AppResult<license::LicenseStatus> {
     let st = state.inner().clone();
-    let r = blocking(move || Ok(license::logout(&st))).await?;
+    let app2 = app.clone();
+    let r = blocking(move || {
+        let r = license::logout(&st);
+        license::enforce(&app2, &st);
+        Ok(r)
+    })
+    .await?;
     let _ = app.emit("license-state", r.clone());
     Ok(r)
 }
@@ -810,6 +816,7 @@ pub fn run() {
     if let Some(i) = args.iter().position(|a| a == "--selftest-license") {
         if let Some(out) = args.get(i + 1) {
             let mut v = license::selftest_cred();
+            v["enforce"] = license::selftest_enforce();
             if let Some(key) = args.get(i + 2) {
                 v["server"] = license::selftest_server(key);
             }

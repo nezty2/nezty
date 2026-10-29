@@ -285,11 +285,10 @@ export function SettingsPage() {
   );
 }
 
-/** Updates: automatisch zoeken aan of uit, en zelf zoeken. */
+/** Updates: nezty zoekt zelf (verplicht); hier kun je ook meteen zoeken. */
 function UpdateSection() {
   const { t } = useT();
   const settings = useApp((s) => s.settings);
-  const updateSettings = useApp((s) => s.updateSettings);
   const version = useApp((s) => s.appInfo?.version ?? "");
   const { status, info, check, install } = useUpdate();
   if (!settings) return null;
@@ -311,9 +310,6 @@ function UpdateSection() {
     <section>
       <SectionTitle>{t("update.settingsTitle")}</SectionTitle>
       <Card className="divide-y divide-line !py-1">
-        <Row title={t("update.auto")} desc={t("update.autoDesc")}>
-          <Toggle checked={settings.autoUpdateCheck} onChange={(v) => void updateSettings({ autoUpdateCheck: v })} label={t("update.auto")} />
-        </Row>
         <Row title={t("update.current", { version })} desc={message ?? undefined}>
           {status === "available" ? (
             <Button size="sm" variant="primary" onClick={() => void install()}>
