@@ -16,6 +16,7 @@ import { motion } from "framer-motion";
 import { useT } from "@/i18n/hooks";
 import type { TKey } from "@/i18n";
 import { useApp, type PageId } from "@/store/app";
+import { LicenseBlock } from "./license/LicenseBlock";
 import { cn } from "./ui";
 import { UpdateButton } from "./UpdateButton";
 
@@ -74,6 +75,8 @@ export function Sidebar() {
           <div className="text-[12px] text-ink-3">v{appInfo?.version ?? ""}</div>
         </div>
       </div>
+
+      <LicenseBlock />
 
       <nav className="scroll-thin flex flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 py-2">
         {items.map(({ id, key, icon }) => (

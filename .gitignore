@@ -12,3 +12,9 @@ scripts/update.json
 scripts/publish.json
 tsconfig.tsbuildinfo
 .github/*.local
+
+# Licenties: geheimen en serverconfig alleen lokaal
+scripts/license.json
+*secrets*.json
+server/supabase/.temp/
+server/supabase/.env*

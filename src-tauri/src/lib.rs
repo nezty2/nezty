@@ -19,6 +19,7 @@ mod games;
 mod hwaccel;
 mod ini;
 mod jsonfile;
+mod license;
 mod icons;
 mod journal;
 mod measure;
@@ -47,7 +48,7 @@ use models::*;
 use state::{lock, AppState};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_opener::OpenerExt;
 
 type St<'a> = State<'a, Arc<AppState>>;
@@ -230,6 +231,9 @@ fn restore_point_first(app: &AppHandle, st: &AppState) {
 
 #[tauri::command]
 async fn set_tweak(app: AppHandle, state: St<'_>, tweak_id: String, enabled: bool, option: Option<String>, game_id: Option<String>) -> AppResult<TweakInfo> {
+    if enabled {
+        license::require(&state)?;
+    }
     let st = state.inner().clone();
     blocking(move || {
         let game = match &game_id {
@@ -261,6 +265,7 @@ async fn preview_cleanup(state: St<'_>) -> AppResult<CleanupPreview> {
 
 #[tauri::command]
 async fn run_cleanup(state: St<'_>, item_ids: Vec<String>) -> AppResult<CleanupResult> {
+    license::require(&state)?;
     let st = state.inner().clone();
     blocking(move || tweaks::cleanup::run(&st, &item_ids)).await
 }
@@ -273,6 +278,7 @@ async fn get_big_wins(state: St<'_>) -> AppResult<Vec<BigWin>> {
 
 #[tauri::command]
 async fn fix_big_win(app: AppHandle, state: St<'_>, id: String) -> AppResult<Vec<BigWin>> {
+    license::require(&state)?;
     let st = state.inner().clone();
     blocking(move || {
         restore_point_first(&app, &st);
@@ -451,6 +457,7 @@ fn get_watcher_status(state: St<'_>) -> WatcherStatus {
 
 #[tauri::command]
 async fn measure_fps(app: AppHandle, state: St<'_>, game_id: String) -> AppResult<FpsResult> {
+    license::require(&state)?;
     let st = state.inner().clone();
     blocking(move || {
         let g = find_game(&st, &game_id)?;
@@ -469,6 +476,7 @@ async fn list_processes(state: St<'_>) -> AppResult<Vec<ProcessInfo>> {
 
 #[tauri::command]
 async fn kill_process(state: St<'_>, pid: u32) -> AppResult<CloseResult> {
+    license::require(&state)?;
     let st = state.inner().clone();
     blocking(move || {
         let closed = processes::kill_pid(&st, pid)?;
@@ -481,6 +489,7 @@ async fn kill_process(state: St<'_>, pid: u32) -> AppResult<CloseResult> {
 
 #[tauri::command]
 async fn close_apps(state: St<'_>, names: Vec<String>) -> AppResult<CloseResult> {
+    license::require(&state)?;
     let st = state.inner().clone();
     blocking(move || Ok(processes::close_many(&st, &names, None, None))).await
 }
@@ -514,6 +523,9 @@ async fn get_store_background() -> AppResult<bool> {
 
 #[tauri::command]
 async fn set_store_background(app: AppHandle, state: St<'_>, allowed: bool) -> AppResult<()> {
+    if !allowed {
+        license::require(&state)?;
+    }
     let st = state.inner().clone();
     blocking(move || {
         restore_point_first(&app, &st);
@@ -531,6 +543,9 @@ async fn list_startup_items() -> AppResult<Vec<StartupItem>> {
 
 #[tauri::command]
 async fn set_startup_item(app: AppHandle, state: St<'_>, item_id: String, enabled: bool) -> AppResult<StartupItem> {
+    if !enabled {
+        license::require(&state)?;
+    }
     let st = state.inner().clone();
     blocking(move || {
         restore_point_first(&app, &st);
@@ -570,6 +585,7 @@ async fn get_fortnite_settings() -> AppResult<FortniteSettings> {
 
 #[tauri::command]
 async fn save_fortnite_settings(state: St<'_>, settings: FortniteSettings) -> AppResult<FortniteSettings> {
+    license::require(&state)?;
     let st = state.inner().clone();
     blocking(move || fortnite::save(&st, &settings)).await
 }
@@ -578,6 +594,63 @@ async fn save_fortnite_settings(state: St<'_>, settings: FortniteSettings) -> Ap
 async fn set_background(state: St<'_>, path: Option<String>) -> AppResult<Settings> {
     let st = state.inner().clone();
     blocking(move || background::set(&st, path.as_deref())).await
+}
+
+#[tauri::command]
+fn license_status(state: St<'_>) -> license::LicenseStatus {
+    license::status(&state)
+}
+
+#[tauri::command]
+async fn license_config(state: St<'_>) -> AppResult<license::PublicConfig> {
+    let st = state.inner().clone();
+    blocking(move || Ok(license::config(&st))).await
+}
+
+#[tauri::command]
+async fn license_register(app: AppHandle, state: St<'_>, username: String, password: String, key: String, email: Option<String>, remember: bool) -> AppResult<license::LicenseStatus> {
+    let st = state.inner().clone();
+    let r = blocking(move || license::register(&st, &username, &password, &key, email.as_deref(), remember)).await?;
+    let _ = app.emit("license-state", r.clone());
+    Ok(r)
+}
+
+#[tauri::command]
+async fn license_login(app: AppHandle, state: St<'_>, username: String, password: String, remember: bool) -> AppResult<license::LicenseStatus> {
+    let st = state.inner().clone();
+    let r = blocking(move || license::login(&st, &username, &password, remember)).await?;
+    let _ = app.emit("license-state", r.clone());
+    Ok(r)
+}
+
+#[tauri::command]
+async fn license_demo(app: AppHandle, state: St<'_>) -> AppResult<license::LicenseStatus> {
+    let st = state.inner().clone();
+    let r = blocking(move || license::demo(&st)).await?;
+    let _ = app.emit("license-state", r.clone());
+    Ok(r)
+}
+
+#[tauri::command]
+async fn license_logout(app: AppHandle, state: St<'_>) -> AppResult<license::LicenseStatus> {
+    let st = state.inner().clone();
+    let app2 = app.clone();
+    let r = blocking(move || {
+        let r = license::logout(&st);
+        license::enforce(&app2, &st);
+        Ok(r)
+    })
+    .await?;
+    let _ = app.emit("license-state", r.clone());
+    Ok(r)
+}
+
+#[tauri::command]
+async fn license_refresh(app: AppHandle, state: St<'_>) -> AppResult<license::LicenseStatus> {
+    let st = state.inner().clone();
+    let r = blocking(move || license::refresh(&st)).await?;
+    let _ = app.emit("license-state", r.clone());
+    Ok(r)
 }
 
 #[tauri::command]
@@ -592,12 +665,14 @@ fn get_background_file(state: St<'_>) -> Option<String> {
 
 #[tauri::command]
 async fn measure_bandwidth(state: St<'_>, seconds: Option<f32>) -> AppResult<BandwidthReport> {
+    license::require(&state)?;
     let st = state.inner().clone();
     blocking(move || Ok(bandwidth::measure(&st, seconds.unwrap_or(3.0)))).await
 }
 
 #[tauri::command]
-async fn run_bufferbloat(app: AppHandle) -> AppResult<BufferbloatResult> {
+async fn run_bufferbloat(app: AppHandle, state: St<'_>) -> AppResult<BufferbloatResult> {
+    license::require(&state)?;
     blocking(move || bufferbloat::run(&app)).await
 }
 
@@ -607,7 +682,8 @@ async fn verify_input_live() -> AppResult<Vec<LiveCheck>> {
 }
 
 #[tauri::command]
-async fn sync_input_live() -> AppResult<Vec<LiveCheck>> {
+async fn sync_input_live(state: St<'_>) -> AppResult<Vec<LiveCheck>> {
+    license::require(&state)?;
     blocking(|| Ok(tweaks::input::sync_live())).await
 }
 
@@ -618,6 +694,7 @@ async fn list_game_config(game_id: String) -> AppResult<Vec<GameConfigCheck>> {
 
 #[tauri::command]
 async fn apply_game_config(app: AppHandle, state: St<'_>, game_id: String) -> AppResult<Vec<GameConfigCheck>> {
+    license::require(&state)?;
     let st = state.inner().clone();
     blocking(move || {
         restore_point_first(&app, &st);
@@ -634,6 +711,7 @@ async fn get_fortnite_overview(state: St<'_>) -> AppResult<FortniteOverview> {
 
 #[tauri::command]
 async fn apply_fortnite_recommended(app: AppHandle, state: St<'_>, ids: Vec<String>) -> AppResult<FortniteOverview> {
+    license::require(&state)?;
     let st = state.inner().clone();
     blocking(move || {
         restore_point_first(&app, &st);
@@ -650,6 +728,7 @@ async fn list_overlays(state: St<'_>) -> AppResult<Vec<OverlayInfo>> {
 
 #[tauri::command]
 async fn close_overlay(state: St<'_>, id: String) -> AppResult<Vec<OverlayInfo>> {
+    license::require(&state)?;
     let st = state.inner().clone();
     blocking(move || overlays::close(&st, &id)).await
 }
@@ -662,6 +741,7 @@ async fn list_hw_accel(state: St<'_>) -> AppResult<Vec<HwAccelInfo>> {
 
 #[tauri::command]
 async fn set_hw_accel(app: AppHandle, state: St<'_>, id: String, enabled: bool) -> AppResult<Vec<HwAccelInfo>> {
+    license::require(&state)?;
     let st = state.inner().clone();
     blocking(move || {
         restore_point_first(&app, &st);
@@ -681,6 +761,9 @@ async fn restore_fortnite_backup(state: St<'_>, backup_path: String) -> AppResul
 /// Async: een venster maken vanuit een synchrone opdracht kan op Windows vastlopen.
 #[tauri::command]
 async fn set_crosshair_enabled(app: AppHandle, state: St<'_>, enabled: bool) -> AppResult<bool> {
+    if enabled {
+        license::require(&state)?;
+    }
     crosshair::set_enabled(&app, &state, enabled)?;
     Ok(enabled)
 }
@@ -714,7 +797,8 @@ async fn list_controllers() -> AppResult<Vec<controller::ControllerInfo>> {
 
 /// Meet een paar seconden hoe vaak de controller nieuwe standen doorgeeft (alleen uitlezen).
 #[tauri::command]
-async fn measure_controller_rate(id: String, seconds: Option<f32>) -> AppResult<controller::ControllerRate> {
+async fn measure_controller_rate(state: St<'_>, id: String, seconds: Option<f32>) -> AppResult<controller::ControllerRate> {
+    license::require(&state)?;
     blocking(move || Ok(controller::measure(&id, seconds.unwrap_or(4.0)))).await
 }
 
@@ -729,6 +813,17 @@ fn get_crosshair_config(state: St<'_>) -> CrosshairConfig {
 pub fn run() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let args: Vec<String> = std::env::args().collect();
+    if let Some(i) = args.iter().position(|a| a == "--selftest-license") {
+        if let Some(out) = args.get(i + 1) {
+            let mut v = license::selftest_cred();
+            v["enforce"] = license::selftest_enforce();
+            if let Some(key) = args.get(i + 2) {
+                v["server"] = license::selftest_server(key);
+            }
+            let _ = std::fs::write(out, serde_json::to_string_pretty(&v).unwrap_or_default());
+        }
+        return;
+    }
     if let Some(i) = args.iter().position(|a| a == "--selftest-wifi") {
         if let Some(out) = args.get(i + 1) {
             let before = tweaks::wifi_gaming::adapter_count();
@@ -827,6 +922,8 @@ pub fn run() {
                 let _ = crosshair::set_enabled(app.handle(), &state, true);
             }
 
+            license::init(&state);
+            license::start(app.handle().clone(), state.clone());
             metrics::start(app.handle().clone(), state.clone());
             // Wifi-gamestand hoort bij een open sessie van nezty: na een herstart van de app opnieuw aanzetten.
             {
@@ -912,6 +1009,13 @@ pub fn run() {
             set_startup_item,
             get_game_regions,
             get_device_info,
+            license_status,
+            license_config,
+            license_register,
+            license_login,
+            license_demo,
+            license_logout,
+            license_refresh,
             ping_host,
             get_connection_overview,
             flush_dns,

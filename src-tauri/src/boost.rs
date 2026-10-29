@@ -68,6 +68,8 @@ fn reason_of(e: &AppError) -> Msg {
 
 /// Voert de boost uit. Met `measure_fps` wordt (als de game draait) vóór en na 10 seconden FPS gemeten.
 pub fn run_boost(app: &AppHandle, state: &Arc<AppState>, game_id: Option<&str>, measure_fps: bool) -> AppResult<BoostReport> {
+    // Zonder geldige licentie geen boost (ook niet automatisch). Terugzetten blijft altijd mogelijk.
+    crate::license::require(state)?;
     if lock(&state.boost).is_some() {
         return Err(AppError::coded("already_boosting"));
     }

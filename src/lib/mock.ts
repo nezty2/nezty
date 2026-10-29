@@ -168,6 +168,18 @@ function mockDevice(): T.DeviceInfo {
   const effective: T.DeviceKind = settings.deviceType === "auto" ? detected : settings.deviceType;
   return { detected, effective, setting: settings.deviceType, chassis: [10], hasBattery: true, manufacturer: "ASUSTeK COMPUTER INC.", model: "ROG Strix G16", vendorApp: "Armoury Crate", hybrid: true, displayGpu: "Intel(R) UHD Graphics", fastGpu: "NVIDIA GeForce RTX 4060 Laptop GPU" };
 }
+const lic = (() => {
+  const q = typeof location !== "undefined" ? new URLSearchParams(location.search).get("licentie") : null;
+  const base: T.LicenseStatus = { mode: "active", kind: "month", username: "speler", keyHint: "a871", licenseId: "mock-1", activatedAt: now() - (6 * 24 + 20) * 3600_000, expiresAt: now() + (23 * 24 + 4) * 3600_000, checkBy: now() + 24 * 3600_000, serverNow: now(), remember: true, reason: null };
+  if (q === "uit") return { ...base, mode: "off" as const };
+  if (q === "login") return { ...base, mode: "signed_out" as const, kind: null, username: null, keyHint: null, licenseId: null, activatedAt: null, expiresAt: null, checkBy: null };
+  if (q === "demo") return { ...base, kind: "demo" as const, username: null, keyHint: "DEMO", activatedAt: now() - 18 * 60_000, expiresAt: now() + (60 + 42) * 60_000 };
+  if (q === "bijna") return { ...base, expiresAt: now() + 2 * 24 * 3600_000 + 5 * 3600_000 };
+  if (q === "verlopen") return { ...base, mode: "expired" as const, expiresAt: now() - 3600_000 };
+  return base;
+})();
+let licenseState: T.LicenseStatus = lic;
+const licenseConfig: T.LicenseConfig = { demoEnabled: true, contact: { discord: "nezty_support", email: "support@voorbeeld.nl", website: "", note: "Licenties kosten 5 euro per maand." }, reachable: true };
 let running: string[] = ["epic:fortnite"];
 let history: T.MetricsSample[] = [];
 let cpu = 18;
@@ -253,6 +265,28 @@ export const mockApi: Api = {
     return tweaks.map((x) => ({ ...x, platformLocked: x.platform === "pc_only" ? laptop : x.platform === "laptop_only" ? !laptop : false }));
   },
   async getDeviceInfo() { await delay(); return mockDevice(); },
+  async licenseStatus() { return { ...licenseState, serverNow: now() }; },
+  async licenseConfig() { await delay(200); return licenseConfig; },
+  async licenseRegister(username, _password, key) {
+    await delay(700);
+    if (username.toLowerCase() === "bezet") throw { code: "coded", key: "lic_username_taken", params: {}, message: "" };
+    if (!key.toLowerCase().endsWith("871")) throw { code: "coded", key: "lic_key_unknown", params: {}, message: "" };
+    licenseState = { ...lic, mode: "active", kind: "month", username, keyHint: "a871", activatedAt: now(), expiresAt: now() + 30 * 24 * 3600_000, serverNow: now() };
+    return licenseState;
+  },
+  async licenseLogin(username, password) {
+    await delay(700);
+    if (password !== "geheim123") throw { code: "coded", key: "lic_login_failed", params: {}, message: "" };
+    licenseState = { ...lic, mode: "active", kind: "month", username, keyHint: "a871", activatedAt: now() - 7 * 24 * 3600_000, expiresAt: now() + 23 * 24 * 3600_000, serverNow: now() };
+    return licenseState;
+  },
+  async licenseDemo() {
+    await delay(500);
+    licenseState = { ...lic, mode: "active", kind: "demo", username: null, keyHint: "DEMO", activatedAt: now(), expiresAt: now() + 2 * 3600_000, serverNow: now() };
+    return licenseState;
+  },
+  async licenseLogout() { await delay(300); licenseState = { ...licenseState, mode: "signed_out", kind: null, username: null, expiresAt: null, activatedAt: null }; return licenseState; },
+  async licenseRefresh() { await delay(400); return { ...licenseState, serverNow: now() }; },
   async getGameTweaks(gameId) {
     await delay(200);
     const game = games.find((x) => x.id === gameId);

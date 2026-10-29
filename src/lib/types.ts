@@ -559,6 +559,30 @@ export interface BackendError {
   message: string;
 }
 
+export type LicenseMode = "off" | "signed_out" | "active" | "expired" | "revoked" | "offline";
+
+export interface LicenseStatus {
+  mode: LicenseMode;
+  kind: "month" | "demo" | null;
+  username: string | null;
+  keyHint: string | null;
+  licenseId: string | null;
+  activatedAt: number | null;
+  expiresAt: number | null;
+  checkBy: number | null;
+  /** Geschatte servertijd op het moment van dit bericht. */
+  serverNow: number;
+  remember: boolean;
+  /** Waarom de sessie verviel, bv. "device_mismatch". */
+  reason: string | null;
+}
+
+export interface LicenseConfig {
+  demoEnabled: boolean;
+  contact: { discord: string; email: string; website: string; note: string };
+  reachable: boolean;
+}
+
 /** Namen van backend-events (tauri `listen`). */
 export const EVENTS = {
   metrics: "metrics",
@@ -572,4 +596,5 @@ export const EVENTS = {
   crosshairConfig: "crosshair-config",
   crosshairState: "crosshair-state",
   restorePoint: "restore-point",
+  licenseState: "license-state",
 } as const;

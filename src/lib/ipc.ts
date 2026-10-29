@@ -54,6 +54,13 @@ export interface Api {
   setStartupItem(itemId: string, enabled: boolean): Promise<T.StartupItem>;
   getGameRegions(): Promise<T.GameRegion[]>;
   getDeviceInfo(): Promise<T.DeviceInfo>;
+  licenseStatus(): Promise<T.LicenseStatus>;
+  licenseConfig(): Promise<T.LicenseConfig>;
+  licenseRegister(username: string, password: string, key: string, email: string | null, remember: boolean): Promise<T.LicenseStatus>;
+  licenseLogin(username: string, password: string, remember: boolean): Promise<T.LicenseStatus>;
+  licenseDemo(): Promise<T.LicenseStatus>;
+  licenseLogout(): Promise<T.LicenseStatus>;
+  licenseRefresh(): Promise<T.LicenseStatus>;
   pingHost(host: string, count: number): Promise<T.PingResult>;
   getConnectionOverview(): Promise<T.ConnectionOverview>;
   flushDns(): Promise<void>;
@@ -123,6 +130,13 @@ const tauriApi: Api = {
   setStartupItem: (itemId, enabled) => call("set_startup_item", { itemId, enabled }),
   getGameRegions: () => call("get_game_regions"),
   getDeviceInfo: () => call("get_device_info"),
+  licenseStatus: () => call("license_status"),
+  licenseConfig: () => call("license_config"),
+  licenseRegister: (username, password, key, email, remember) => call("license_register", { username, password, key, email, remember }),
+  licenseLogin: (username, password, remember) => call("license_login", { username, password, remember }),
+  licenseDemo: () => call("license_demo"),
+  licenseLogout: () => call("license_logout"),
+  licenseRefresh: () => call("license_refresh"),
   pingHost: (host, count) => call("ping_host", { host, count }),
   getConnectionOverview: () => call("get_connection_overview"),
   flushDns: () => call("flush_dns"),

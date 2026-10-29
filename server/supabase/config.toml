@@ -1,0 +1,6 @@
+# Minimale Supabase-instellingen voor dit project.
+project_id = "nezty"
+
+# De app stuurt geen Supabase-login mee: de functie doet zelf de controles (sessie, beheerderssleutel).
+[functions.license]
+verify_jwt = false

@@ -36,6 +36,8 @@ pub struct AppState {
     pub icons: Mutex<HashMap<String, Option<String>>>,
     /// Loopt er een afbeeldingen-ophaalronde?
     pub covers_busy: AtomicBool,
+    /// Licentie: sessie, ondertekend token en apparaat-ID.
+    pub license: Mutex<crate::license::Runtime>,
 }
 
 /// Lock die een "poisoned" mutex gewoon doorgeeft in plaats van te panikeren.
@@ -67,6 +69,7 @@ impl AppState {
             titles: Mutex::new(HashMap::new()),
             icons: Mutex::new(HashMap::new()),
             covers_busy: AtomicBool::new(false),
+            license: Mutex::new(crate::license::Runtime::default()),
         }
     }
 

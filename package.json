@@ -1,14 +1,25 @@
 {
   "name": "nezty",
   "private": true,
-  "version": "0.3.13",
+  "version": "0.3.14",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "licentie:maak": "node --no-warnings tools/licentie/cli.ts maak",
+    "licentie:verleng": "node --no-warnings tools/licentie/cli.ts verleng",
+    "licentie:intrekken": "node --no-warnings tools/licentie/cli.ts intrekken",
+    "licentie:reset-apparaat": "node --no-warnings tools/licentie/cli.ts reset-apparaat",
+    "licentie:lijst": "node --no-warnings tools/licentie/cli.ts lijst",
+    "licentie:info": "node --no-warnings tools/licentie/cli.ts info",
+    "gebruiker:reset-wachtwoord": "node --no-warnings tools/licentie/cli.ts reset-wachtwoord",
+    "licentie:instellingen": "node --no-warnings tools/licentie/cli.ts instellingen",
+    "licentie:sleutels-maken": "node --no-warnings tools/licentie/cli.ts sleutels-maken",
+    "licentie:test": "node --no-warnings --test server/test/core.test.ts",
+    "licentie:testserver": "node --no-warnings server/dev/devserver.ts"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.4",

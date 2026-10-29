@@ -21,11 +21,17 @@ import { NetworkPage } from "@/pages/Network";
 import { SettingsPage } from "@/pages/Settings";
 import { StartupPage } from "@/pages/Startup";
 import { TweaksPage } from "@/pages/Tweaks";
-import { useApp } from "@/store/app";
+import { useApp, type PageId } from "@/store/app";
+import { LoginScreen } from "@/components/license/LoginScreen";
+import { ForceUpdate } from "@/components/ForceUpdate";
+import { LicenseGate } from "@/components/license/LicenseGate";
+import { LicensePage } from "@/pages/License";
+import { isLocked, remainingMs, warnThresholds, parts } from "@/lib/license";
 
 const pages = {
   dashboard: DashboardPage,
   tweaks: TweaksPage,
+  license: LicensePage,
   laptop: LaptopPage,
   input: InputPage,
   controller: ControllerPage,
@@ -47,6 +53,10 @@ export default function App() {
   const showResult = useApp((s) => s.showResult);
   const setShowResult = useApp((s) => s.setShowResult);
   const mainRef = useRef<HTMLElement>(null);
+  const license = useApp((s) => s.license);
+  const toast = useApp((s) => s.toast);
+  const setPage = useApp((s) => s.setPage);
+  const tr = useApp((s) => s.tr);
 
   useEffect(() => {
     void init();
@@ -78,14 +88,47 @@ export default function App() {
     mainRef.current?.scrollTo({ top: 0 });
   }, [page]);
 
-  const Page = pages[page];
+  // Waarschuwen: 3 dagen en 1 dag voor het einde (maand), 15 minuten (demo). Eén keer per moment.
+  useEffect(() => {
+    if (!license || license.mode !== "active" || license.expiresAt == null || !license.licenseId) return;
+    const check = () => {
+      const left = remainingMs(license, license.serverNow + (Date.now() - useApp.getState().licenseReceivedAt));
+      for (const limit of warnThresholds(license)) {
+        if (left > limit) continue;
+        const k = `nezty.licwarn.${license.licenseId}.${license.expiresAt}.${limit}`;
+        try {
+          if (localStorage.getItem(k)) continue;
+          localStorage.setItem(k, "1");
+        } catch {
+          /* geen opslag: dan gewoon tonen */
+        }
+        const p = parts(left);
+        const title =
+          license.kind === "demo"
+            ? tr("license.warnDemo", { minutes: Math.max(1, Math.ceil(left / 60_000)) })
+            : p.days > 0
+              ? tr("license.warnDays", { days: p.days })
+              : tr("license.warnHours", { hours: Math.max(1, p.hours) });
+        toast({ level: "warning", title, message: tr("license.warnText"), action: { label: tr("license.renew"), onClick: () => setPage("license") } });
+        break;
+      }
+    };
+    check();
+    const id = window.setInterval(check, license.kind === "demo" ? 15_000 : 300_000);
+    return () => window.clearInterval(id);
+  }, [license, toast, tr, setPage]);
+
+  // Zonder geldige licentie op slot. Logboek (Alles terugzetten), instellingen en licentie blijven open.
+  const OPEN: PageId[] = ["log", "settings", "license"];
+  const Page = isLocked(license) && !OPEN.includes(page) ? LicenseGate : pages[page];
+  const signedOut = license?.mode === "signed_out";
 
   return (
     <MotionConfig reducedMotion={settings?.reduceMotion ? "always" : "never"}>
       <AppBackground />
       <div className="relative flex h-full">
-        <Sidebar />
-        <main ref={mainRef} className="scroll-thin relative min-w-0 flex-1 overflow-y-auto">
+        {!signedOut && <Sidebar />}
+        <main ref={mainRef} className={signedOut ? "invisible relative min-w-0 flex-1" : "scroll-thin relative min-w-0 flex-1 overflow-y-auto"}>
           {!isTauri && <div className="sticky top-0 z-20 border-b border-warn/30 bg-[#2a2416] px-4 py-1 text-center text-[12px] text-warn">{t("common.browserPreview")}</div>}
           {ready && (
             <AnimatePresence mode="wait" initial={false}>
@@ -107,6 +150,8 @@ export default function App() {
         <Toasts />
         <WelcomeModal />
         <BoostResultModal report={lastReport} open={showResult} onClose={() => setShowResult(false)} />
+        {!intro && ready && signedOut && <LoginScreen />}
+        {!intro && <ForceUpdate />}
         {intro && <Intro onDone={() => setIntro(false)} />}
         <Splash show={!intro && !ready} />
       </div>
