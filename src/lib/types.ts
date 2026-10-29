@@ -167,22 +167,6 @@ export interface HwAccelInfo {
   running: boolean;
 }
 
-export type TestStatus = "ok" | "warn" | "fail" | "info";
-
-export interface TestCheck {
-  id: string;
-  status: TestStatus;
-  key: string;
-  params: Record<string, string>;
-}
-
-export interface TweakTestStep {
-  id: string;
-  result: "ok" | "skipped" | "error";
-  restored: boolean;
-  error: string | null;
-}
-
 export interface CrosshairPreset {
   name: string;
   config: CrosshairConfig;

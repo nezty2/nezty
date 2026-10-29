@@ -13,22 +13,17 @@ import { isTauri } from "@/lib/ipc";
 import { BackgroundAppsPage } from "@/pages/BackgroundApps";
 import { CrosshairPage } from "@/pages/Crosshair";
 import { DashboardPage } from "@/pages/Dashboard";
-import { FortnitePage } from "@/pages/Fortnite";
-import { GamesPage } from "@/pages/Games";
 import { InputPage } from "@/pages/Input";
 import { ControllerPage } from "@/pages/Controller";
 import { LogPage } from "@/pages/Log";
 import { NetworkPage } from "@/pages/Network";
 import { SettingsPage } from "@/pages/Settings";
 import { StartupPage } from "@/pages/Startup";
-import { TestPage } from "@/pages/Test";
 import { TweaksPage } from "@/pages/Tweaks";
 import { useApp } from "@/store/app";
 
 const pages = {
   dashboard: DashboardPage,
-  games: GamesPage,
-  fortnite: FortnitePage,
   tweaks: TweaksPage,
   input: InputPage,
   controller: ControllerPage,
@@ -37,7 +32,6 @@ const pages = {
   network: NetworkPage,
   startup: StartupPage,
   log: LogPage,
-  test: TestPage,
   settings: SettingsPage,
 };
 

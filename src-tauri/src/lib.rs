@@ -2,7 +2,6 @@
 
 mod autostart;
 mod bigwins;
-mod checkup;
 mod background;
 mod bandwidth;
 mod boost;
@@ -107,22 +106,6 @@ async fn get_app_info(app: AppHandle, state: St<'_>) -> AppResult<AppInfo> {
             total_memory_mb: sys.total_memory() / 1_048_576,
             ui_language: windows_ui_language(),
         })
-    })
-    .await
-}
-
-#[tauri::command]
-async fn run_checkup(app: AppHandle, state: St<'_>) -> AppResult<Vec<checkup::Check>> {
-    let st = state.inner().clone();
-    blocking(move || Ok(checkup::run(&app, &st))).await
-}
-
-#[tauri::command]
-async fn run_tweak_test(app: AppHandle, state: St<'_>) -> AppResult<Vec<checkup::RoundtripStep>> {
-    let st = state.inner().clone();
-    blocking(move || {
-        restore_point_first(&app, &st);
-        checkup::tweak_roundtrip(&st)
     })
     .await
 }
@@ -862,8 +845,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_app_info,
             get_autostart,
-            run_checkup,
-            run_tweak_test,
             set_autostart,
             get_settings,
             save_settings,

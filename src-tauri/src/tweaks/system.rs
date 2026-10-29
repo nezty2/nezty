@@ -55,12 +55,31 @@ pub fn game_bar_disable(state: &AppState) -> AppResult<()> {
 // ---------- Meldingen ----------
 
 /// Windows-meldingen (pop-ups rechtsonder, ook van Discord en andere apps) uit. Dezelfde schakelaar als
-/// Instellingen > Systeem > Meldingen. Meldingen komen nog wel in het meldingencentrum.
+/// Instellingen > Systeem > Meldingen. Windows 11 leest de nieuwe sleutel (Notifications\Settings), oudere
+/// onderdelen de oude (PushNotifications), daarom allebei. Meldingen komen nog wel in het meldingencentrum.
 fn notifications_specs() -> Vec<RegSpec> {
-    vec![RegSpec::dword(Hive::Hkcu, "Software\\Microsoft\\Windows\\CurrentVersion\\PushNotifications", "ToastEnabled", 0, 1)]
+    vec![
+        RegSpec::dword(Hive::Hkcu, r"Software\Microsoft\Windows\CurrentVersion\Notifications\Settings", "NOC_GLOBAL_SETTING_TOASTS_ENABLED", 0, 1).off_absent(),
+        RegSpec::dword(Hive::Hkcu, r"Software\Microsoft\Windows\CurrentVersion\PushNotifications", "ToastEnabled", 0, 1),
+    ]
 }
-pub fn notifications_status() -> AppResult<Status> {
-    Ok(Status::simple(regtweak::state_of(&notifications_specs())?))
+
+/// Apps met een eigen meldingsstijl die Windows niet tegenhoudt: naam en procesnamen.
+const OWN_POPUPS: &[(&str, &[&str])] = &[("Teams", &["ms-teams.exe", "teams.exe"]), ("Steam", &["steam.exe"])];
+
+pub fn notifications_status(state: &AppState) -> AppResult<Status> {
+    let st = regtweak::state_of(&notifications_specs())?;
+    if st != TweakState::On {
+        return Ok(Status::simple(st));
+    }
+    // Staat de tweak aan, zeg er dan eerlijk bij welke draaiende apps toch nog pop-ups tonen.
+    let running = crate::processes::running_names(state);
+    let own: Vec<&str> = OWN_POPUPS.iter().filter(|(_, procs)| procs.iter().any(|p| running.contains(*p))).map(|(name, _)| *name).collect();
+    if own.is_empty() {
+        Ok(Status::simple(st))
+    } else {
+        Ok(Status::with_detail(st, Msg::new("notif_own_popups").with("apps", own.join(", "))))
+    }
 }
 pub fn notifications_apply(state: &AppState, session: Option<&str>) -> AppResult<()> {
     regtweak::apply(state, get("notifications_off")?, &notifications_specs(), session, None, None)

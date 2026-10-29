@@ -76,8 +76,6 @@ export interface Api {
   setHwAccel(id: string, enabled: boolean): Promise<T.HwAccelInfo[]>;
   setCrosshairEnabled(enabled: boolean): Promise<boolean>;
   getCrosshairConfig(): Promise<T.CrosshairConfig>;
-  runCheckup(): Promise<T.TestCheck[]>;
-  runTweakTest(): Promise<T.TweakTestStep[]>;
   listControllers(): Promise<T.ControllerInfo[]>;
   measureControllerRate(id: string, seconds?: number): Promise<T.ControllerRate>;
 }
@@ -147,8 +145,6 @@ const tauriApi: Api = {
   setHwAccel: (id, enabled) => call("set_hw_accel", { id, enabled }),
   setCrosshairEnabled: (enabled) => call("set_crosshair_enabled", { enabled }),
   getCrosshairConfig: () => call("get_crosshair_config"),
-  runCheckup: () => call("run_checkup"),
-  runTweakTest: () => call("run_tweak_test"),
   listControllers: () => call("list_controllers"),
   measureControllerRate: (id, seconds) => call("measure_controller_rate", { id, seconds: seconds ?? null }),
 };

@@ -1,12 +1,9 @@
 import {
   Crosshair,
-  FlaskConical,
-  Gamepad2,
   Joystick,
   LayoutDashboard,
   Layers,
   Mouse,
-  Pickaxe,
   Power,
   ScrollText,
   Settings,
@@ -24,8 +21,6 @@ import { UpdateButton } from "./UpdateButton";
 
 const items: { id: PageId; key: TKey; icon: LucideIcon }[] = [
   { id: "dashboard", key: "nav.dashboard", icon: LayoutDashboard },
-  { id: "games", key: "nav.games", icon: Gamepad2 },
-  { id: "fortnite", key: "nav.fortnite", icon: Pickaxe },
   { id: "tweaks", key: "nav.tweaks", icon: SlidersHorizontal },
   { id: "input", key: "nav.input", icon: Mouse },
   { id: "controller", key: "nav.controller", icon: Joystick },
@@ -34,7 +29,6 @@ const items: { id: PageId; key: TKey; icon: LucideIcon }[] = [
   { id: "network", key: "nav.network", icon: Wifi },
   { id: "startup", key: "nav.startup", icon: Power },
   { id: "log", key: "nav.log", icon: ScrollText },
-  { id: "test", key: "nav.test", icon: FlaskConical },
 ];
 
 function NavButton({ label, icon: Icon, active, dot, onClick }: { id: PageId; label: string; icon: LucideIcon; active: boolean; dot?: boolean; onClick: () => void }) {
