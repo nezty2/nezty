@@ -8,11 +8,11 @@
 //   npm run licentie:maak -- --type maand
 //   npm run licentie:maak -- --type demo
 //   npm run licentie:maak -- --type maand --aantal 5
-//   npm run licentie:verleng -- --sleutel NZT-XXXX-XXXX-XXXX-XXXX --dagen 30
-//   npm run licentie:intrekken -- --sleutel NZT-...
-//   npm run licentie:reset-apparaat -- --sleutel NZT-...
+//   npm run licentie:verleng -- --sleutel nezty-xxxx-xxxx-xxx --dagen 30
+//   npm run licentie:intrekken -- --sleutel nezty-...
+//   npm run licentie:reset-apparaat -- --sleutel nezty-...
 //   npm run licentie:lijst
-//   npm run licentie:info -- --sleutel NZT-...
+//   npm run licentie:info -- --sleutel nezty-...
 //   npm run gebruiker:reset-wachtwoord -- --gebruiker naam
 //   npm run licentie:instellingen -- --demo aan --discord jouwnaam --email jij@voorbeeld.nl
 //   npm run licentie:sleutels-maken
@@ -81,7 +81,7 @@ function target(): Record<string, string> {
     return { key };
   }
   if (id) return { id };
-  stop("Geef --sleutel NZT-XXXX-XXXX-XXXX-XXXX (of --id uit de lijst).");
+  stop("Geef --sleutel nezty-xxxx-xxxx-xxx (of --id uit de lijst).");
 }
 
 function showLicense(l: Record<string, any>) {
@@ -238,11 +238,11 @@ async function main() {
   nezty licentiegenerator
 
   npm run licentie:maak -- --type maand|demo [--aantal 5] [--notitie "klant X"]
-  npm run licentie:verleng -- --sleutel NZT-... --dagen 30
-  npm run licentie:intrekken -- --sleutel NZT-...
-  npm run licentie:reset-apparaat -- --sleutel NZT-...
+  npm run licentie:verleng -- --sleutel nezty-... --dagen 30
+  npm run licentie:intrekken -- --sleutel nezty-...
+  npm run licentie:reset-apparaat -- --sleutel nezty-...
   npm run licentie:lijst
-  npm run licentie:info -- --sleutel NZT-...
+  npm run licentie:info -- --sleutel nezty-...
   npm run gebruiker:reset-wachtwoord -- --gebruiker naam [--wachtwoord nieuw]
   npm run licentie:instellingen -- [--demo aan|uit] [--discord x] [--email x] [--website x] [--tekst x]
   npm run licentie:sleutels-maken

@@ -70,11 +70,11 @@ Alle commando's vanuit de map `nzty-broncode`.
 npm run licentie:maak -- --type maand
 npm run licentie:maak -- --type demo
 npm run licentie:maak -- --type maand --aantal 5
-npm run licentie:verleng -- --sleutel NZT-XXXX-XXXX-XXXX-XXXX --dagen 30
-npm run licentie:intrekken -- --sleutel NZT-...
-npm run licentie:reset-apparaat -- --sleutel NZT-...     (klant heeft een nieuwe pc)
+npm run licentie:verleng -- --sleutel nezty-xxxx-xxxx-xxx --dagen 30
+npm run licentie:intrekken -- --sleutel nezty-...
+npm run licentie:reset-apparaat -- --sleutel nezty-...     (klant heeft een nieuwe pc)
 npm run licentie:lijst
-npm run licentie:info -- --sleutel NZT-...
+npm run licentie:info -- --sleutel nezty-...
 npm run gebruiker:reset-wachtwoord -- --gebruiker naam
 npm run licentie:instellingen -- --demo uit
 ```
@@ -83,7 +83,7 @@ In plaats van `--sleutel` kun je `--id` gebruiken (de eerste tekens uit `licenti
 
 ## Hoe het werkt
 
-- **Sleutels.** `NZT-XXXX-XXXX-XXXX-XXXX`: 15 willekeurige tekens (75 bits) plus een controleteken. Een typfout ziet de app al tijdens het typen.
+- **Sleutels.** Bijvoorbeeld `nezty-8273-ctaa-871`: 10 willekeurige tekens (50 bits, ruim duizend biljoen mogelijkheden) plus een controleteken. Kleine letters en cijfers zonder 0, 1, i en o. Hoofdletters of spaties bij het overtypen maken niet uit, en een typfout ziet de app al tijdens het typen.
 - **Tijd.** De tijd gaat lopen bij het activeren, niet bij het maken. Maand = 30 dagen, demo = 2 uur. Verlengen telt door vanaf de einddatum, of vanaf nu als de licentie al verlopen was.
 - **Eén apparaat.** De app stuurt een apparaat-ID (een hash van de Windows MachineGuid). Inloggen op een ander apparaat kan pas na `licentie:reset-apparaat`.
 - **Token.** De server ondertekent de uitkomst met Ed25519. De app controleert de handtekening en bewaart sessie en token in Windows Credential Manager (alleen met "Ingelogd blijven").

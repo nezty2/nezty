@@ -3,7 +3,8 @@
 
 import type { LicenseStatus } from "./types";
 
-const ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+const ALPHABET = "23456789abcdefghjklmnpqrstuvwxyz";
+const RANDOM = 10;
 
 function checkChar(body: string): string {
   let factor = 2;
@@ -17,21 +18,21 @@ function checkChar(body: string): string {
   return ALPHABET[(32 - (sum % 32)) % 32];
 }
 
-/** Tekens zonder voorvoegsel en streepjes, of null als het geen geldige sleutel kan zijn. */
+/** De 11 tekens zonder "nezty" en streepjes, of null als het geen geldige sleutel kan zijn. */
 export function keyChars(input: string): string | null {
-  let s = input.toUpperCase().replace(/[\s-]/g, "");
-  if (s.startsWith("NZT") && s.length === 19) s = s.slice(3);
-  if (s.length !== 16 || [...s].some((c) => !ALPHABET.includes(c))) return null;
-  return checkChar(s.slice(0, 15)) === s[15] ? s : null;
+  let s = input.toLowerCase().replace(/[\s-]/g, "");
+  if (s.startsWith("nezty") && s.length === 16) s = s.slice(5);
+  if (s.length !== RANDOM + 1 || [...s].some((c) => !ALPHABET.includes(c))) return null;
+  return checkChar(s.slice(0, RANDOM)) === s[RANDOM] ? s : null;
 }
 
-/** Netjes opmaken tijdens het typen: NZT-XXXX-XXXX-XXXX-XXXX. */
+/** Netjes opmaken tijdens het typen: nezty-xxxx-xxxx-xxx (hoofdletters worden kleine letters). */
 export function formatKeyInput(input: string): string {
-  let s = input.toUpperCase().replace(/[^0-9A-Z]/g, "");
-  if (s.startsWith("NZT")) s = s.slice(3);
-  s = s.slice(0, 16);
-  const groups = s.match(/.{1,4}/g) ?? [];
-  return groups.length ? `NZT-${groups.join("-")}` : "";
+  let s = input.toLowerCase().replace(/[^0-9a-z]/g, "");
+  if (s.startsWith("nezty")) s = s.slice(5);
+  s = s.slice(0, RANDOM + 1);
+  const groups = [s.slice(0, 4), s.slice(4, 8), s.slice(8, 11)].filter(Boolean);
+  return groups.length ? `nezty-${groups.join("-")}` : "";
 }
 
 export type LicenseTone = "normal" | "warn" | "bad";

@@ -170,7 +170,7 @@ function mockDevice(): T.DeviceInfo {
 }
 const lic = (() => {
   const q = typeof location !== "undefined" ? new URLSearchParams(location.search).get("licentie") : null;
-  const base: T.LicenseStatus = { mode: "active", kind: "month", username: "speler", keyHint: "H8RD", licenseId: "mock-1", activatedAt: now() - (6 * 24 + 20) * 3600_000, expiresAt: now() + (23 * 24 + 4) * 3600_000, checkBy: now() + 24 * 3600_000, serverNow: now(), remember: true, reason: null };
+  const base: T.LicenseStatus = { mode: "active", kind: "month", username: "speler", keyHint: "a871", licenseId: "mock-1", activatedAt: now() - (6 * 24 + 20) * 3600_000, expiresAt: now() + (23 * 24 + 4) * 3600_000, checkBy: now() + 24 * 3600_000, serverNow: now(), remember: true, reason: null };
   if (q === "uit") return { ...base, mode: "off" as const };
   if (q === "login") return { ...base, mode: "signed_out" as const, kind: null, username: null, keyHint: null, licenseId: null, activatedAt: null, expiresAt: null, checkBy: null };
   if (q === "demo") return { ...base, kind: "demo" as const, username: null, keyHint: "DEMO", activatedAt: now() - 18 * 60_000, expiresAt: now() + (60 + 42) * 60_000 };
@@ -270,14 +270,14 @@ export const mockApi: Api = {
   async licenseRegister(username, _password, key) {
     await delay(700);
     if (username.toLowerCase() === "bezet") throw { code: "coded", key: "lic_username_taken", params: {}, message: "" };
-    if (!key.endsWith("H8RD")) throw { code: "coded", key: "lic_key_unknown", params: {}, message: "" };
-    licenseState = { ...lic, mode: "active", kind: "month", username, keyHint: "H8RD", activatedAt: now(), expiresAt: now() + 30 * 24 * 3600_000, serverNow: now() };
+    if (!key.toLowerCase().endsWith("871")) throw { code: "coded", key: "lic_key_unknown", params: {}, message: "" };
+    licenseState = { ...lic, mode: "active", kind: "month", username, keyHint: "a871", activatedAt: now(), expiresAt: now() + 30 * 24 * 3600_000, serverNow: now() };
     return licenseState;
   },
   async licenseLogin(username, password) {
     await delay(700);
     if (password !== "geheim123") throw { code: "coded", key: "lic_login_failed", params: {}, message: "" };
-    licenseState = { ...lic, mode: "active", kind: "month", username, keyHint: "H8RD", activatedAt: now() - 7 * 24 * 3600_000, expiresAt: now() + 23 * 24 * 3600_000, serverNow: now() };
+    licenseState = { ...lic, mode: "active", kind: "month", username, keyHint: "a871", activatedAt: now() - 7 * 24 * 3600_000, expiresAt: now() + 23 * 24 * 3600_000, serverNow: now() };
     return licenseState;
   },
   async licenseDemo() {

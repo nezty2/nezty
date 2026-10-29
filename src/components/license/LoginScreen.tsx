@@ -66,7 +66,8 @@ export function LoginScreen() {
   // Uitgelogd door de server (bv. apparaat losgekoppeld of wachtwoord gereset): laten zien waarom.
   const reason = license?.reason ? td(`msg.lic_${license.reason}`, undefined, "") : "";
   const keyOk = keyChars(key) !== null;
-  const keyTyped = key.replace(/[^0-9A-Z]/gi, "").length >= 19;
+  // Volledig getypt: "nezty" plus 11 tekens.
+  const keyTyped = key.replace(/[^0-9a-z]/gi, "").length >= 16;
 
   const show = (e: unknown) => {
     const err = asBackendError(e);
@@ -149,7 +150,7 @@ export function LoginScreen() {
             {tab === "register" && (
               <>
                 <Field label={t("login.key")} hint={keyTyped ? (keyOk ? <span className="text-ok">{t("login.keyLooksOk")}</span> : <span className="text-bad">{t("login.keyTypo")}</span>) : undefined}>
-                  <Input value={key} onChange={(v) => setKey(formatKeyInput(v))} placeholder="NZT-XXXX-XXXX-XXXX-XXXX" mono invalid={keyTyped && !keyOk} />
+                  <Input value={key} onChange={(v) => setKey(formatKeyInput(v))} placeholder="nezty-xxxx-xxxx-xxx" mono invalid={keyTyped && !keyOk} />
                 </Field>
                 <Field label={t("login.email")} hint={t("login.optional")}>
                   <Input value={email} onChange={setEmail} type="email" autoComplete="email" />

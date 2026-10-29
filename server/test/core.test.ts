@@ -27,17 +27,19 @@ async function setup() {
 test("sleutels: formaat, controleteken en typfouten", () => {
   for (let i = 0; i < 200; i++) {
     const k = newKey();
-    assert.match(k, /^NZT-[2-9A-HJ-NP-Z]{4}(-[2-9A-HJ-NP-Z]{4}){3}$/);
+    assert.match(k, /^nezty-[2-9a-hj-np-z]{4}-[2-9a-hj-np-z]{4}-[2-9a-hj-np-z]{3}$/);
     assert.ok(normalize(k));
-    assert.ok(normalize(k.toLowerCase().replace(/-/g, " ")), "kleine letters en spaties mogen");
+    assert.ok(normalize(k.toUpperCase().replace(/-/g, " ")), "hoofdletters en spaties mogen");
+    assert.ok(normalize(k.replace(/^nezty-/, "")), "zonder nezty ervoor mag ook");
     // Eén teken veranderen moet altijd opvallen.
-    const chars = k.replace(/^NZT-/, "").replace(/-/g, "");
-    const pos = i % 16;
+    const chars = k.replace(/^nezty-/, "").replace(/-/g, "");
+    const pos = i % 11;
     const other = ALPHABET[(ALPHABET.indexOf(chars[pos]) + 1 + (i % 30)) % 32];
     const typo = chars.slice(0, pos) + other + chars.slice(pos + 1);
     assert.equal(normalize(typo), null, `typfout op positie ${pos} niet gezien`);
   }
-  assert.equal(normalize("NZT-0000-1111-IIII-OOOO"), null);
+  assert.equal(normalize("nezty-0000-1111-ioi"), null);
+  assert.equal(normalize("nezty-2345-6789-abc") === null || normalize("nezty-2345-6789-abd") === null, true, "niet elk rijtje is geldig");
 });
 
 test("account maken: tijd start bij activeren, één apparaat, sleutel maar één keer", async () => {
@@ -131,7 +133,7 @@ test("beheer: verlengen, intrekken, nieuw apparaat, wachtwoord resetten, lijst",
   assert.equal(list.licenses.length, 3);
   const mine = list.licenses.find((l: any) => l.username === "klant");
   assert.equal(mine.status, "active");
-  assert.equal(mine.hint, key.slice(-4));
+  assert.equal(mine.hint, normalize(key)!.slice(-4));
   assert.equal(list.licenses.filter((l: any) => l.status === "unused").length, 2);
   const byId = await call("/admin/info", { id: mine.id.slice(0, 8) }, true);
   assert.equal(byId.license.username, "klant");
