@@ -24,6 +24,7 @@ import { TweaksPage } from "@/pages/Tweaks";
 import { useApp, type PageId } from "@/store/app";
 import { LoginScreen } from "@/components/license/LoginScreen";
 import { ForceUpdate } from "@/components/ForceUpdate";
+import { useAutoUpdateCheck } from "@/store/update";
 import { LicenseGate } from "@/components/license/LicenseGate";
 import { LicensePage } from "@/pages/License";
 import { isLocked, remainingMs, warnThresholds, parts } from "@/lib/license";
@@ -53,6 +54,7 @@ export default function App() {
   const showResult = useApp((s) => s.showResult);
   const setShowResult = useApp((s) => s.setShowResult);
   const mainRef = useRef<HTMLElement>(null);
+  useAutoUpdateCheck(ready);
   const license = useApp((s) => s.license);
   const toast = useApp((s) => s.toast);
   const setPage = useApp((s) => s.setPage);
@@ -151,7 +153,7 @@ export default function App() {
         <WelcomeModal />
         <BoostResultModal report={lastReport} open={showResult} onClose={() => setShowResult(false)} />
         {!intro && ready && signedOut && <LoginScreen />}
-        {!intro && <ForceUpdate />}
+        <ForceUpdate />
         {intro && <Intro onDone={() => setIntro(false)} />}
         <Splash show={!intro && !ready} />
       </div>
