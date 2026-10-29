@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { AlertCircle, KeyRound, LogIn, Play, UserPlus, WifiOff, Zap } from "lucide-react";
+import { AlertCircle, KeyRound, LogIn, Play, UserPlus, WifiOff } from "lucide-react";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Button, cn } from "@/components/ui";
 import { useT } from "@/i18n/hooks";
@@ -107,11 +107,8 @@ export function LoginScreen() {
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center overflow-y-auto px-4 py-10">
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }} className="w-full max-w-[420px]">
-        <div className="mb-6 flex items-center justify-center gap-3">
-          <div className="btn-primary flex h-10 w-10 items-center justify-center rounded-xl">
-            <Zap className="h-5 w-5 text-white" fill="currentColor" />
-          </div>
-          <div className="text-xl font-semibold tracking-tight">nezty</div>
+        <div className="mb-6 text-center text-2xl font-semibold tracking-tight">
+          nezty <span className="text-accent">tweaks</span>
         </div>
 
         <div className="card p-6">

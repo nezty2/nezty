@@ -66,12 +66,13 @@ export function Sidebar() {
 
   return (
     <aside className="glass relative z-10 flex h-full w-[68px] shrink-0 flex-col border-r border-line min-[1120px]:w-[224px]">
-      <div className="flex h-16 items-center gap-3 px-4 min-[1120px]:px-5">
-        <div className="btn-primary flex h-9 w-9 shrink-0 items-center justify-center rounded-lg">
-          <Zap className="h-5 w-5 text-white" fill="currentColor" />
-        </div>
+      <div className="flex h-16 items-center px-4 min-[1120px]:px-5">
+        {/* Smalle zijbalk: alleen "nezty"; breed: "nezty tweaks" met versie. */}
+        <div className="text-[13px] font-semibold leading-tight tracking-tight min-[1120px]:hidden">nezty</div>
         <div className="hidden min-w-0 min-[1120px]:block">
-          <div className="text-[15px] font-semibold leading-tight">nezty</div>
+          <div className="text-[16px] font-semibold leading-tight tracking-tight">
+            nezty <span className="text-accent">tweaks</span>
+          </div>
           <div className="text-[12px] text-ink-3">v{appInfo?.version ?? ""}</div>
         </div>
       </div>
