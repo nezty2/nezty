@@ -1,4 +1,4 @@
-import { Download, RotateCcw, Zap } from "lucide-react";
+import { Download, RotateCcw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useT } from "@/i18n/hooks";
 import { api } from "@/lib/ipc";
@@ -45,8 +45,8 @@ export function ForceUpdate() {
   return (
     <div className="fixed inset-0 z-[95] flex items-center justify-center bg-bg/90 px-4 backdrop-blur">
       <div className="card w-full max-w-[440px] space-y-5 p-6 text-center">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl btn-primary">
-          <Zap className="h-6 w-6 text-white" fill="currentColor" />
+        <div className="text-xl font-semibold tracking-tight">
+          nezty <span className="text-accent">tweaks</span>
         </div>
         <div>
           <h2 className="text-lg font-semibold">{t("forceUpdate.title")}</h2>
