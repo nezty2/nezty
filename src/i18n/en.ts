@@ -28,6 +28,7 @@ export const en: Dict = {
   nav: {
     dashboard: "Dashboard",
     tweaks: "Tweaks",
+    laptop: "Laptop",
     input: "Mouse & keyboard",
     controller: "Controller",
     crosshair: "Crosshair",
@@ -547,9 +548,6 @@ export const en: Dict = {
     },
   },
   tweaks: {
-    laptop: "Laptop",
-    laptopNote: "For laptops only. Game Boost includes these by default.",
-    laptopNotePc: "These tweaks are for laptops. On your PC they are locked.",
     title: "Tweaks",
     tabs: { recommended: "Recommended", fortnite: "Fortnite", games: "Per game", windows: "Windows", experimental: "Experimental" },
     tabsSub: {
@@ -598,6 +596,19 @@ export const en: Dict = {
       pc_only: "On a laptop this mostly means more heat and a flat battery.",
       laptop_only: "This is about a laptop's battery, charger or power mode. On a desktop PC it does nothing.",
     },
+  },
+  laptop: {
+    title: "Laptop",
+    pcTitle: "This device is a PC",
+    pcText: "Everything on this page is for laptops, so it is locked. Is that wrong? Pick the right type in Settings.",
+    pcButton: "Open Settings",
+    statusTitle: "Right now",
+    tweaksTitle: "Tweaks for your laptop",
+    tweaksSub: "Game Boost includes these by default on a laptop. Everything can be reverted.",
+    checksTitle: "Checks",
+    checksSub: "Charger, heat, graphics card, screen, network and your maker's apps.",
+    settingsTitle: "Game Boost on your laptop",
+    safe: "nezty only reads heat. It never controls fans or voltages.",
   },
   bigwin: {
     brandApp: "your laptop maker's app",

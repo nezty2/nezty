@@ -25,8 +25,10 @@ const TABS: { id: TweaksTab; icon: LucideIcon }[] = [
   { id: "experimental", icon: FlaskConical },
 ];
 const TAB_KEY = "nezty.tweaks.tab";
+/** Controles die alleen op de laptoppagina staan. */
+export const LAPTOP_CHECKS = ["laptop_heat", "laptop_gpu_mode", "laptop_wifi", "laptop_display", "vendor_apps"];
 
-function BigWinCard({ win, onFixed }: { win: BigWin; onFixed: (list: BigWin[]) => void }) {
+export function BigWinCard({ win, onFixed }: { win: BigWin; onFixed: (list: BigWin[]) => void }) {
   const { t, td, tl, lang } = useT();
   const setPage = useApp((s) => s.setPage);
   const handleError = useApp((s) => s.handleError);
@@ -111,7 +113,7 @@ function BigWins() {
   const { t } = useT();
   const bigWins = useApp((s) => s.bigWins);
   const order = { issue: 0, info: 1, ok: 2, unavailable: 3 };
-  const sorted = [...(bigWins ?? [])].sort((a, b) => order[a.status] - order[b.status]);
+  const sorted = [...(bigWins ?? [])].filter((w) => !LAPTOP_CHECKS.includes(w.id)).sort((a, b) => order[a.status] - order[b.status]);
   return (
     <section>
       <SectionTitle sub={t("tweaks.bigWinsSub")}>{t("tweaks.bigWins")}</SectionTitle>
@@ -171,7 +173,6 @@ function readTab(fromParams: string | undefined): TweaksTab {
 export function TweaksPage() {
   const { t, td } = useT();
   const tweaks = useApp((s) => s.tweaks);
-  const device = useApp((s) => s.device);
   const loading = useApp((s) => s.tweaksLoading);
   const refreshTweaks = useApp((s) => s.refreshTweaks);
   const refreshBigWins = useApp((s) => s.refreshBigWins);
@@ -213,16 +214,7 @@ export function TweaksPage() {
   const network = tweaks.filter((tw) => tw.category === "network" && !tw.experimental);
   const experimental = tweaks.filter((tw) => tw.experimental);
   const cleanup = tweaks.filter((tw) => tw.category === "cleanup");
-  const isLaptop = device?.effective === "laptop";
   const grid = (list: TweakInfo[]) => <TweakGrid list={list} busy={busy} onToggle={onToggle} elevated={elevated} onCleanup={() => setCleanupOpen(true)} />;
-  const laptopTweaks = tweaks.filter((tw) => tw.category === "laptop");
-  const laptopSection = laptopTweaks.length > 0 && (
-    <section>
-      <SectionTitle>{t("tweaks.laptop")}</SectionTitle>
-      <p className="-mt-1 mb-3 text-[13px] text-ink-3">{isLaptop ? t("tweaks.laptopNote") : t("tweaks.laptopNotePc")}</p>
-      {grid(laptopTweaks)}
-    </section>
-  );
 
   return (
     <div className="space-y-6">
@@ -268,7 +260,6 @@ export function TweaksPage() {
 
       {tab === "windows" && (
         <div className="space-y-8">
-          {isLaptop && laptopSection}
           <section>
             <SectionTitle>{t("tweaks.system")}</SectionTitle>
             {loading && tweaks.length === 0 ? <Skeleton className="h-48" /> : grid(system)}
@@ -294,7 +285,6 @@ export function TweaksPage() {
             <SectionTitle>{t("tweaks.cleanup")}</SectionTitle>
             {grid(cleanup)}
           </section>
-          {!isLaptop && laptopSection}
         </div>
       )}
 

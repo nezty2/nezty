@@ -26,6 +26,7 @@ export const nl = {
   nav: {
     dashboard: "Dashboard",
     tweaks: "Tweaks",
+    laptop: "Laptop",
     input: "Muis & toetsenbord",
     controller: "Controller",
     crosshair: "Crosshair",
@@ -545,9 +546,6 @@ export const nl = {
     },
   },
   tweaks: {
-    laptop: "Laptop",
-    laptopNote: "Alleen voor laptops. Game Boost neemt deze standaard mee.",
-    laptopNotePc: "Deze tweaks zijn voor laptops. Op je pc staan ze op slot.",
     title: "Tweaks",
     tabs: { recommended: "Aanbevolen", fortnite: "Fortnite", games: "Per game", windows: "Windows", experimental: "Experimenteel" },
     tabsSub: {
@@ -596,6 +594,19 @@ export const nl = {
       pc_only: "Op een laptop geeft dit vooral meer hitte en een lege batterij.",
       laptop_only: "Dit gaat over de accu, de lader of de energiemodus van een laptop. Op een vaste pc doet het niets.",
     },
+  },
+  laptop: {
+    title: "Laptop",
+    pcTitle: "Dit apparaat is een pc",
+    pcText: "Alles op deze pagina is voor laptops en staat daarom op slot. Klopt dat niet? Kies het juiste type in Instellingen.",
+    pcButton: "Naar Instellingen",
+    statusTitle: "Nu",
+    tweaksTitle: "Tweaks voor je laptop",
+    tweaksSub: "Game Boost neemt deze op een laptop standaard mee. Alles is terug te zetten.",
+    checksTitle: "Controles",
+    checksSub: "Lader, hitte, videokaart, scherm, netwerk en apps van je merk.",
+    settingsTitle: "Game Boost op je laptop",
+    safe: "nezty leest hitte alleen uit. Ventilatoren en spanningen stuurt nezty nooit aan.",
   },
   bigwin: {
     brandApp: "de app van je laptopmerk",

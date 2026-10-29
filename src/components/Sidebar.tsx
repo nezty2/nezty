@@ -2,7 +2,7 @@ import {
   Crosshair,
   Joystick,
   LayoutDashboard,
-  Layers,
+  Laptop, Layers,
   Mouse,
   Power,
   ScrollText,
@@ -22,6 +22,7 @@ import { UpdateButton } from "./UpdateButton";
 const items: { id: PageId; key: TKey; icon: LucideIcon }[] = [
   { id: "dashboard", key: "nav.dashboard", icon: LayoutDashboard },
   { id: "tweaks", key: "nav.tweaks", icon: SlidersHorizontal },
+  { id: "laptop", key: "nav.laptop", icon: Laptop },
   { id: "input", key: "nav.input", icon: Mouse },
   { id: "controller", key: "nav.controller", icon: Joystick },
   { id: "crosshair", key: "nav.crosshair", icon: Crosshair },

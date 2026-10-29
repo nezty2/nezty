@@ -28,6 +28,7 @@ export const fr: Dict = {
   nav: {
     dashboard: "Tableau de bord",
     tweaks: "Réglages",
+    laptop: "Portable",
     input: "Souris et clavier",
     controller: "Manette",
     crosshair: "Viseur",
@@ -547,9 +548,6 @@ export const fr: Dict = {
     },
   },
   tweaks: {
-    laptop: "Portable",
-    laptopNote: "Pour les portables uniquement. Game Boost les inclut par défaut.",
-    laptopNotePc: "Ces tweaks sont pour les portables. Sur votre PC, ils sont verrouillés.",
     title: "Réglages",
     tabs: { recommended: "Conseillés", fortnite: "Fortnite", games: "Par jeu", windows: "Windows", experimental: "Expérimental" },
     tabsSub: {
@@ -598,6 +596,19 @@ export const fr: Dict = {
       pc_only: "Sur un portable, cela donne surtout plus de chaleur et une batterie vide.",
       laptop_only: "Cela concerne la batterie, le chargeur ou le mode d'alimentation d'un portable. Sur un PC fixe, cela ne fait rien.",
     },
+  },
+  laptop: {
+    title: "Portable",
+    pcTitle: "Cet appareil est un PC",
+    pcText: "Tout sur cette page est pour les portables, donc verrouillé. Ce n'est pas le cas ? Choisissez le bon type dans les Paramètres.",
+    pcButton: "Ouvrir les Paramètres",
+    statusTitle: "En ce moment",
+    tweaksTitle: "Tweaks pour votre portable",
+    tweaksSub: "Game Boost les inclut par défaut sur un portable. Tout est réversible.",
+    checksTitle: "Vérifications",
+    checksSub: "Chargeur, chaleur, carte graphique, écran, réseau et applications du fabricant.",
+    settingsTitle: "Game Boost sur votre portable",
+    safe: "nezty lit seulement la chaleur. Il ne pilote jamais les ventilateurs ni les tensions.",
   },
   bigwin: {
     brandApp: "l'application du fabricant de votre portable",
