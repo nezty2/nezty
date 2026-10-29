@@ -13,7 +13,7 @@ import type { FortniteSettings, Game, GameProfile, ProcessInfo, TweakInfo } from
 import { useApp } from "@/store/app";
 
 /** Tweaks die Game Boost op een laptop standaard meeneemt (zelfde lijst als in de backend). */
-const LAPTOP_BOOST_DEFAULTS = ["power_mode_best", "battery_saver_off"];
+const LAPTOP_BOOST_DEFAULTS = ["power_mode_best", "battery_saver_off", "cpu_full_speed", "cpu_epp_performance", "cpu_prefer_pcores", "pcie_aspm_off", "usb_suspend_ac_off", "wifi_gaming_mode"];
 
 /* ---------- Boost-instellingen per game ---------- */
 

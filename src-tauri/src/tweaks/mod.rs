@@ -8,6 +8,7 @@ pub mod network;
 pub mod per_game;
 pub mod input_extra;
 pub mod laptop;
+pub mod wifi_gaming;
 pub mod regtweak;
 pub mod system;
 
@@ -82,12 +83,19 @@ pub const CATALOG: &[TweakDef] = &[
     def("adapter_power_saving_off", "Network adapter power saving off", C::Network, S::Global, Small, Instant, true),
     TweakDef { experimental: true, ..def("nagle_off", "Nagle's algorithm off", C::Network, S::Global, Negligible, PcRestart, true) },
     def("wifi_power_max", "Wi-Fi power saving off", C::Network, S::Global, Small, Instant, false),
+    def("wifi_gaming_mode", "Wi-Fi background scan off while nezty runs", C::Network, S::Global, Measurable, Instant, false),
     def("delivery_optimization_off", "Delivery Optimization uploads off", C::Network, S::Global, Small, Instant, true),
     TweakDef { experimental: true, ..def("interrupt_moderation_off", "Interrupt moderation off", C::Network, S::Global, Negligible, Instant, true) },
     TweakDef { experimental: true, ..def("network_throttling_off", "Network throttling off", C::Network, S::Global, Negligible, PcRestart, true) },
     // Alleen laptop
     TweakDef { platform: Platform::LaptopOnly, ..def("power_mode_best", "Power mode best performance", C::Laptop, S::Global, Measurable, Instant, true) },
     TweakDef { platform: Platform::LaptopOnly, ..def("battery_saver_off", "Battery saver off while gaming", C::Laptop, S::Global, Measurable, Instant, false) },
+    TweakDef { platform: Platform::LaptopOnly, ..def("cpu_full_speed", "Processor at full speed", C::Laptop, S::Global, Measurable, Instant, false) },
+    TweakDef { platform: Platform::LaptopOnly, ..def("cpu_epp_performance", "Processor reacts at once (EPP)", C::Laptop, S::Global, Measurable, Instant, false) },
+    TweakDef { platform: Platform::LaptopOnly, ..def("cpu_prefer_pcores", "Games on the performance cores", C::Laptop, S::Global, Measurable, Instant, false) },
+    TweakDef { platform: Platform::LaptopOnly, ..def("pcie_aspm_off", "PCI Express power saving off on the charger", C::Laptop, S::Global, Small, Instant, false) },
+    TweakDef { platform: Platform::LaptopOnly, ..def("usb_suspend_ac_off", "USB selective suspend off on the charger", C::Laptop, S::Global, Small, Instant, false) },
+    TweakDef { platform: Platform::LaptopOnly, ..def("touchpad_off_with_mouse", "Touchpad off while a mouse is connected", C::Laptop, S::Global, Small, Instant, false) },
     // Per game
     def("fullscreen_opt_off", "Fullscreen optimizations off", C::Game, S::PerGame, Small, GameRestart, false),
     def("gpu_high_perf", "GPU preference high performance", C::Game, S::PerGame, Small, GameRestart, false),
@@ -137,6 +145,13 @@ pub fn status(state: &AppState, id: &str, game: Option<&Game>) -> Status {
         "lang_hotkey_off" => input_extra::lang_hotkey_status(),
         "power_mode_best" => laptop::power_mode_status(),
         "battery_saver_off" => laptop::battery_saver_status(),
+        "cpu_full_speed" => laptop::cpu_full_speed_status(),
+        "cpu_epp_performance" => laptop::cpu_epp_status(),
+        "cpu_prefer_pcores" => laptop::cpu_pcores_status(),
+        "pcie_aspm_off" => laptop::pcie_status(),
+        "usb_suspend_ac_off" => laptop::usb_ac_status(),
+        "touchpad_off_with_mouse" => laptop::touchpad_status(),
+        "wifi_gaming_mode" => wifi_gaming::status(),
         "adapter_power_saving_off" => network::adapter_power_status(state.elevated),
         "nagle_off" => network::nagle_status(),
         "network_throttling_off" => network::throttling_status(),
@@ -204,7 +219,17 @@ pub fn platform_locked(state: &AppState, d: &TweakDef) -> bool {
 }
 
 /// Tweaks die Game Boost op een laptop standaard meeneemt als de gebruiker er niets voor gekozen heeft.
-pub const LAPTOP_BOOST_DEFAULTS: [&str; 2] = ["power_mode_best", "battery_saver_off"];
+/// Allemaal tijdelijk: na het gamen zet de boost alles terug, zodat de laptop daarna weer koel en zuinig is.
+pub const LAPTOP_BOOST_DEFAULTS: &[&str] = &[
+    "power_mode_best",
+    "battery_saver_off",
+    "cpu_full_speed",
+    "cpu_epp_performance",
+    "cpu_prefer_pcores",
+    "pcie_aspm_off",
+    "usb_suspend_ac_off",
+    "wifi_gaming_mode",
+];
 
 pub fn info(state: &AppState, d: &TweakDef, game: Option<&Game>) -> TweakInfo {
     let st = status(state, d.id, game);
@@ -294,6 +319,13 @@ pub fn apply(state: &AppState, id: &str, option: Option<&str>, session: Option<&
         "lang_hotkey_off" => input_extra::lang_hotkey_apply(state, session),
         "power_mode_best" => laptop::power_mode_apply(state, session),
         "battery_saver_off" => laptop::battery_saver_apply(state, session),
+        "cpu_full_speed" => laptop::cpu_full_speed_apply(state, session),
+        "cpu_epp_performance" => laptop::cpu_epp_apply(state, session),
+        "cpu_prefer_pcores" => laptop::cpu_pcores_apply(state, session),
+        "pcie_aspm_off" => laptop::pcie_apply(state, session),
+        "usb_suspend_ac_off" => laptop::usb_ac_apply(state, session),
+        "touchpad_off_with_mouse" => laptop::touchpad_apply(state, session),
+        "wifi_gaming_mode" => wifi_gaming::apply(state, session),
         "adapter_power_saving_off" => network::adapter_power_apply(state, session),
         "nagle_off" => network::nagle_apply(state, session),
         "network_throttling_off" => network::throttling_apply(state, session),
@@ -328,6 +360,13 @@ pub fn disable(state: &AppState, id: &str, game: Option<&Game>) -> AppResult<()>
         "lang_hotkey_off" => input_extra::lang_hotkey_disable(state),
         "power_mode_best" => laptop::power_mode_disable(state),
         "battery_saver_off" => laptop::battery_saver_disable(state),
+        "cpu_full_speed" => laptop::cpu_full_speed_disable(state),
+        "cpu_epp_performance" => laptop::cpu_epp_disable(state),
+        "cpu_prefer_pcores" => laptop::cpu_pcores_disable(state),
+        "pcie_aspm_off" => laptop::pcie_disable(state),
+        "usb_suspend_ac_off" => laptop::usb_ac_disable(state),
+        "touchpad_off_with_mouse" => laptop::touchpad_disable(state),
+        "wifi_gaming_mode" => wifi_gaming::disable(state),
         "adapter_power_saving_off" => network::adapter_power_disable(state),
         "nagle_off" => network::nagle_disable(state),
         "network_throttling_off" => network::throttling_disable(state),

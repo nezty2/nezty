@@ -8,6 +8,14 @@ import type { TweakInfo } from "@/lib/types";
 import { useApp } from "@/store/app";
 import { BigWinCard, LAPTOP_CHECKS } from "./Tweaks";
 
+/** Tweaks per onderwerp. Laptoptweaks plus algemene tweaks die op een laptop veel doen (alleen op een laptop). */
+const GROUPS: { key: "power" | "input" | "network" | "windows"; ids: string[] }[] = [
+  { key: "power", ids: ["power_mode_best", "cpu_full_speed", "cpu_epp_performance", "cpu_prefer_pcores", "battery_saver_off", "pcie_aspm_off"] },
+  { key: "input", ids: ["usb_suspend_ac_off", "touchpad_off_with_mouse", "input_device_power_off", "mouse_precision_off"] },
+  { key: "network", ids: ["wifi_gaming_mode", "wifi_power_max", "adapter_power_saving_off"] },
+  { key: "windows", ids: ["hags", "windowed_opt", "game_bar_dvr_off", "game_mode"] },
+];
+
 /** Alles voor laptops op één plek: status, tweaks, controles en de lader-instelling. */
 export function LaptopPage() {
   const { t, td } = useT();
@@ -25,8 +33,17 @@ export function LaptopPage() {
 
   const isLaptop = device?.effective === "laptop";
   const list = tweaks.filter((tw) => tw.category === "laptop");
+  // Op een pc alleen de (vergrendelde) laptoptweaks; op een laptop ook de algemene die daar veel doen.
+  const visible = (tw: TweakInfo) => isLaptop || tw.category === "laptop";
+  const grouped = GROUPS.map((g) => ({
+    key: g.key,
+    items: g.ids.map((id) => tweaks.find((tw) => tw.id === id)).filter((tw): tw is TweakInfo => !!tw && visible(tw)),
+  }));
+  const known = new Set(GROUPS.flatMap((g) => g.ids));
+  const extra = list.filter((tw) => !known.has(tw.id));
+  if (extra.length > 0) grouped[0].items.push(...extra);
   // Laptopcontroles, plus lader en snelle videokaart: die horen op een laptop er ook bij.
-  const checkIds = ["power_source", ...LAPTOP_CHECKS, "gpu_choice"];
+  const checkIds = ["power_source", "gpu_battery_limit", ...LAPTOP_CHECKS, "gpu_choice", "refresh_rate"];
   const order = { issue: 0, info: 1, ok: 2, unavailable: 3 };
   const checks = (bigWins ?? []).filter((w) => checkIds.includes(w.id)).sort((a, b) => order[a.status] - order[b.status]);
   const model = [device?.manufacturer, device?.model].filter((x) => x && x.trim()).join(" ");
@@ -74,16 +91,24 @@ export function LaptopPage() {
         </section>
       )}
 
-      <section>
+      <section className="space-y-6">
         <SectionTitle sub={t("laptop.tweaksSub")}>{t("laptop.tweaksTitle")}</SectionTitle>
         {loading && list.length === 0 ? (
           <Skeleton className="h-48" />
         ) : (
-          <div className="grid gap-4 lg:grid-cols-2">
-            {list.map((tw) => (
-              <TweakCard key={tw.id} tweak={tw} elevated={appInfo?.isElevated ?? false} busy={busy === tw.id} onToggle={(v, opt) => void onToggle(tw, v, opt)} />
-            ))}
-          </div>
+          grouped
+            .filter((g) => g.items.length > 0)
+            .map((g) => (
+              <div key={g.key}>
+                <h3 className="text-[13px] font-semibold uppercase tracking-wide text-ink-3">{t(`laptop.groups.${g.key}` as "laptop.groups.power")}</h3>
+                <p className="mb-3 mt-0.5 text-[13px] text-ink-3">{t(`laptop.groupsSub.${g.key}` as "laptop.groupsSub.power")}</p>
+                <div className="grid gap-4 lg:grid-cols-2">
+                  {g.items.map((tw) => (
+                    <TweakCard key={tw.id} tweak={tw} elevated={appInfo?.isElevated ?? false} busy={busy === tw.id} onToggle={(v, opt) => void onToggle(tw, v, opt)} />
+                  ))}
+                </div>
+              </div>
+            ))
         )}
       </section>
 

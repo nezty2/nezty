@@ -729,6 +729,18 @@ fn get_crosshair_config(state: St<'_>) -> CrosshairConfig {
 pub fn run() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let args: Vec<String> = std::env::args().collect();
+    if let Some(i) = args.iter().position(|a| a == "--selftest-wifi") {
+        if let Some(out) = args.get(i + 1) {
+            let before = tweaks::wifi_gaming::adapter_count();
+            let started = tweaks::wifi_gaming::start().map_err(|e| e.to_string());
+            let active = tweaks::wifi_gaming::is_active();
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            tweaks::wifi_gaming::stop();
+            let v = serde_json::json!({ "adapters": before, "start": started, "activeDuring": active, "activeAfterStop": tweaks::wifi_gaming::is_active(), "hybridCpu": tweaks::laptop::cpu_is_hybrid() });
+            let _ = std::fs::write(out, serde_json::to_string_pretty(&v).unwrap_or_default());
+        }
+        return;
+    }
     if let Some(i) = args.iter().position(|a| a == "--selftest-device") {
         if let Some(out) = args.get(i + 1) {
             let st = AppState::new(std::env::temp_dir().join("nezty-selftest-device"), false);
@@ -816,6 +828,11 @@ pub fn run() {
             }
 
             metrics::start(app.handle().clone(), state.clone());
+            // Wifi-gamestand hoort bij een open sessie van nezty: na een herstart van de app opnieuw aanzetten.
+            {
+                let st = state.clone();
+                std::thread::spawn(move || tweaks::wifi_gaming::resume_if_active(&st));
+            }
             watcher::start(app.handle().clone(), state.clone());
             {
                 let st = state.clone();
