@@ -17,6 +17,7 @@
 //   npm run licentie:instellingen -- --demo aan --discord jouwnaam --email jij@voorbeeld.nl
 //   npm run licentie:sleutels-maken
 
+import { execFileSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { newSigningKeyPair, randomToken, sha256Hex } from "../../server/supabase/functions/_shared/crypto.ts";
 import { normalize } from "../../server/supabase/functions/_shared/keys.ts";
@@ -57,9 +58,22 @@ function date(iso: string | null): string {
   return new Date(iso).toLocaleString("nl-NL", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+/** Omgevingsvariabele, ook als dit venster al open stond voordat hij werd gezet (dan uit het Windows-register). */
+function setting(name: string): string | undefined {
+  if (process.env[name]) return process.env[name];
+  if (process.platform !== "win32") return undefined;
+  try {
+    const out = execFileSync("reg", ["query", "HKCU\\Environment", "/v", name], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+    const m = out.match(new RegExp(`${name}\\s+REG_\\w+\\s+(.+)`));
+    return m ? m[1].trim() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 async function api(path: string, body: Record<string, unknown> = {}) {
-  const url = process.env.NEZTY_LICENSE_URL;
-  const admin = process.env.NEZTY_ADMIN_KEY;
+  const url = setting("NEZTY_LICENSE_URL");
+  const admin = setting("NEZTY_ADMIN_KEY");
   if (!url) stop("Zet eerst NEZTY_LICENSE_URL (het adres van je licentieserver).");
   if (!admin) stop("Zet eerst NEZTY_ADMIN_KEY (je beheerderssleutel).");
   let res: Response;
