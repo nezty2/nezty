@@ -1,14 +1,7 @@
 //! "Test vóór en na": meet tijdens het spelen de FPS, 1%-low, haperingen en frametijden (PresentMon) en
 //! tegelijk de ping, schommeling en pakketverlies naar de gekozen regio. Alleen meten, niets beloven.
 
-use crate::error::{AppError, AppResult};
-use crate::models::{FpsDetail, Game, Measurement};
-use crate::state::{lock, AppState};
-use crate::{fps, ping};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::time::Duration;
-use tauri::{AppHandle, Emitter};
+use crate::models::FpsDetail;
 
 /// Aantal punten in de frametijdgrafiek.
 const GRAPH_POINTS: usize = 240;
@@ -83,62 +76,4 @@ pub fn analyze(text: &str, seconds: f32) -> Option<FpsDetail> {
         cpu_busy: share(&cpu),
         graph,
     })
-}
-
-/// Meet `seconds` seconden. Ping loopt tegelijk mee (één keer per seconde).
-pub fn run(app: &AppHandle, state: &AppState, game: &Game, seconds: u32, ping_host: Option<String>) -> AppResult<Measurement> {
-    let seconds = seconds.clamp(10, 120);
-    if !state.elevated {
-        return Err(AppError::coded("fps_needs_admin"));
-    }
-    let done = Arc::new(AtomicBool::new(false));
-    // Voortgang voor de interface.
-    let ticker = {
-        let (app, done) = (app.clone(), done.clone());
-        std::thread::spawn(move || {
-            let mut s = 0;
-            while !done.load(Ordering::Relaxed) && s <= seconds {
-                let _ = app.emit("measure-progress", s);
-                std::thread::sleep(Duration::from_secs(1));
-                s += 1;
-            }
-        })
-    };
-    let pinger = ping_host.clone().map(|host| {
-        let count = seconds.saturating_sub(2).max(5);
-        std::thread::spawn(move || ping::ping_series(&host, count, 1000, 1000))
-    });
-    let csv = fps::capture(app, state, game, seconds);
-    done.store(true, Ordering::Relaxed);
-    let _ = ticker.join();
-    let ping = pinger.and_then(|h| h.join().ok());
-    let fps = analyze(&csv?, seconds as f32).ok_or_else(|| AppError::coded("fps_no_frames"))?;
-    Ok(Measurement {
-        game_id: game.id.clone(),
-        game_name: game.name.clone(),
-        taken_at: crate::models::now_ms(),
-        boost_active: lock(&state.boost).is_some(),
-        ping_host,
-        fps,
-        ping,
-    })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::analyze;
-
-    #[test]
-    fn counts_stutters_and_limits() {
-        let mut csv = String::from("Application,ProcessID,FrameTime,CPUBusy,GPUBusy\n");
-        for i in 0..1000 {
-            let ft = if i % 100 == 50 { 25.0 } else { 5.0 };
-            csv.push_str(&format!("game.exe,1,{ft},1.0,4.8\n"));
-        }
-        let d = analyze(&csv, 10.0).unwrap();
-        assert_eq!(d.stutters, 10);
-        assert_eq!(d.graph.len(), 240);
-        assert!(d.gpu_busy.unwrap() > 0.9);
-        assert!(d.cpu_busy.unwrap() < 0.5);
-    }
 }

@@ -1,121 +1,11 @@
-import { Gauge, Info, Mouse, RotateCcw } from "lucide-react";
-import { useCallback, useRef, useState, type PointerEvent as RPointerEvent } from "react";
+import { Info } from "lucide-react";
+import { useState } from "react";
 import { LiveInputCard } from "@/components/LiveInputCard";
 import { TweakCard } from "@/components/TweakCard";
-import { Button, Card, PageHeader, SectionTitle, Skeleton, cn } from "@/components/ui";
+import { Card, PageHeader, SectionTitle, Skeleton } from "@/components/ui";
 import { useT } from "@/i18n/hooks";
-import { api, isTauri } from "@/lib/ipc";
 import type { TweakInfo } from "@/lib/types";
 import { useApp } from "@/store/app";
-
-const STANDARD_RATES = [125, 250, 500, 1000, 2000, 4000, 8000];
-
-function snap(hz: number): number {
-  const near = STANDARD_RATES.find((r) => Math.abs(r - hz) / r < 0.15);
-  return near ?? Math.round(hz / 10) * 10;
-}
-
-/** Meet de pollingrate via de tijd tussen ruwe muisgebeurtenissen (mediaan, robuust tegen pauzes). */
-function PollingTester() {
-  const { t } = useT();
-  const stamps = useRef<number[]>([]);
-  const [hz, setHz] = useState<number | null>(null);
-  const [measuring, setMeasuring] = useState(false);
-  const [reports, setReports] = useState<number | null>(null);
-  const backendBusy = useRef(false);
-
-  const compute = useCallback(() => {
-    const s = stamps.current;
-    if (s.length < 60) return;
-    const recent = s.slice(-400);
-    const intervals: number[] = [];
-    for (let i = 1; i < recent.length; i++) {
-      const d = recent[i] - recent[i - 1];
-      if (d > 0 && d < 40) intervals.push(d);
-    }
-    if (intervals.length < 50) return;
-    intervals.sort((a, b) => a - b);
-    const median = intervals[Math.floor(intervals.length / 2)];
-    setHz((prev) => Math.max(prev ?? 0, snap(1000 / median)));
-  }, []);
-
-  // In de echte app: zodra je in het vak beweegt, telt de backend 3 seconden elk muisrapport (raw input).
-  const startBackend = useCallback(() => {
-    if (backendBusy.current) return;
-    backendBusy.current = true;
-    setMeasuring(true);
-    api
-      .measureMouseRate(3)
-      .then((r) => {
-        setReports(r.reports);
-        setHz(r.hz > 0 ? r.hz : null);
-      })
-      .catch(() => setHz(null))
-      .finally(() => {
-        backendBusy.current = false;
-        setMeasuring(false);
-      });
-  }, []);
-
-  const onEvent = useCallback(
-    (e: RPointerEvent<HTMLDivElement>) => {
-      if (isTauri) {
-        if (hz == null) startBackend();
-        return;
-      }
-      const native = e.nativeEvent as PointerEvent & { getCoalescedEvents?: () => PointerEvent[] };
-      const list = native.getCoalescedEvents ? native.getCoalescedEvents() : [native];
-      for (const ev of list.length ? list : [native]) stamps.current.push(ev.timeStamp);
-      if (stamps.current.length > 4000) stamps.current = stamps.current.slice(-2000);
-      if (!measuring) setMeasuring(true);
-      if (stamps.current.length % 50 === 0) compute();
-    },
-    [compute, measuring, hz, startBackend],
-  );
-
-  const reset = () => {
-    stamps.current = [];
-    setHz(null);
-    setReports(null);
-    if (!backendBusy.current) setMeasuring(false);
-  };
-
-  const advice = hz == null ? null : hz < 900 ? t("input.pollingLow", { hz }) : t("input.pollingGood", { hz });
-
-  return (
-    <Card>
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h3 className="flex items-center gap-2 text-[15px] font-semibold">
-            <Gauge className="h-4 w-4 text-accent" />
-            {t("input.pollingTitle")}
-          </h3>
-          <p className="mt-1 text-[13px] text-ink-2">{t("input.pollingDesc")}</p>
-        </div>
-        <Button size="sm" variant="ghost" icon={RotateCcw} onClick={reset}>
-          {t("input.pollingReset")}
-        </Button>
-      </div>
-      <div className="mt-4 grid gap-4 md:grid-cols-[minmax(0,1fr)_220px]">
-        <div
-          onPointerMove={onEvent}
-          className="flex h-44 select-none items-center justify-center rounded-lg border border-dashed border-line-2 bg-panel-2 text-[13px] text-ink-3"
-          style={{ touchAction: "none" }}
-        >
-          <span className="flex items-center gap-2">
-            <Mouse className="h-4 w-4" />
-            {measuring && hz == null ? t("input.pollingMeasuring") : t("input.pollingArea")}
-          </span>
-        </div>
-        <div className="card-inset flex flex-col justify-center p-4 text-center">
-          <div className={cn("text-[34px] font-semibold tnum", hz == null ? "text-ink-3" : hz < 900 ? "text-warn" : "text-ok")}>{hz == null ? "-" : t("input.pollingResult", { hz })}</div>
-        </div>
-      </div>
-      {advice && <p className="mt-3 text-[13px] leading-relaxed text-ink">{advice}</p>}
-      <p className="mt-2 text-[12px] text-ink-3">{isTauri ? (reports != null ? t("input.pollingNoteRaw", { reports }) : t("input.pollingNoteRawIdle")) : t("input.pollingNote")}</p>
-    </Card>
-  );
-}
 
 export function InputPage() {
   const { t, td } = useT();
@@ -169,8 +59,6 @@ export function InputPage() {
           </div>
         )}
       </section>
-
-      <PollingTester />
 
       <section>
         <SectionTitle>{t("input.tipsTitle")}</SectionTitle>

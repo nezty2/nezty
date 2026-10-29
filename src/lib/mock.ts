@@ -38,7 +38,6 @@ let fortniteOverview: T.FortniteOverview = {
     { id: "render_mode", current: "dx12", recommended: "performance", ok: false },
   ],
 };
-let mockMeasureCount = 0;
 let liveChecks: T.LiveCheck[] = [
   { id: "mouse_precision_off", saved: true, live: true },
   { id: "keyboard_fast_repeat", saved: true, live: false },
@@ -113,6 +112,8 @@ let tweaks: T.TweakInfo[] = [
   tw({ id: "mouse_precision_off", category: "input", gain: "measurable", state: "on", active: "now" }),
   tw({ id: "keyboard_fast_repeat", category: "input" }),
   tw({ id: "accessibility_hotkeys_off", category: "input", state: "on", active: "now" }),
+  tw({ id: "input_device_power_off", category: "input", requiresAdmin: true, state: "off", detail: { key: "device_power_count", params: { n: "3" } } }),
+  tw({ id: "lang_hotkey_off", category: "input", state: "off" }),
   tw({ id: "usb_suspend_off", category: "input" }),
   tw({ id: "adapter_power_saving_off", category: "network", requiresAdmin: true, state: "unknown", detail: msg("adapter_needs_admin") }),
   tw({ id: "nagle_off", category: "network", gain: "negligible", timing: "pc_restart", experimental: true, requiresAdmin: true, detail: msg("nagle_ifaces", { count: "1" }) }),
@@ -378,21 +379,6 @@ export const mockApi: Api = {
     fortniteOverview = { ...fortniteOverview, renderMode: ids.includes("render_mode") ? "performance" : fortniteOverview.renderMode, checks: fortniteOverview.checks.map((c) => (ids.includes(c.id) ? { ...c, ok: true, current: c.recommended } : c)) };
     return fortniteOverview;
   },
-  async measureSession(gameId, seconds, pingHost) {
-    await delay(2500);
-    const boosted = mockMeasureCount++ > 0;
-    const base = boosted ? 4.6 : 5.6;
-    const graph = Array.from({ length: 240 }, (_, i) => base + Math.sin(i / 7) * 0.3 + (i % (boosted ? 61 : 23) === 0 ? base * 2.6 : 0));
-    return {
-      gameId,
-      gameName: "Fortnite",
-      takenAt: Date.now(),
-      boostActive: boosted,
-      pingHost,
-      fps: { avgFps: boosted ? 214 : 178, low1Fps: boosted ? 141 : 102, frames: seconds * 200, seconds, medianMs: base, stutters: boosted ? 4 : 11, stuttersPerMin: boosted ? 4 : 11, gpuBusy: 0.72, cpuBusy: 0.81, graph },
-      ping: pingHost ? { host: pingHost, ip: "3.120.0.1", sent: 58, received: 58, minMs: 10, avgMs: 11.4, maxMs: 14, jitterMs: 0.8, lossPct: 0, samples: [] } : null,
-    };
-  },
   async setBackground(path) {
     await delay(200);
     settings = { ...settings, backgroundImage: path ? "background.png" : null };
@@ -400,10 +386,6 @@ export const mockApi: Api = {
   },
   async getBackgroundFile() {
     return null;
-  },
-  async measureMouseRate(seconds) {
-    await delay(seconds * 1000);
-    return { hz: 8000, rawHz: 7840, reports: 19600, seconds, wmInput: 19600, wakeups: 400 };
   },
   async measureBandwidth() {
     await delay(3000);

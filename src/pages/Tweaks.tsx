@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import { BestTweaks } from "@/components/BestTweaks";
 import { CleanupModal } from "@/components/CleanupModal";
 import { FortniteSection } from "@/components/FortniteSection";
-import { MeasureCard } from "@/components/MeasureCard";
 import { PerGame } from "@/components/PerGame";
 import { GainBadge, TweakCard } from "@/components/TweakCard";
 import { Button, Card, PageHeader, SectionTitle, Skeleton, cn } from "@/components/ui";
@@ -249,7 +248,6 @@ export function TweaksPage() {
         <div className="space-y-8">
           <BigWins />
           {loading && tweaks.length === 0 ? <Skeleton className="h-48" /> : <BestTweaks />}
-          <MeasureCard />
         </div>
       )}
 

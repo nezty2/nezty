@@ -14,7 +14,7 @@ use windows_sys::Win32::UI::Accessibility::{FILTERKEYS, STICKYKEYS, TOGGLEKEYS};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     SendMessageTimeoutW, SystemParametersInfoW, ANIMATIONINFO, HWND_BROADCAST, SMTO_ABORTIFHUNG, SPIF_SENDCHANGE,
     SPI_GETFILTERKEYS, SPI_GETSTICKYKEYS, SPI_GETTOGGLEKEYS, SPI_SETANIMATION, SPI_SETFILTERKEYS, SPI_SETKEYBOARDDELAY,
-    SPI_SETKEYBOARDSPEED, SPI_SETMOUSE, SPI_SETSTICKYKEYS, SPI_SETTOGGLEKEYS, SPI_SETUIEFFECTS, WM_SETTINGCHANGE,
+    SPI_SETKEYBOARDSPEED, SPI_SETLANGTOGGLE, SPI_SETMOUSE, SPI_SETSTICKYKEYS, SPI_SETTOGGLEKEYS, SPI_SETUIEFFECTS, WM_SETTINGCHANGE,
 };
 
 pub const PRIORITY_HIGH: u32 = HIGH_PRIORITY_CLASS;
@@ -164,6 +164,13 @@ pub fn apply_keyboard_from_registry() {
     unsafe {
         SystemParametersInfoW(SPI_SETKEYBOARDDELAY, delay, std::ptr::null_mut(), SPIF_SENDCHANGE);
         SystemParametersInfoW(SPI_SETKEYBOARDSPEED, speed, std::ptr::null_mut(), SPIF_SENDCHANGE);
+    }
+}
+
+/// Laat Windows de sneltoetsen voor taal- en indelingswissel opnieuw uit het register lezen.
+pub fn apply_lang_toggle_from_registry() {
+    unsafe {
+        SystemParametersInfoW(SPI_SETLANGTOGGLE, 0, std::ptr::null_mut(), SPIF_SENDCHANGE);
     }
 }
 

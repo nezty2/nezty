@@ -6,6 +6,7 @@ pub mod input;
 pub mod network_extra;
 pub mod network;
 pub mod per_game;
+pub mod input_extra;
 pub mod regtweak;
 pub mod system;
 
@@ -72,6 +73,8 @@ pub const CATALOG: &[TweakDef] = &[
     def("keyboard_fast_repeat", "Fastest keyboard repeat", C::Input, S::Global, Small, Instant, false),
     def("accessibility_hotkeys_off", "Sticky/Filter/Toggle keys shortcuts off", C::Input, S::Global, Small, Instant, false),
     def("usb_suspend_off", "USB selective suspend off", C::Input, S::Global, Small, Instant, false),
+    def("input_device_power_off", "Mouse and keyboard power saving off", C::Input, S::Global, Small, Instant, true),
+    def("lang_hotkey_off", "Language switch shortcuts off", C::Input, S::Global, Small, Instant, false),
     // Netwerk
     def("adapter_power_saving_off", "Network adapter power saving off", C::Network, S::Global, Small, Instant, true),
     TweakDef { experimental: true, ..def("nagle_off", "Nagle's algorithm off", C::Network, S::Global, Negligible, PcRestart, true) },
@@ -124,6 +127,8 @@ pub fn status(state: &AppState, id: &str, game: Option<&Game>) -> Status {
         "keyboard_fast_repeat" => input::keyboard_status(),
         "accessibility_hotkeys_off" => input::accessibility_status(),
         "usb_suspend_off" => input::usb_suspend_status(),
+        "input_device_power_off" => input_extra::device_power_status(),
+        "lang_hotkey_off" => input_extra::lang_hotkey_status(),
         "adapter_power_saving_off" => network::adapter_power_status(state.elevated),
         "nagle_off" => network::nagle_status(),
         "network_throttling_off" => network::throttling_status(),
@@ -253,6 +258,8 @@ pub fn apply(state: &AppState, id: &str, option: Option<&str>, session: Option<&
         "keyboard_fast_repeat" => input::keyboard_apply(state, session),
         "accessibility_hotkeys_off" => input::accessibility_apply(state, session),
         "usb_suspend_off" => input::usb_suspend_apply(state, session),
+        "input_device_power_off" => input_extra::device_power_apply(state, session),
+        "lang_hotkey_off" => input_extra::lang_hotkey_apply(state, session),
         "adapter_power_saving_off" => network::adapter_power_apply(state, session),
         "nagle_off" => network::nagle_apply(state, session),
         "network_throttling_off" => network::throttling_apply(state, session),
@@ -283,6 +290,8 @@ pub fn disable(state: &AppState, id: &str, game: Option<&Game>) -> AppResult<()>
         "keyboard_fast_repeat" => input::keyboard_disable(state),
         "accessibility_hotkeys_off" => input::accessibility_disable(state),
         "usb_suspend_off" => input::usb_suspend_disable(state),
+        "input_device_power_off" => input_extra::device_power_disable(state),
+        "lang_hotkey_off" => input_extra::lang_hotkey_disable(state),
         "adapter_power_saving_off" => network::adapter_power_disable(state),
         "nagle_off" => network::nagle_disable(state),
         "network_throttling_off" => network::throttling_disable(state),
