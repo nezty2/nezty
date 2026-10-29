@@ -5,6 +5,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { Toasts } from "@/components/Toasts";
 import { AppBackground } from "@/components/AppBackground";
 import { Splash } from "@/components/Splash";
+import { Intro } from "@/intro/Intro";
 import { WelcomeModal } from "@/components/WelcomeModal";
 import { useT } from "@/i18n/hooks";
 import { LOCALES } from "@/i18n";
@@ -55,13 +56,8 @@ export default function App() {
     void init();
   }, [init]);
 
-  // Openingsanimatie: minstens even zichtbaar, en tot de app klaar is.
+  // Openingsanimatie (elke keer dat de app opent). Daarna, als de app nog niet klaar is, het eenvoudige laadscherm.
   const [intro, setIntro] = useState(true);
-  useEffect(() => {
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const id = setTimeout(() => setIntro(false), reduce ? 0 : 1100);
-    return () => clearTimeout(id);
-  }, []);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -89,7 +85,7 @@ export default function App() {
   const Page = pages[page];
 
   return (
-    <MotionConfig reducedMotion={settings?.reduceMotion ? "always" : "user"}>
+    <MotionConfig reducedMotion={settings?.reduceMotion ? "always" : "never"}>
       <AppBackground />
       <div className="relative flex h-full">
         <Sidebar />
@@ -115,7 +111,8 @@ export default function App() {
         <Toasts />
         <WelcomeModal />
         <BoostResultModal report={lastReport} open={showResult} onClose={() => setShowResult(false)} />
-        <Splash show={intro || !ready} />
+        {intro && <Intro onDone={() => setIntro(false)} />}
+        <Splash show={!intro && !ready} />
       </div>
     </MotionConfig>
   );

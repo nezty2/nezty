@@ -111,9 +111,20 @@ button:disabled { cursor: not-allowed; }
 .btn-primary:hover:not(:disabled) { filter: brightness(1.08); box-shadow: 0 8px 26px -8px var(--accent); }
 .btn-primary:active:not(:disabled) { transform: translateY(1px); }
 
+/* Naam in de opening: een lichtstreep in je accentkleur glijdt over elke letter. */
+.intro-letter {
+  background: linear-gradient(100deg, var(--color-ink) 0 42%, var(--accent) 50%, var(--color-ink) 58% 100%);
+  background-size: 300% 100%;
+  background-position: 100% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: letter-sweep 1.5s ease-out both;
+}
+@keyframes letter-sweep { from { background-position: 100% 0; } to { background-position: 0% 0; } }
+
 /* Minder beweging: uit via Instellingen of via Windows. */
 :root[data-motion="reduce"] .stagger > * > *, :root[data-motion="reduce"] .glow { animation: none !important; }
-@media (prefers-reduced-motion: reduce) { .stagger > * > *, .glow { animation: none !important; } }
 .card-inset {
   background: var(--color-panel-2);
   border: 1px solid var(--color-line);
