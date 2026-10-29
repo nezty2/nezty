@@ -253,6 +253,19 @@ impl Journal {
             .collect()
     }
 
+    /// Tijdstip (ms) van de laatste nog geldende wijziging voor deze tweak.
+    pub fn latest_active_ts(&self, tweak_id: &str, game_id: Option<&str>) -> Option<i64> {
+        self.entries
+            .iter()
+            .filter(|e| e.tweak_id == tweak_id && !e.reverted && e.revertable)
+            .filter(|e| match game_id {
+                Some(g) => e.game_id.as_deref() == Some(g),
+                None => true,
+            })
+            .map(|e| e.ts)
+            .max()
+    }
+
     pub fn has_active(&self, tweak_id: &str, game_id: Option<&str>) -> bool {
         !self.active_ids(tweak_id, game_id).is_empty()
     }

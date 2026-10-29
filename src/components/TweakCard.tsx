@@ -26,13 +26,15 @@ export function GainBadge({ gain }: { gain: Gain }) {
   );
 }
 
-/** Statuslabel: al goed, door nezty aangezet of niet beschikbaar. */
+/** Statuslabel, concreet: werkt nu, of nog niet (herstart pc of game), of niet beschikbaar. */
 export function StateBadge({ tweak }: { tweak: TweakInfo }) {
   const { t } = useT();
   if (tweak.state === "unavailable") return <Badge variant="neutral">{t("tweakCard.unavailable")}</Badge>;
-  if (tweak.state === "on" && tweak.appliedByApp) return <Badge variant="accent" icon={Sparkles}>{t("tweakCard.byApp")}</Badge>;
-  if (tweak.state === "on") return <Badge variant="ok" icon={Check}>{t("tweakCard.alreadyGood")}</Badge>;
-  return null;
+  if (tweak.state !== "on") return null;
+  if (tweak.active === "after_pc_restart") return <Badge variant="warn" icon={Power}>{t("tweakCard.pendingPc")}</Badge>;
+  if (tweak.active === "after_game_restart") return <Badge variant="warn" icon={RotateCcw}>{t("tweakCard.pendingGame")}</Badge>;
+  if (tweak.appliedByApp) return <Badge variant="ok" icon={Sparkles}>{t("tweakCard.activeByApp")}</Badge>;
+  return <Badge variant="ok" icon={Check}>{t("tweakCard.activeAlready")}</Badge>;
 }
 
 export function TweakCard({
@@ -98,6 +100,12 @@ export function TweakCard({
       )}
 
       {tweak.detail && <p className="mt-3 text-[12px] text-ink-3">{td(`msg.${tweak.detail.key}`, tweak.detail.params)}</p>}
+      {isOn && (tweak.active === "after_pc_restart" || tweak.active === "after_game_restart") && (
+        <p className="mt-3 flex items-start gap-2 text-[12px] text-warn">
+          <Power className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          {tweak.active === "after_pc_restart" ? t("tweakCard.pendingPcHint") : t("tweakCard.pendingGameHint")}
+        </p>
+      )}
 
       <div className="mt-auto pt-3">
         <button onClick={() => setOpen((o) => !o)} className="flex items-center gap-1 text-[12px] font-medium text-ink-3 hover:text-ink-2">

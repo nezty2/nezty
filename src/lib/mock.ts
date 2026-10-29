@@ -95,24 +95,24 @@ let settings: T.Settings = {
 function tw(p: Partial<T.TweakInfo> & { id: string; category: T.TweakCategory }): T.TweakInfo {
   return {
     scope: "global", kind: "toggle", risk: "low", gain: "small", timing: "instant", experimental: false, requiresAdmin: false,
-    state: "off", appliedByApp: false, options: null, currentOption: null, detail: null, ...p,
+    state: "off", appliedByApp: false, active: null, options: null, currentOption: null, detail: null, ...p,
   };
 }
 
 let tweaks: T.TweakInfo[] = [
-  tw({ id: "game_mode", category: "system", timing: "game_restart", state: "on" }),
+  tw({ id: "game_mode", category: "system", timing: "game_restart", state: "on", active: "now" }),
   tw({ id: "game_bar_dvr_off", category: "system", gain: "measurable", timing: "game_restart", state: "off" }),
   tw({ id: "power_plan", category: "system", options: ["high", "ultimate"], currentOption: "high", detail: msg("power_current", { name: "Balanced" }) }),
   tw({ id: "wifi_power_max", category: "network", state: "unavailable", detail: msg("wifi_none") }),
   tw({ id: "delivery_optimization_off", category: "network", requiresAdmin: true }),
   tw({ id: "timer_resolution", category: "system", gain: "negligible", timing: "pc_restart", experimental: true, requiresAdmin: true }),
-  tw({ id: "interrupt_moderation_off", category: "network", gain: "negligible", experimental: true, requiresAdmin: true, state: "on" }),
+  tw({ id: "interrupt_moderation_off", category: "network", gain: "negligible", experimental: true, requiresAdmin: true, state: "on", active: "now" }),
   tw({ id: "notifications_off", category: "system", gain: "negligible", timing: "pc_restart" }),
-  tw({ id: "hags", category: "system", risk: "medium", timing: "pc_restart", requiresAdmin: true, state: "on" }),
+  tw({ id: "hags", category: "system", risk: "medium", timing: "pc_restart", requiresAdmin: true, state: "on", active: "after_pc_restart" }),
   tw({ id: "visual_effects", category: "system", gain: "negligible" }),
-  tw({ id: "mouse_precision_off", category: "input", gain: "measurable", state: "on" }),
+  tw({ id: "mouse_precision_off", category: "input", gain: "measurable", state: "on", active: "now" }),
   tw({ id: "keyboard_fast_repeat", category: "input" }),
-  tw({ id: "accessibility_hotkeys_off", category: "input", state: "on" }),
+  tw({ id: "accessibility_hotkeys_off", category: "input", state: "on", active: "now" }),
   tw({ id: "usb_suspend_off", category: "input" }),
   tw({ id: "adapter_power_saving_off", category: "network", requiresAdmin: true, state: "unknown", detail: msg("adapter_needs_admin") }),
   tw({ id: "nagle_off", category: "network", gain: "negligible", timing: "pc_restart", experimental: true, requiresAdmin: true, detail: msg("nagle_ifaces", { count: "1" }) }),
@@ -400,6 +400,10 @@ export const mockApi: Api = {
   },
   async getBackgroundFile() {
     return null;
+  },
+  async measureMouseRate(seconds) {
+    await delay(seconds * 1000);
+    return { hz: 8000, rawHz: 7840, reports: 19600, seconds, wmInput: 19600, wakeups: 400 };
   },
   async measureBandwidth() {
     await delay(3000);
