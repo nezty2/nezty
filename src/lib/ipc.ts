@@ -64,6 +64,8 @@ export interface Api {
   listOverlays(): Promise<T.OverlayInfo[]>;
   verifyInputLive(): Promise<T.LiveCheck[]>;
   measureBandwidth(seconds: number): Promise<T.BandwidthReport>;
+  setBackground(path: string | null): Promise<T.Settings>;
+  getBackgroundFile(): Promise<string | null>;
   measureSession(gameId: string, seconds: number, pingHost: string | null): Promise<T.Measurement>;
   runBufferbloat(): Promise<T.BufferbloatResult>;
   syncInputLive(): Promise<T.LiveCheck[]>;
@@ -133,6 +135,8 @@ const tauriApi: Api = {
   listOverlays: () => call("list_overlays"),
   verifyInputLive: () => call("verify_input_live"),
   measureBandwidth: (seconds) => call("measure_bandwidth", { seconds }),
+  setBackground: (path) => call("set_background", { path }),
+  getBackgroundFile: () => call("get_background_file"),
   measureSession: (gameId, seconds, pingHost) => call("measure_session", { gameId, seconds, pingHost }),
   runBufferbloat: () => call("run_bufferbloat"),
   syncInputLive: () => call("sync_input_live"),
@@ -163,6 +167,14 @@ export async function pickExe(title: string): Promise<string | null> {
   if (!isTauri) return "C:\\Games\\MyGame\\MyGame.exe";
   const { open } = await import("@tauri-apps/plugin-dialog");
   const result = await open({ multiple: false, directory: false, title, filters: [{ name: "exe", extensions: ["exe"] }] });
+  return typeof result === "string" ? result : null;
+}
+
+/** Kies een afbeelding voor de achtergrond. */
+export async function pickImage(title: string): Promise<string | null> {
+  if (!isTauri) return null;
+  const { open } = await import("@tauri-apps/plugin-dialog");
+  const result = await open({ multiple: false, directory: false, title, filters: [{ name: "Afbeelding", extensions: ["png", "jpg", "jpeg", "webp", "gif"] }] });
   return typeof result === "string" ? result : null;
 }
 

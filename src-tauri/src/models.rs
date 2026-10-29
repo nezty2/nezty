@@ -333,6 +333,16 @@ pub struct Settings {
     /// "nl" | "en" | "fr" of null (volgt Windows).
     pub language: Option<String>,
     pub accent: Accent,
+    /// Eigen accentkleur (#rrggbb). Leeg: de gekozen vaste kleur.
+    pub accent_custom: Option<String>,
+    /// midnight | oled | slate | tinted
+    pub theme: String,
+    /// Bestandsnaam van de eigen achtergrond in de gegevensmap.
+    pub background_image: Option<String>,
+    /// Hoe donker de achtergrond wordt gemaakt (0 tot 90 procent).
+    pub background_dim: u8,
+    /// Vervaging van de achtergrond in pixels.
+    pub background_blur: u8,
     pub reduce_motion: bool,
     pub auto_boost_enabled: bool,
     pub restore_point_policy: RestorePointPolicy,
@@ -367,6 +377,11 @@ impl Default for Settings {
         Settings {
             language: None,
             accent: Accent::Violet,
+            accent_custom: None,
+            theme: "midnight".into(),
+            background_image: None,
+            background_dim: 55,
+            background_blur: 6,
             reduce_motion: false,
             auto_boost_enabled: true,
             restore_point_policy: RestorePointPolicy::Auto,

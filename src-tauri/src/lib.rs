@@ -3,6 +3,7 @@
 mod autostart;
 mod bigwins;
 mod checkup;
+mod background;
 mod bandwidth;
 mod boost;
 mod bufferbloat;
@@ -590,6 +591,17 @@ async fn save_fortnite_settings(state: St<'_>, settings: FortniteSettings) -> Ap
 }
 
 #[tauri::command]
+async fn set_background(state: St<'_>, path: Option<String>) -> AppResult<Settings> {
+    let st = state.inner().clone();
+    blocking(move || background::set(&st, path.as_deref())).await
+}
+
+#[tauri::command]
+fn get_background_file(state: St<'_>) -> Option<String> {
+    background::current(&state).map(|p| p.to_string_lossy().to_string())
+}
+
+#[tauri::command]
 async fn measure_session(app: AppHandle, state: St<'_>, game_id: String, seconds: u32, ping_host: Option<String>) -> AppResult<Measurement> {
     let st = state.inner().clone();
     blocking(move || {
@@ -778,6 +790,10 @@ pub fn run() {
             if let Err(e) = app.asset_protocol_scope().allow_directory(state.covers_dir(), false) {
                 log::warn!("covermap niet toegestaan: {e}");
             }
+            let _ = std::fs::create_dir_all(state.background_dir());
+            if let Err(e) = app.asset_protocol_scope().allow_directory(state.background_dir(), false) {
+                log::warn!("achtergrondmap niet toegestaan: {e}");
+            }
             app.manage(state.clone());
             // Logboek was (deels) onleesbaar: melden zodra de interface luistert. Er is een kopie bewaard.
             if let Some(backup) = lock(&state.journal).backup.clone() {
@@ -900,6 +916,8 @@ pub fn run() {
             verify_input_live,
             measure_bandwidth,
             measure_session,
+            set_background,
+            get_background_file,
             run_bufferbloat,
             sync_input_live,
             list_game_config,

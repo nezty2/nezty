@@ -1,5 +1,6 @@
 import { AlertCircle, BellOff, CheckCircle2, ChevronDown, ExternalLink, Gamepad2, HelpCircle, Info, MinusCircle, RefreshCw, Trash2, Wrench } from "lucide-react";
 import { useState } from "react";
+import { BestTweaks } from "@/components/BestTweaks";
 import { CleanupModal } from "@/components/CleanupModal";
 import { GainBadge, TweakCard } from "@/components/TweakCard";
 import { Badge, Button, Card, PageHeader, SectionTitle, Skeleton, cn } from "@/components/ui";
@@ -187,6 +188,8 @@ export function TweaksPage() {
       />
 
       <BigWins />
+
+      <BestTweaks />
 
       <section>
         <SectionTitle>{t("tweaks.system")}</SectionTitle>

@@ -8,6 +8,7 @@ import { useAppIcons } from "@/components/useAppIcons";
 import { Badge, Button, Chip, EmptyState, Modal, PageHeader, Row, SearchInput, SegmentedControl, Skeleton, Spinner, TextInput, Toggle, cn } from "@/components/ui";
 import { useT } from "@/i18n/hooks";
 import { api, pickExe } from "@/lib/ipc";
+import { prettyPath } from "@/lib/privacy";
 import { formatMb } from "@/lib/format";
 import type { FortniteSettings, Game, GameProfile, ProcessInfo, TweakInfo } from "@/lib/types";
 import { useApp } from "@/store/app";
@@ -249,7 +250,7 @@ export function FortniteIniTab() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2 text-[12px] text-ink-3">
         <FolderOpen className="h-3.5 w-3.5" />
-        <span className="selectable truncate">{data.iniPath}</span>
+        <span className="selectable truncate">{prettyPath(data.iniPath)}</span>
         {data.readOnly && <Badge variant="warn">{t("fortnite.readOnly")}</Badge>}
       </div>
       <div className="card-inset divide-y divide-line px-4">
