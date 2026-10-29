@@ -1,5 +1,5 @@
 import { Gamepad2, Play, Plus, RefreshCw, Trash2, Zap } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useT } from "@/i18n/hooks";
 import { api, pickExe } from "@/lib/ipc";
 import type { GameProfile } from "@/lib/types";
@@ -31,6 +31,8 @@ export function PerGame() {
   const [tab, setTab] = useState<Tab>("profile");
   const [adding, setAdding] = useState(false);
   const [profile, setProfile] = useState<GameProfile | null>(null);
+  const detailRef = useRef<HTMLDivElement>(null);
+  const reduceMotion = useApp((s) => s.settings?.reduceMotion ?? false);
 
   // Vanaf het dashboard: meteen de aangeklikte game openen.
   useEffect(() => {
@@ -41,6 +43,15 @@ export function PerGame() {
     // Het profiel alleen opnieuw laden als je een andere game kiest, niet bij elke wijziging.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected]);
+
+  // Na het kiezen van een game rustig naar de instellingen van die game scrollen.
+  useEffect(() => {
+    if (!selected || !profile) return;
+    const id = window.setTimeout(() => detailRef.current?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" }), 60);
+    return () => window.clearTimeout(id);
+    // Alleen bij een andere game of zodra het profiel er is, niet bij elke wijziging in het profiel.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, profile !== null]);
 
   const filtered = useMemo(() => games.filter((g) => g.name.toLowerCase().includes(search.toLowerCase())), [games, search]);
   const game = games.find((g) => g.id === selected) ?? null;
@@ -118,6 +129,7 @@ export function PerGame() {
       )}
 
       {game && profile && (
+        <div ref={detailRef} className="scroll-mt-24">
         <Card>
           <div className="flex flex-wrap items-center gap-3">
             <span className="h-10 w-[86px] shrink-0 overflow-hidden rounded-md border border-line">
@@ -178,6 +190,7 @@ export function PerGame() {
           )}
           {tab === "now" && <NowTab game={game} />}
         </Card>
+        </div>
       )}
     </div>
   );

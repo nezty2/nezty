@@ -90,15 +90,6 @@ export interface FortniteOverview {
   checks: FortniteCheck[];
 }
 
-export interface MouseRate {
-  hz: number;
-  rawHz: number;
-  reports: number;
-  seconds: number;
-  wmInput: number;
-  wakeups: number;
-}
-
 export interface FpsDetail {
   avgFps: number;
   low1Fps: number;

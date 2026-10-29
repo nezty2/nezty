@@ -20,6 +20,8 @@ pub enum PostAction {
     KeyboardSpi,
     /// Plaktoetsen, filtertoetsen en wisseltoetsen opnieuw toepassen vanuit het register.
     AccessibilitySpi,
+    /// Sneltoetsen voor taal- en indelingswissel opnieuw inlezen.
+    LangToggleSpi,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -61,6 +63,11 @@ pub enum RevertPayload {
     Priority {
         pid: u32,
         old_class: u32,
+    },
+    /// Het vinkje "De computer mag dit apparaat uitschakelen" van één apparaat (WMI MSPower_DeviceEnable).
+    DevicePower {
+        instance: String,
+        enable: bool,
     },
     /// Eén sleutel in een ini-bestand. `old` leeg: de sleutel stond er niet en wordt weer weggehaald.
     IniKey {
@@ -328,6 +335,7 @@ pub fn execute_revert(payload: &RevertPayload) -> AppResult<()> {
                 }
                 Some(PostAction::KeyboardSpi) => winapi::apply_keyboard_from_registry(),
                 Some(PostAction::AccessibilitySpi) => winapi::apply_accessibility_from_registry(),
+                Some(PostAction::LangToggleSpi) => winapi::apply_lang_toggle_from_registry(),
                 None => {}
             }
             Ok(())
@@ -376,6 +384,7 @@ pub fn execute_revert(payload: &RevertPayload) -> AppResult<()> {
             }
             Ok(())
         }
+        RevertPayload::DevicePower { instance, enable } => crate::tweaks::input_extra::set_device_power(instance, *enable),
         RevertPayload::IniKey { path, section, key, old } => {
             let p = Path::new(path);
             let (mut text, utf16) = crate::ini::read_text(p)?;

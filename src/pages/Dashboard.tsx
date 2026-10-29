@@ -1,4 +1,4 @@
-import { Activity, AlertTriangle, ChevronRight, Cpu, Gamepad2, Gauge, History, MemoryStick, Monitor, Pickaxe, Play, ShieldCheck, Sparkles, Thermometer, Undo2, Zap, type LucideIcon } from "lucide-react";
+import { Activity, AlertTriangle, ChevronRight, Cpu, Gamepad2, History, MemoryStick, Monitor, Pickaxe, Play, ShieldCheck, Sparkles, Thermometer, Undo2, Zap, type LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { GameCover } from "@/components/GameCover";
 import { Sparkline } from "@/components/Sparkline";
@@ -162,11 +162,11 @@ function BoostCard() {
 function QuickActions() {
   const { t } = useT();
   const setPage = useApp((s) => s.setPage);
-  const items: { id: "best" | "fortnite" | "games" | "measure"; icon: LucideIcon; tab: string }[] = [
+  const items: { id: "best" | "fortnite" | "games" | "windows"; icon: LucideIcon; tab: string }[] = [
     { id: "best", icon: Sparkles, tab: "recommended" },
     { id: "fortnite", icon: Pickaxe, tab: "fortnite" },
     { id: "games", icon: Gamepad2, tab: "games" },
-    { id: "measure", icon: Gauge, tab: "recommended" },
+    { id: "windows", icon: Monitor, tab: "windows" },
   ];
   return (
     <div>

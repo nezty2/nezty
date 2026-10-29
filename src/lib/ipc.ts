@@ -64,10 +64,8 @@ export interface Api {
   listOverlays(): Promise<T.OverlayInfo[]>;
   verifyInputLive(): Promise<T.LiveCheck[]>;
   measureBandwidth(seconds: number): Promise<T.BandwidthReport>;
-  measureMouseRate(seconds: number): Promise<T.MouseRate>;
   setBackground(path: string | null): Promise<T.Settings>;
   getBackgroundFile(): Promise<string | null>;
-  measureSession(gameId: string, seconds: number, pingHost: string | null): Promise<T.Measurement>;
   runBufferbloat(): Promise<T.BufferbloatResult>;
   syncInputLive(): Promise<T.LiveCheck[]>;
   listGameConfig(gameId: string): Promise<T.GameConfigCheck[]>;
@@ -134,10 +132,8 @@ const tauriApi: Api = {
   listOverlays: () => call("list_overlays"),
   verifyInputLive: () => call("verify_input_live"),
   measureBandwidth: (seconds) => call("measure_bandwidth", { seconds }),
-  measureMouseRate: (seconds) => call("measure_mouse_rate", { seconds }),
   setBackground: (path) => call("set_background", { path }),
   getBackgroundFile: () => call("get_background_file"),
-  measureSession: (gameId, seconds, pingHost) => call("measure_session", { gameId, seconds, pingHost }),
   runBufferbloat: () => call("run_bufferbloat"),
   syncInputLive: () => call("sync_input_live"),
   listGameConfig: (gameId) => call("list_game_config", { gameId }),

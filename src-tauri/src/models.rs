@@ -167,19 +167,6 @@ pub struct FortniteOverview {
 
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct MouseRate {
-    /// Afgerond naar een gangbare stand (125 tot 8000 Hz). 0 als de muis niet bewoog.
-    pub hz: u32,
-    pub raw_hz: f32,
-    pub reports: u32,
-    pub seconds: f32,
-    /// Alle WM_INPUT-berichten (ook zonder beweging) en het aantal keren dat de lus wakker werd.
-    pub wm_input: u32,
-    pub wakeups: u32,
-}
-
-#[derive(Serialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
 pub struct FpsDetail {
     pub avg_fps: f32,
     pub low1_fps: f32,
@@ -194,18 +181,6 @@ pub struct FpsDetail {
     pub cpu_busy: Option<f32>,
     /// Langste frametijd (ms) per tijdvak, voor de grafiek.
     pub graph: Vec<f32>,
-}
-
-#[derive(Serialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct Measurement {
-    pub game_id: String,
-    pub game_name: String,
-    pub taken_at: i64,
-    pub boost_active: bool,
-    pub ping_host: Option<String>,
-    pub fps: FpsDetail,
-    pub ping: Option<PingResult>,
 }
 
 #[derive(Serialize, Clone, Debug)]

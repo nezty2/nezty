@@ -22,7 +22,6 @@ mod icons;
 mod journal;
 mod measure;
 mod metrics;
-mod mouserate;
 mod models;
 mod netinfo;
 mod overlays;
@@ -586,21 +585,6 @@ fn get_background_file(state: St<'_>) -> Option<String> {
 }
 
 #[tauri::command]
-async fn measure_session(app: AppHandle, state: St<'_>, game_id: String, seconds: u32, ping_host: Option<String>) -> AppResult<Measurement> {
-    let st = state.inner().clone();
-    blocking(move || {
-        let game = find_game(&st, &game_id)?;
-        measure::run(&app, &st, &game, seconds, ping_host)
-    })
-    .await
-}
-
-#[tauri::command]
-async fn measure_mouse_rate(seconds: Option<f32>) -> AppResult<MouseRate> {
-    blocking(move || mouserate::measure(seconds.unwrap_or(3.0))).await
-}
-
-#[tauri::command]
 async fn measure_bandwidth(state: St<'_>, seconds: Option<f32>) -> AppResult<BandwidthReport> {
     let st = state.inner().clone();
     blocking(move || Ok(bandwidth::measure(&st, seconds.unwrap_or(3.0)))).await
@@ -739,13 +723,6 @@ fn get_crosshair_config(state: St<'_>) -> CrosshairConfig {
 pub fn run() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let args: Vec<String> = std::env::args().collect();
-    if let Some(i) = args.iter().position(|a| a == "--selftest-mouse") {
-        if let Some(out) = args.get(i + 1) {
-            let r = mouserate::measure(3.0).map(|m| serde_json::to_value(m).unwrap_or_default()).map_err(|e| e.to_string());
-            let _ = std::fs::write(out, serde_json::to_string_pretty(&serde_json::json!(r)).unwrap_or_default());
-        }
-        return;
-    }
     if let Some(i) = args.iter().position(|a| a == "--selftest-network") {
         if let Some(out) = args.get(i + 1) {
             selftest::run_network(out);
@@ -909,8 +886,6 @@ pub fn run() {
             get_fortnite_overview,
             verify_input_live,
             measure_bandwidth,
-            measure_mouse_rate,
-            measure_session,
             set_background,
             get_background_file,
             run_bufferbloat,
