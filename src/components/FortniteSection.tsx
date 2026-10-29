@@ -1,12 +1,12 @@
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Cpu, Hammer, Info, MonitorPlay, Pickaxe, RefreshCw, Sparkles, Wifi, XCircle } from "lucide-react";
 import { OverlaysCard } from "@/components/OverlaysCard";
 import { useCallback, useEffect, useState } from "react";
-import { Badge, Button, Card, EmptyState, PageHeader, SectionTitle, Skeleton, Toggle, cn } from "@/components/ui";
+import { Badge, Button, Card, EmptyState, SectionTitle, Skeleton, Toggle, cn } from "@/components/ui";
 import { useT } from "@/i18n/hooks";
 import type { TKey } from "@/i18n";
 import { api } from "@/lib/ipc";
 import type { FortniteOverview, HwAccelInfo } from "@/lib/types";
-import { FortniteIniTab, NowTab } from "@/pages/Games";
+import { FortniteIniTab, FortniteTipsTab, NowTab } from "./GameTabs";
 import { useApp } from "@/store/app";
 
 const GAME_ID = "epic:fortnite";
@@ -16,12 +16,13 @@ function StatusIcon({ ok }: { ok: boolean }) {
   return ok ? <CheckCircle2 className="h-[18px] w-[18px] shrink-0 text-ok" /> : <XCircle className="h-[18px] w-[18px] shrink-0 text-warn" />;
 }
 
-export function FortnitePage() {
+export function FortniteSection() {
   const { t } = useT();
   const games = useApp((s) => s.games);
   const handleError = useApp((s) => s.handleError);
   const toast = useApp((s) => s.toast);
   const setPage = useApp((s) => s.setPage);
+  const [tips, setTips] = useState(false);
   const game = games.find((g) => g.id === GAME_ID) ?? null;
 
   const [ov, setOv] = useState<FortniteOverview | null>(null);
@@ -59,10 +60,7 @@ export function FortnitePage() {
   if (!ov) return <Skeleton className="h-64" />;
   if (!game && !ov.iniExists) {
     return (
-      <div className="space-y-6">
-        <PageHeader title="Fortnite" subtitle={t("fn.subtitle")} />
-        <EmptyState icon={Pickaxe} title={t("fn.notFound")} description={t("msg.ini_missing")} />
-      </div>
+      <EmptyState icon={Pickaxe} title={t("fn.notFound")} description={t("msg.ini_missing")} />
     );
   }
 
@@ -82,15 +80,20 @@ export function FortnitePage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Fortnite"
-        subtitle={t("fn.subtitle")}
-        actions={
-          <Button icon={RefreshCw} onClick={() => void load()}>
-            {t("fn.refresh")}
-          </Button>
-        }
-      />
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-soft text-accent">
+            <Pickaxe className="h-5 w-5" />
+          </span>
+          <div>
+            <h2 className="text-[17px] font-semibold">Fortnite</h2>
+            <p className="text-[13px] text-ink-2">{t("fn.subtitle")}</p>
+          </div>
+        </div>
+        <Button size="sm" icon={RefreshCw} onClick={() => void load()}>
+          {t("fn.refresh")}
+        </Button>
+      </div>
 
       {ov.running && (
         <div className="flex items-start gap-3 rounded-xl border border-warn/40 bg-warn/10 px-4 py-3 text-[13px]">
@@ -253,6 +256,25 @@ export function FortnitePage() {
             </div>
           </Card>
         </div>
+      </section>
+
+      {/* Tips voor de instellingen in de game zelf */}
+      <section>
+        <SectionTitle
+          sub={t("fortniteTips.intro")}
+          right={
+            <Button size="sm" variant="ghost" icon={tips ? ChevronUp : ChevronDown} onClick={() => setTips((v) => !v)}>
+              {tips ? t("fn.advancedHide") : t("fn.advancedShow")}
+            </Button>
+          }
+        >
+          {t("games.tabs.tips")}
+        </SectionTitle>
+        {tips && (
+          <Card>
+            <FortniteTipsTab />
+          </Card>
+        )}
       </section>
 
       {/* Zelf aanpassen (bestaande editor met back-ups) */}

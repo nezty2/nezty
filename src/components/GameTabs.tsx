@@ -1,13 +1,12 @@
-import { FolderOpen, Gamepad2, Lightbulb, Play, Plus, RefreshCw, Save, Trash2, Undo2, Zap } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { FolderOpen, Gamepad2, Plus, Save, Trash2, Undo2 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { GameConfigCard } from "@/components/GameConfigCard";
-import { GameCover } from "@/components/GameCover";
 import { OverlaysCard } from "@/components/OverlaysCard";
 import { GainBadge, StateBadge, TimingBadge } from "@/components/TweakCard";
 import { useAppIcons } from "@/components/useAppIcons";
-import { Badge, Button, Chip, EmptyState, Modal, PageHeader, Row, SearchInput, SegmentedControl, Skeleton, Spinner, TextInput, Toggle, cn } from "@/components/ui";
+import { Badge, Button, Chip, EmptyState, Row, SegmentedControl, Skeleton, Spinner, TextInput, Toggle } from "@/components/ui";
 import { useT } from "@/i18n/hooks";
-import { api, pickExe } from "@/lib/ipc";
+import { api } from "@/lib/ipc";
 import { prettyPath } from "@/lib/privacy";
 import { formatMb } from "@/lib/format";
 import type { FortniteSettings, Game, GameProfile, ProcessInfo, TweakInfo } from "@/lib/types";
@@ -15,7 +14,7 @@ import { useApp } from "@/store/app";
 
 /* ---------- Boost-instellingen per game ---------- */
 
-function ProfileTab({ game, profile, onChange }: { game: Game; profile: GameProfile; onChange: (p: GameProfile) => void }) {
+export function ProfileTab({ game, profile, onChange }: { game: Game; profile: GameProfile; onChange: (p: GameProfile) => void }) {
   const { t, td, lang } = useT();
   const tweaks = useApp((s) => s.tweaks);
   const settings = useApp((s) => s.settings);
@@ -320,7 +319,7 @@ const tipGroups: { group: "display" | "quality" | "advanced"; items: string[] }[
   { group: "advanced", items: ["reflex", "multithread", "motion_blur", "shader_cache"] },
 ];
 
-function FortniteTipsTab() {
+export function FortniteTipsTab() {
   const { t, td } = useT();
   return (
     <div className="space-y-5">
@@ -341,192 +340,6 @@ function FortniteTipsTab() {
           </div>
         </section>
       ))}
-    </div>
-  );
-}
-
-/* ---------- Detailvenster ---------- */
-
-type Tab = "profile" | "now" | "fortnite" | "tips";
-
-function GameDetail({ game, onClose }: { game: Game; onClose: () => void }) {
-  const { t } = useT();
-  const profileFor = useApp((s) => s.profileFor);
-  const saveProfile = useApp((s) => s.saveProfile);
-  const runningGames = useApp((s) => s.runningGames);
-  const boost = useApp((s) => s.boost);
-  const runBoost = useApp((s) => s.runBoost);
-  const refreshGames = useApp((s) => s.refreshGames);
-  const handleError = useApp((s) => s.handleError);
-  const toast = useApp((s) => s.toast);
-  const [tab, setTab] = useState<Tab>("profile");
-  const [profile, setProfile] = useState<GameProfile>(() => profileFor(game.id));
-  const isFortnite = game.id === "epic:fortnite";
-  const running = runningGames.includes(game.id);
-  const tabs: Tab[] = isFortnite ? ["profile", "now", "fortnite", "tips"] : ["profile", "now"];
-
-  return (
-    <Modal
-      open
-      onClose={onClose}
-      width="max-w-3xl"
-      title={
-        <span className="flex items-center gap-3">
-          <span className="h-10 w-[86px] shrink-0 overflow-hidden rounded-md border border-line">
-            <GameCover game={game} />
-          </span>
-          <span className="min-w-0">
-            <span className="flex items-center gap-2">
-              {game.name}
-              {running && <Badge variant="ok">{t("games.playing")}</Badge>}
-            </span>
-            <span className="block text-[12px] font-normal text-ink-3">{t(`launcher.${game.launcher}`)}</span>
-          </span>
-        </span>
-      }
-      footer={
-        <>
-          {game.launcher === "custom" && (
-            <Button
-              variant="danger"
-              icon={Trash2}
-              onClick={async () => {
-                try {
-                  await api.removeCustomGame(game.id);
-                  toast({ level: "info", title: t("notice.info"), message: t("games.removed", { name: game.name }) });
-                  onClose();
-                  void refreshGames();
-                } catch (e) {
-                  handleError(e);
-                }
-              }}
-            >
-              {t("common.remove")}
-            </Button>
-          )}
-          <div className="flex-1" />
-          <Button icon={Play} onClick={() => api.launchGame(game.id).catch(handleError)}>
-            {t("games.launch")}
-          </Button>
-          <Button variant="primary" icon={Zap} disabled={boost.active} onClick={() => void runBoost(game.id, running).then(() => onClose())}>
-            {t("games.boostNow")}
-          </Button>
-        </>
-      }
-    >
-      <div className="mb-5 flex gap-1 border-b border-line">
-        {tabs.map((id) => (
-          <button key={id} onClick={() => setTab(id)} className={cn("-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors", tab === id ? "border-accent text-ink" : "border-transparent text-ink-3 hover:text-ink-2")}>
-            {id === "tips" && <Lightbulb className="mr-1 inline h-3.5 w-3.5" />}
-            {t(`games.tabs.${id}`)}
-          </button>
-        ))}
-      </div>
-      {tab === "profile" && (
-        <ProfileTab
-          game={game}
-          profile={profile}
-          onChange={(p) => {
-            setProfile(p);
-            void saveProfile(p);
-          }}
-        />
-      )}
-      {tab === "now" && <NowTab game={game} />}
-      {tab === "fortnite" && <FortniteIniTab />}
-      {tab === "tips" && <FortniteTipsTab />}
-    </Modal>
-  );
-}
-
-/* ---------- Pagina ---------- */
-
-export function GamesPage() {
-  const { t } = useT();
-  const games = useApp((s) => s.games);
-  const loading = useApp((s) => s.gamesLoading);
-  const refreshGames = useApp((s) => s.refreshGames);
-  const runningGames = useApp((s) => s.runningGames);
-  const profiles = useApp((s) => s.profiles);
-  const handleError = useApp((s) => s.handleError);
-  const toast = useApp((s) => s.toast);
-  const [search, setSearch] = useState("");
-  const [selected, setSelected] = useState<string | null>(null);
-  const [adding, setAdding] = useState(false);
-
-  const filtered = useMemo(() => games.filter((g) => g.name.toLowerCase().includes(search.toLowerCase())), [games, search]);
-  const selectedGame = games.find((g) => g.id === selected) ?? null;
-
-  const addGame = async () => {
-    const path = await pickExe(t("games.add"));
-    if (!path) return;
-    setAdding(true);
-    try {
-      const g = await api.addCustomGame(path, null);
-      toast({ level: "success", title: t("notice.success"), message: t("games.added", { name: g.name }) });
-      await refreshGames();
-      setSelected(g.id);
-    } catch (e) {
-      handleError(e);
-    } finally {
-      setAdding(false);
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        title={t("games.title")}
-        subtitle={t("games.subtitle")}
-        actions={
-          <>
-            <SearchInput value={search} onChange={setSearch} placeholder={t("games.search")} className="w-56" />
-            <Button icon={RefreshCw} onClick={() => void refreshGames()} loading={loading}>
-              {t("games.rescan")}
-            </Button>
-            <Button variant="primary" icon={Plus} onClick={() => void addGame()} loading={adding}>
-              {t("games.add")}
-            </Button>
-          </>
-        }
-      />
-
-      {loading && games.length === 0 ? (
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 2xl:grid-cols-4">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="aspect-[460/275]" />
-          ))}
-        </div>
-      ) : filtered.length === 0 ? (
-        <EmptyState icon={Gamepad2} title={games.length === 0 ? t("games.emptyTitle") : t("games.noMatch")} description={games.length === 0 ? t("games.emptyDesc") : undefined} />
-      ) : (
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 2xl:grid-cols-4">
-          {filtered.map((g) => {
-            const p = profiles.find((x) => x.gameId === g.id);
-            const running = runningGames.includes(g.id);
-            return (
-              <button key={g.id} onClick={() => setSelected(g.id)} className="card group overflow-hidden text-left transition-colors hover:border-line-2">
-                <div className="relative aspect-[460/215] overflow-hidden border-b border-line">
-                  <GameCover game={g} className="transition-transform duration-300 group-hover:scale-[1.03]" />
-                  <div className="absolute left-2 top-2 flex gap-1.5">
-                    {running && <Badge variant="ok" className="!bg-[#0f1115]/90">{t("games.playing")}</Badge>}
-                    {p?.autoBoost && <Badge variant="accent" className="!bg-[#0f1115]/90">{t("games.autoBoost")}</Badge>}
-                  </div>
-                </div>
-                <div className="px-3.5 py-3">
-                  <div className="truncate text-sm font-semibold">{g.name}</div>
-                  <div className="mt-0.5 flex items-center gap-2 text-[12px] text-ink-3">
-                    {t(`launcher.${g.launcher}`)}
-                    {!g.exePath && <span className="text-warn">· {t("games.noExe")}</span>}
-                  </div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {selectedGame && <GameDetail key={selectedGame.id} game={selectedGame} onClose={() => setSelected(null)} />}
     </div>
   );
 }

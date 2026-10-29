@@ -457,29 +457,6 @@ export const mockApi: Api = {
     hwAccel = hwAccel.map((h) => (h.id === id ? { ...h, enabled } : h));
     return hwAccel;
   },
-  async runCheckup(): Promise<T.TestCheck[]> {
-    await delay(700);
-    return [
-      { id: "admin", status: "ok", key: "ok", params: {} },
-      { id: "restore", status: "ok", key: "ok", params: {} },
-      { id: "journal", status: "ok", key: "ok", params: {} },
-      { id: "data", status: "ok", key: "ok", params: {} },
-      { id: "tweaks", status: "ok", key: "ok", params: { total: "31", on: "6", unknown: "0" } },
-      { id: "games", status: "ok", key: "ok", params: { count: "5" } },
-      { id: "display", status: "warn", key: "low", params: { current: "60", max: "144" } },
-      { id: "network", status: "ok", key: "ok", params: { ms: "14" } },
-      { id: "update", status: "ok", key: "latest", params: {} },
-      { id: "autostart", status: "info", key: "off", params: {} },
-      { id: "controller", status: "info", key: "none", params: {} },
-    ];
-  },
-  async runTweakTest() {
-    await delay(900);
-    return [
-      { id: "mouse_precision_off", result: "ok", restored: true, error: null },
-      { id: "keyboard_fast_repeat", result: "skipped", restored: true, error: null },
-    ];
-  },
   async listControllers() { await delay(); return [{ id: "xinput:0", kind: "xbox", model: "xbox", slot: 0, wired: false, battery: "medium", batteryPercent: null, charging: null }, { id: "hid:mock-dualsense", kind: "playstation", model: "dualsense", slot: null, wired: true, battery: null, batteryPercent: 80, charging: true }]; },
   async measureControllerRate(id, seconds) { await delay((seconds ?? 4) * 1000); const ps = id.startsWith("hid:"); return { id, hz: ps ? 250 : 125, changes: ps ? 1000 : 480, seconds: seconds ?? 4, connected: true }; },
 };

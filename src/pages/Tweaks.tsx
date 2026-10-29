@@ -1,10 +1,14 @@
-import { AlertCircle, BellOff, CheckCircle2, ChevronDown, ExternalLink, Gamepad2, HelpCircle, Info, MinusCircle, RefreshCw, Trash2, Wrench } from "lucide-react";
-import { useState } from "react";
+import { AlertCircle, BellOff, CheckCircle2, ChevronDown, ExternalLink, FlaskConical, Gamepad2, HelpCircle, Info, MinusCircle, MonitorCog, Pickaxe, RefreshCw, Sparkles, Trash2, Wrench, type LucideIcon } from "lucide-react";
+import { useEffect, useState } from "react";
 import { BestTweaks } from "@/components/BestTweaks";
 import { CleanupModal } from "@/components/CleanupModal";
+import { FortniteSection } from "@/components/FortniteSection";
+import { MeasureCard } from "@/components/MeasureCard";
+import { PerGame } from "@/components/PerGame";
 import { GainBadge, TweakCard } from "@/components/TweakCard";
-import { Badge, Button, Card, PageHeader, SectionTitle, Skeleton, cn } from "@/components/ui";
+import { Button, Card, PageHeader, SectionTitle, Skeleton, cn } from "@/components/ui";
 import { useT } from "@/i18n/hooks";
+import type { TKey } from "@/i18n";
 import { api } from "@/lib/ipc";
 import { formatDate, formatMb } from "@/lib/format";
 import type { BigWin, TweakInfo } from "@/lib/types";
@@ -12,6 +16,16 @@ import { useApp } from "@/store/app";
 
 const statusIcon = { ok: CheckCircle2, issue: AlertCircle, info: HelpCircle, unavailable: MinusCircle };
 const statusColor = { ok: "text-ok", issue: "text-accent", info: "text-warn", unavailable: "text-ink-3" };
+
+export type TweaksTab = "recommended" | "fortnite" | "games" | "windows" | "experimental";
+const TABS: { id: TweaksTab; icon: LucideIcon }[] = [
+  { id: "recommended", icon: Sparkles },
+  { id: "fortnite", icon: Pickaxe },
+  { id: "games", icon: Gamepad2 },
+  { id: "windows", icon: MonitorCog },
+  { id: "experimental", icon: FlaskConical },
+];
+const TAB_KEY = "nezty.tweaks.tab";
 
 function BigWinCard({ win, onFixed }: { win: BigWin; onFixed: (list: BigWin[]) => void }) {
   const { t, td, tl, lang } = useT();
@@ -142,6 +156,18 @@ function TweakGrid({ list, busy, onToggle, elevated, onCleanup }: { list: TweakI
   );
 }
 
+function readTab(fromParams: string | undefined): TweaksTab {
+  const ids = TABS.map((x) => x.id);
+  if (fromParams && (ids as string[]).includes(fromParams)) return fromParams as TweaksTab;
+  try {
+    const saved = localStorage.getItem(TAB_KEY);
+    if (saved && (ids as string[]).includes(saved)) return saved as TweaksTab;
+  } catch {
+    /* geen opslag beschikbaar */
+  }
+  return "recommended";
+}
+
 export function TweaksPage() {
   const { t, td } = useT();
   const tweaks = useApp((s) => s.tweaks);
@@ -151,13 +177,25 @@ export function TweaksPage() {
   const refresh = () => Promise.all([refreshTweaks(), refreshBigWins()]);
   const setTweak = useApp((s) => s.setTweak);
   const appInfo = useApp((s) => s.appInfo);
-  const setPage = useApp((s) => s.setPage);
+  const pageParams = useApp((s) => s.pageParams);
   const toast = useApp((s) => s.toast);
   const handleError = useApp((s) => s.handleError);
   const [busy, setBusy] = useState<string | null>(null);
   const [cleanupOpen, setCleanupOpen] = useState(false);
-  const [showExperimental, setShowExperimental] = useState(false);
+  const [tab, setTab] = useState<TweaksTab>(() => readTab(pageParams.tab));
   const elevated = appInfo?.isElevated ?? false;
+
+  // Vanaf het dashboard of een andere pagina: meteen het gevraagde tabblad openen.
+  useEffect(() => {
+    if (pageParams.tab) setTab(readTab(pageParams.tab));
+  }, [pageParams.tab]);
+  useEffect(() => {
+    try {
+      localStorage.setItem(TAB_KEY, tab);
+    } catch {
+      /* geen opslag beschikbaar */
+    }
+  }, [tab]);
 
   const onToggle = async (tw: TweakInfo, enabled: boolean, option: string | null) => {
     setBusy(tw.id);
@@ -174,9 +212,10 @@ export function TweaksPage() {
   const network = tweaks.filter((tw) => tw.category === "network" && !tw.experimental);
   const experimental = tweaks.filter((tw) => tw.experimental);
   const cleanup = tweaks.filter((tw) => tw.category === "cleanup");
+  const grid = (list: TweakInfo[]) => <TweakGrid list={list} busy={busy} onToggle={onToggle} elevated={elevated} onCleanup={() => setCleanupOpen(true)} />;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <PageHeader
         title={t("tweaks.title")}
         subtitle={t("tweaks.subtitle")}
@@ -187,60 +226,76 @@ export function TweaksPage() {
         }
       />
 
-      <BigWins />
+      {/* Tabbladen: alles wat met tweaks te maken heeft staat hier, overzichtelijk per onderwerp. */}
+      <div className="sticky top-0 z-10 -mx-1 flex flex-wrap gap-1.5 rounded-xl border border-line bg-panel/85 p-1.5 backdrop-blur">
+        {TABS.map(({ id, icon: Icon }) => (
+          <button
+            key={id}
+            onClick={() => setTab(id)}
+            className={cn(
+              "flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors",
+              tab === id ? "bg-accent-soft text-ink ring-1 ring-accent/30" : "text-ink-2 hover:bg-panel-2 hover:text-ink",
+            )}
+          >
+            <Icon className={cn("h-4 w-4", tab === id && "text-accent")} />
+            {t(`tweaks.tabs.${id}` as TKey)}
+            {id === "experimental" && experimental.some((tw) => tw.state === "on") && <span className="h-1.5 w-1.5 rounded-full bg-warn" />}
+          </button>
+        ))}
+      </div>
+      <p className="-mt-2 px-1 text-[13px] text-ink-3">{t(`tweaks.tabsSub.${tab}` as TKey)}</p>
 
-      <BestTweaks />
-
-      <section>
-        <SectionTitle>{t("tweaks.system")}</SectionTitle>
-        {loading && tweaks.length === 0 ? <Skeleton className="h-48" /> : <TweakGrid list={system} busy={busy} onToggle={onToggle} elevated={elevated} onCleanup={() => setCleanupOpen(true)} />}
-      </section>
-
-      <Card className="flex flex-wrap items-center gap-4">
-        <BellOff className="h-5 w-5 text-ink-3" />
-        <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold">{t("tweaks.dndTitle")}</div>
-          <div className="text-[13px] text-ink-2">{t("tweaks.dndText")}</div>
+      {tab === "recommended" && (
+        <div className="space-y-8">
+          <BigWins />
+          {loading && tweaks.length === 0 ? <Skeleton className="h-48" /> : <BestTweaks />}
+          <MeasureCard />
         </div>
-        <Button size="sm" icon={ExternalLink} onClick={() => api.openUrl("ms-settings:notifications").catch(handleError)}>
-          {t("tweaks.openSettings")}
-        </Button>
-      </Card>
+      )}
 
-      <section>
-        <SectionTitle>{t("tweaks.network")}</SectionTitle>
-        <TweakGrid list={network} busy={busy} onToggle={onToggle} elevated={elevated} onCleanup={() => setCleanupOpen(true)} />
-      </section>
+      {tab === "fortnite" && <FortniteSection />}
 
-      <section>
-        <SectionTitle>{t("tweaks.cleanup")}</SectionTitle>
-        <TweakGrid list={cleanup} busy={busy} onToggle={onToggle} elevated={elevated} onCleanup={() => setCleanupOpen(true)} />
-      </section>
+      {tab === "games" && <PerGame />}
 
-      <Card className="flex flex-wrap items-center gap-4">
-        <Gamepad2 className="h-5 w-5 text-ink-3" />
-        <div className="min-w-0 flex-1 text-[13px] text-ink-2">{t("tweaks.perGameNote")}</div>
-        <Button size="sm" onClick={() => setPage("games")}>
-          {t("tweaks.toGames")}
-        </Button>
-      </Card>
+      {tab === "windows" && (
+        <div className="space-y-8">
+          <section>
+            <SectionTitle>{t("tweaks.system")}</SectionTitle>
+            {loading && tweaks.length === 0 ? <Skeleton className="h-48" /> : grid(system)}
+          </section>
 
-      <section>
-        <button onClick={() => setShowExperimental((v) => !v)} className="flex items-center gap-2 text-sm font-medium text-ink-2 hover:text-ink">
-          <ChevronDown className={cn("h-4 w-4 transition-transform", showExperimental && "rotate-180")} />
-          {showExperimental ? t("tweaks.hideExperimental") : t("tweaks.showExperimental")}
-          <Badge variant="warn">{experimental.length}</Badge>
-        </button>
-        {showExperimental && (
-          <div className="mt-3">
-            <p className="mb-3 flex items-center gap-2 text-[13px] text-ink-3">
-              <Info className="h-4 w-4" />
-              {t("tweaks.experimentalNote")}
-            </p>
-            <TweakGrid list={experimental} busy={busy} onToggle={onToggle} elevated={elevated} onCleanup={() => setCleanupOpen(true)} />
-          </div>
-        )}
-      </section>
+          <Card className="flex flex-wrap items-center gap-4">
+            <BellOff className="h-5 w-5 text-ink-3" />
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-semibold">{t("tweaks.dndTitle")}</div>
+              <div className="text-[13px] text-ink-2">{t("tweaks.dndText")}</div>
+            </div>
+            <Button size="sm" icon={ExternalLink} onClick={() => api.openUrl("ms-settings:notifications").catch(handleError)}>
+              {t("tweaks.openSettings")}
+            </Button>
+          </Card>
+
+          <section>
+            <SectionTitle>{t("tweaks.network")}</SectionTitle>
+            {grid(network)}
+          </section>
+
+          <section>
+            <SectionTitle>{t("tweaks.cleanup")}</SectionTitle>
+            {grid(cleanup)}
+          </section>
+        </div>
+      )}
+
+      {tab === "experimental" && (
+        <section>
+          <p className="mb-3 flex items-center gap-2 text-[13px] text-ink-3">
+            <Info className="h-4 w-4" />
+            {t("tweaks.experimentalNote")}
+          </p>
+          {grid(experimental)}
+        </section>
+      )}
 
       <CleanupModal open={cleanupOpen} onClose={() => setCleanupOpen(false)} />
     </div>

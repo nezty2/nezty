@@ -115,7 +115,7 @@ pub fn status(state: &AppState, id: &str, game: Option<&Game>) -> Status {
         "hags" => system::hags_status(),
         "visual_effects" => system::visual_effects_status(),
         "windowed_opt" => system::windowed_opt_status(),
-        "notifications_off" => system::notifications_status(),
+        "notifications_off" => system::notifications_status(state),
         "timer_resolution" => system::timer_status(),
         "interrupt_moderation_off" => network::interrupt_status(state.elevated),
         "wifi_power_max" => network_extra::wifi_status(network_extra::has_wifi()),

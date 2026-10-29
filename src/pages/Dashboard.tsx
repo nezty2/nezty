@@ -1,4 +1,4 @@
-import { Activity, AlertTriangle, ChevronRight, Cpu, Gauge, History, MemoryStick, Monitor, Play, ShieldCheck, Sparkles, Thermometer, Undo2, Zap, type LucideIcon } from "lucide-react";
+import { Activity, AlertTriangle, ChevronRight, Cpu, Gamepad2, Gauge, History, MemoryStick, Monitor, Pickaxe, Play, ShieldCheck, Sparkles, Thermometer, Undo2, Zap, type LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { GameCover } from "@/components/GameCover";
 import { Sparkline } from "@/components/Sparkline";
@@ -8,16 +8,22 @@ import { api } from "@/lib/ipc";
 import { formatMb, formatMs, formatPct, formatTemp, timeAgo } from "@/lib/format";
 import { useApp } from "@/store/app";
 
-function StatTile({ icon: Icon, label, value, sub, series, min, max, format }: { icon: LucideIcon; label: string; value: string; sub?: ReactNode; series: (number | null)[]; min?: number; max?: number; format?: (v: number) => string }) {
+type Tone = "normal" | "warn" | "bad";
+
+function StatTile({ icon: Icon, label, value, sub, series, min, max, format, tone = "normal" }: { icon: LucideIcon; label: string; value: string; sub?: ReactNode; series: (number | null)[]; min?: number; max?: number; format?: (v: number) => string; tone?: Tone }) {
   return (
-    <div className="card flex min-w-0 flex-col p-4">
-      <div className="flex items-center gap-2 text-[13px] text-ink-3">
-        <Icon className="h-4 w-4" />
-        {label}
+    <div className="card relative flex min-w-0 flex-col overflow-hidden p-4">
+      {/* Zachte gloed bovenin, in je accentkleur. Oranje of rood als een waarde hoog staat. */}
+      <div className={cn("pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full opacity-20 blur-2xl", tone === "bad" ? "bg-bad" : tone === "warn" ? "bg-warn" : "bg-accent")} />
+      <div className="relative flex items-center gap-2.5">
+        <span className={cn("flex h-8 w-8 items-center justify-center rounded-lg", tone === "bad" ? "bg-bad/15 text-bad" : tone === "warn" ? "bg-warn/15 text-warn" : "bg-accent-soft text-accent")}>
+          <Icon className="h-4 w-4" />
+        </span>
+        <span className="text-[13px] font-medium text-ink-2">{label}</span>
       </div>
-      <div className="mt-2 text-[26px] font-semibold leading-none tracking-tight tnum">{value}</div>
-      <div className="mt-1.5 truncate text-[12px] text-ink-3">{sub}</div>
-      <Sparkline values={series} min={min} max={max} height={36} className="mt-3 h-9" format={format} />
+      <div className={cn("relative mt-3 text-[28px] font-semibold leading-none tracking-tight tnum", tone === "bad" ? "text-bad" : tone === "warn" ? "text-warn" : "text-ink")}>{value}</div>
+      <div className="relative mt-1.5 truncate text-[12px] text-ink-3">{sub}</div>
+      <Sparkline values={series} min={min} max={max} height={36} className="relative mt-3 h-9" format={format} />
     </div>
   );
 }
@@ -56,8 +62,9 @@ function BoostCard() {
   if (boost.active && report) {
     const closedMb = report.closedProcesses.reduce((a, b) => a + b.memoryMb, 0);
     return (
-      <Card className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+      <Card className="relative flex flex-col gap-4 overflow-hidden border-ok/40">
+        <div className="pointer-events-none absolute -left-16 -top-16 h-48 w-48 rounded-full bg-ok opacity-10 blur-3xl" />
+        <div className="relative flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
               <span className="live-dot h-2.5 w-2.5 rounded-full bg-ok" />
@@ -72,7 +79,7 @@ function BoostCard() {
             </Button>
           </div>
         </div>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="relative grid grid-cols-3 gap-3">
           <div className="card-inset p-3">
             <div className="text-[22px] font-semibold tnum">{report.applied.length}</div>
             <div className="text-[12px] text-ink-3">{t("result.statTweaks")}</div>
@@ -87,7 +94,7 @@ function BoostCard() {
           </div>
         </div>
         {report.gameRunning && report.applied.some((a) => a.timing === "game_restart") && report.gameName && (
-          <p className="flex items-start gap-2 text-[13px] text-warn">
+          <p className="relative flex items-start gap-2 text-[13px] text-warn">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             {t("boost.gameRunning", { game: report.gameName })}
           </p>
@@ -97,13 +104,17 @@ function BoostCard() {
   }
 
   return (
-    <Card className="flex flex-col gap-5">
-      <div>
-        <h2 className="text-lg font-semibold">{t("boost.title")}</h2>
+    <Card className="relative flex flex-col gap-5 overflow-hidden">
+      <div className="pointer-events-none absolute -left-16 -top-16 h-48 w-48 rounded-full bg-accent opacity-15 blur-3xl" />
+      <div className="relative">
+        <h2 className="flex items-center gap-2 text-lg font-semibold">
+          <Zap className="h-5 w-5 text-accent" fill="currentColor" />
+          {t("boost.title")}
+        </h2>
         <p className="mt-1 text-[13px] text-ink-2">{t("boost.desc")}</p>
       </div>
 
-      <div>
+      <div className="relative">
         <div className="mb-2 text-[13px] font-medium text-ink-3">{t("boost.forWhich")}</div>
         <div className="flex flex-wrap gap-2">
           <Chip active={target === null} onClick={() => setTarget(null)} icon={Monitor}>
@@ -119,7 +130,7 @@ function BoostCard() {
       </div>
 
       {targetRunning && targetGame && (
-        <div className="space-y-2 rounded-lg border border-line bg-panel-2 p-3.5">
+        <div className="relative space-y-2 rounded-lg border border-line bg-panel-2 p-3.5">
           <label className="flex cursor-pointer items-start gap-2.5">
             <input type="checkbox" className="mt-0.5 h-4 w-4" checked={measure} onChange={(e) => setMeasure(e.target.checked)} />
             <span>
@@ -134,7 +145,7 @@ function BoostCard() {
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-4">
+      <div className="relative flex flex-wrap items-center gap-4">
         <Button variant="primary" size="lg" icon={Zap} loading={boosting} onClick={() => void runBoost(target, targetRunning && measure)} className="min-w-[180px]">
           {boosting ? (stage ? t(`boost.stage.${stage}` as never) : t("common.loading")) : t("boost.start")}
         </Button>
@@ -147,13 +158,40 @@ function BoostCard() {
   );
 }
 
+/** Snel naar de plekken waar je het meest mee doet, elk op het juiste tabblad van Tweaks. */
+function QuickActions() {
+  const { t } = useT();
+  const setPage = useApp((s) => s.setPage);
+  const items: { id: "best" | "fortnite" | "games" | "measure"; icon: LucideIcon; tab: string }[] = [
+    { id: "best", icon: Sparkles, tab: "recommended" },
+    { id: "fortnite", icon: Pickaxe, tab: "fortnite" },
+    { id: "games", icon: Gamepad2, tab: "games" },
+    { id: "measure", icon: Gauge, tab: "recommended" },
+  ];
+  return (
+    <div>
+      <div className="mb-2 text-[12px] font-medium uppercase tracking-wide text-ink-3">{t("dashboard.quickTitle")}</div>
+      <div className="grid grid-cols-2 gap-2">
+        {items.map(({ id, icon: Icon, tab }) => (
+          <button key={id} onClick={() => setPage("tweaks", { tab })} className="card flex items-center gap-2.5 px-3 py-2.5 text-left text-[13px] font-medium transition-colors hover:border-line-2">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-accent-soft text-accent">
+              <Icon className="h-3.5 w-3.5" />
+            </span>
+            <span className="truncate">{t(`dashboard.quick.${id}`)}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function BigWinsTeaser() {
   const { t } = useT();
   const bigWins = useApp((s) => s.bigWins);
   const setPage = useApp((s) => s.setPage);
   const issues = (bigWins ?? []).filter((b) => b.status === "issue");
   return (
-    <button onClick={() => setPage("tweaks")} className="card flex w-full items-center gap-3 p-4 text-left transition-colors hover:border-line-2">
+    <button onClick={() => setPage("tweaks", { tab: "recommended" })} className="card flex w-full items-center gap-3 p-4 text-left transition-colors hover:border-line-2">
       <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", issues.length ? "bg-accent-soft text-accent" : "bg-ok/10 text-ok")}>
         {issues.length ? <Sparkles className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />}
       </span>
@@ -200,19 +238,19 @@ function StatusCard() {
         : t("dashboard.restoreAuto");
 
   return (
-    <div className="card divide-y divide-line px-4">
-      <div className="flex items-center gap-3 py-3.5">
-        <History className={cn("h-4 w-4 shrink-0", settings?.restorePointDone ? "text-ok" : "text-ink-3")} />
-        <div className="min-w-0 flex-1">
-          <div className="text-[12px] text-ink-3">{t("dashboard.restorePoint")}</div>
-          <div className="text-[13px]">{restoreText}</div>
-        </div>
-        {!settings?.restorePointDone && (
-          <Button size="sm" loading={creating} onClick={() => void createRp()}>
-            {t("dashboard.createNow")}
-          </Button>
-        )}
+    <div className="card flex items-center gap-3 px-4 py-3.5">
+      <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", settings?.restorePointDone ? "bg-ok/10 text-ok" : "bg-panel-2 text-ink-3")}>
+        <History className="h-4 w-4" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-semibold">{t("dashboard.restorePoint")}</div>
+        <div className="text-[13px] text-ink-3">{restoreText}</div>
       </div>
+      {!settings?.restorePointDone && (
+        <Button size="sm" loading={creating} onClick={() => void createRp()}>
+          {t("dashboard.createNow")}
+        </Button>
+      )}
     </div>
   );
 }
@@ -224,11 +262,13 @@ function GamesStrip() {
   const setPage = useApp((s) => s.setPage);
   const handleError = useApp((s) => s.handleError);
   if (games.length === 0) return null;
+  // Draaiende games eerst.
+  const shown = [...games].sort((a, b) => Number(runningGames.includes(b.id)) - Number(runningGames.includes(a.id))).slice(0, 5);
   return (
     <div>
       <SectionTitle
         right={
-          <Button size="sm" variant="ghost" onClick={() => setPage("games")}>
+          <Button size="sm" variant="ghost" onClick={() => setPage("tweaks", { tab: "games" })}>
             {t("dashboard.allGames")}
           </Button>
         }
@@ -236,10 +276,10 @@ function GamesStrip() {
         {t("dashboard.games")}
       </SectionTitle>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-        {games.slice(0, 5).map((g) => (
-          <div key={g.id} className="card group overflow-hidden">
+        {shown.map((g) => (
+          <button key={g.id} onClick={() => setPage("tweaks", { tab: "games", game: g.id })} className="card group overflow-hidden text-left transition-colors hover:border-line-2">
             <div className="relative aspect-[460/215] overflow-hidden">
-              <GameCover game={g} />
+              <GameCover game={g} className="transition-transform duration-300 group-hover:scale-[1.03]" />
               {runningGames.includes(g.id) && (
                 <span className="absolute left-2 top-2">
                   <Badge variant="ok" className="!bg-[#0f1115]/90">{t("games.playing")}</Badge>
@@ -248,15 +288,19 @@ function GamesStrip() {
             </div>
             <div className="flex items-center justify-between gap-2 px-3 py-2.5">
               <div className="truncate text-[13px] font-medium">{g.name}</div>
-              <button
+              <span
+                role="button"
                 title={t("games.launch")}
-                onClick={() => api.launchGame(g.id).catch(handleError)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  api.launchGame(g.id).catch(handleError);
+                }}
                 className="rounded-md p-1.5 text-ink-3 hover:bg-panel-2 hover:text-ink"
               >
                 <Play className="h-3.5 w-3.5" />
-              </button>
+              </span>
             </div>
-          </div>
+          </button>
         ))}
       </div>
     </div>
@@ -282,6 +326,8 @@ export function DashboardPage() {
   );
   const temp = latest?.gpuTempC ?? latest?.cpuTempC ?? null;
   const tempSource = latest?.gpuTempC != null ? t("dashboard.tempGpu") : latest?.cpuTempC != null ? t("dashboard.tempCpu") : t("dashboard.tempNone");
+  const ramPct = latest ? latest.ramUsedMb / Math.max(1, latest.ramTotalMb) : 0;
+  const tone = (v: number | null | undefined, warn: number, bad: number): Tone => (v == null ? "normal" : v >= bad ? "bad" : v >= warn ? "warn" : "normal");
 
   return (
     <div className="space-y-6">
@@ -296,7 +342,7 @@ export function DashboardPage() {
       />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-        <StatTile icon={Cpu} label={t("dashboard.cpu")} value={latest ? formatPct(lang, latest.cpuPct) : "-"} sub={appInfo?.cpuName} series={series.cpu} min={0} max={100} format={(v) => formatPct(lang, v, 1)} />
+        <StatTile icon={Cpu} label={t("dashboard.cpu")} value={latest ? formatPct(lang, latest.cpuPct) : "-"} sub={appInfo?.cpuName} series={series.cpu} min={0} max={100} format={(v) => formatPct(lang, v, 1)} tone={tone(latest?.cpuPct, 85, 95)} />
         <StatTile
           icon={Monitor}
           label={t("dashboard.gpu")}
@@ -316,8 +362,9 @@ export function DashboardPage() {
           min={0}
           max={latest?.ramTotalMb}
           format={(v) => formatMb(lang, v)}
+          tone={tone(ramPct, 0.85, 0.95)}
         />
-        <StatTile icon={Thermometer} label={t("dashboard.temp")} value={formatTemp(lang, temp)} sub={tempSource} series={series.temp} min={20} max={100} format={(v) => formatTemp(lang, v)} />
+        <StatTile icon={Thermometer} label={t("dashboard.temp")} value={formatTemp(lang, temp)} sub={tempSource} series={series.temp} min={20} max={100} format={(v) => formatTemp(lang, v)} tone={tone(temp, 80, 90)} />
         <StatTile
           icon={Activity}
           label={t("dashboard.ping")}
@@ -326,16 +373,18 @@ export function DashboardPage() {
           series={series.ping}
           min={0}
           format={(v) => formatMs(lang, v)}
+          tone={tone(latest?.pingMs, 60, 120)}
         />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,1fr)]">
         <BoostCard />
         <div className="space-y-4">
+          <QuickActions />
           <BigWinsTeaser />
           <StatusCard />
           <div className="flex items-center gap-2 px-1 text-[12px] text-ink-3">
-            <Gauge className="h-3.5 w-3.5" />
+            <ShieldCheck className="h-3.5 w-3.5" />
             {t("welcome.safe")}
           </div>
         </div>
