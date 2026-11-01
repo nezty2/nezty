@@ -357,6 +357,7 @@ export const en: Dict = {
     lic_too_many_attempts: "Too many wrong passwords. Try again in 15 minutes.",
     lic_device_mismatch: "This key is already in use on another device. Got a new PC? Get in touch and we'll move it.",
     lic_session_invalid: "You've been signed out. Sign in again.",
+    lic_license_deleted: "Your license has been removed. Everything has been put back the way it was. Get in touch for a new key.",
     lic_no_license: "There's no license on this account. Get in touch.",
     lic_demo_disabled: "The free demo is switched off right now.",
     lic_demo_used: "The free demo has already been used on this PC.",
@@ -750,7 +751,7 @@ export const en: Dict = {
     recheck: "Check again",
     logout: "Sign out",
     logoutConfirm: "Yes, sign out",
-    note: "nezty checks your license every 10 minutes (the demo every minute). Without internet a monthly license keeps working for 24 hours.",
+    note: "nezty checks your license at startup and every 15 minutes after that (the demo every minute). Without internet a monthly license keeps working for 24 hours. If your license is no longer valid, nezty puts everything back the way it was by itself.",
     warnDays: "Your license ends in {days} days",
     warnHours: "Your license ends in {hours} hours",
     warnDemo: "Your demo ends in {minutes} minutes",
@@ -1111,6 +1112,8 @@ export const en: Dict = {
     fix: "Fix: turn on QoS or SQM in your router (sometimes called Smart Queue or Cake) and set the speed to about 90% of your plan. A tweak on your PC cannot fix this.",
   },
   update: {
+    updatedTitle: "nezty has been updated",
+    updated: "nezty has been updated to version {version}.",
     available: "nezty {version} is ready",
     short: "Update {version}",
     availableDesc: "Your settings, log and checkmarks are kept.",
@@ -1373,6 +1376,7 @@ export const en: Dict = {
     openFolder: "Open folder",
     showWelcome: "Show welcome screen again",
     presentMon: "FPS measuring with Intel PresentMon (MIT license)",
+    privacy: "Privacy: nezty does not collect, store or send any personal data. No analytics, no tracking. nezty only connects to the Nezty license and update server, to Steam, Epic and optionally SteamGridDB for game images (can be turned off under Covers), to ping test servers (only when you use that test) and to Cloudflare's speed test (only when you start the bufferbloat test yourself). Every tweak is explained before you apply it, is logged with its old value and can be undone with \"Undo all\".",
   },
   cleanup: {
     title: "Clean up",

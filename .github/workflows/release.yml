@@ -1,0 +1,140 @@
+# Automatische update: elke push naar main met een hoger versienummer in src-tauri/tauri.conf.json wordt
+# gebouwd, ondertekend (minisign, voor de updater in de app) en online gezet in Supabase Storage.
+# Staat die versie al online, dan doet de workflow niets.
+#
+# Instellen (eenmalig, Settings > Secrets and variables > Actions):
+#   Variables:  SUPABASE_PROJECT_REF   (uit de url https://<ref>.supabase.co)
+#               NEZTY_LICENSE_PUBKEY   (publieke sleutel uit "npm run licentie:sleutels-maken", groep 3)
+#   Secrets:    SUPABASE_SERVICE_ROLE_KEY   (Supabase > Project Settings > API > service_role)
+#               TAURI_SIGNING_PRIVATE_KEY   (inhoud van nezty-update-sleutel\nezty.key)
+#               TAURI_SIGNING_PRIVATE_KEY_PASSWORD   (alleen als de sleutel een wachtwoord heeft, anders weglaten)
+name: release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Versie lezen en vergelijken met wat online staat
+        id: versie
+        shell: pwsh
+        run: |
+          $ref = "${{ vars.SUPABASE_PROJECT_REF }}"
+          if (-not $ref) { throw "Variable SUPABASE_PROJECT_REF ontbreekt (Settings > Secrets and variables > Actions > Variables)." }
+          $version = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          $base = "https://$ref.supabase.co/storage/v1/object/public/updates"
+          $publish = "true"
+          try {
+            $online = Invoke-RestMethod "$base/latest.json" -Headers @{ "Cache-Control" = "no-cache" } -TimeoutSec 30
+            if ([version]$online.version -ge [version]$version) {
+              Write-Host "Versie $($online.version) staat al online; $version is niet hoger. Niets te doen."
+              $publish = "false"
+            }
+          } catch {
+            Write-Host "Nog geen latest.json online: eerste publicatie."
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "base=$base" >> $env:GITHUB_OUTPUT
+          "publish=$publish" >> $env:GITHUB_OUTPUT
+
+      - uses: actions/setup-node@v4
+        if: steps.versie.outputs.publish == 'true'
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.versie.outputs.publish == 'true'
+
+      - uses: Swatinem/rust-cache@v2
+        if: steps.versie.outputs.publish == 'true'
+        with:
+          workspaces: src-tauri
+
+      - name: Afhankelijkheden
+        if: steps.versie.outputs.publish == 'true'
+        run: npm ci
+
+      - name: Bouwen (met licentie en updatebron)
+        if: steps.versie.outputs.publish == 'true'
+        shell: pwsh
+        env:
+          NEZTY_LICENSE_URL: https://${{ vars.SUPABASE_PROJECT_REF }}.supabase.co/functions/v1/license
+          NEZTY_LICENSE_PUBKEY: ${{ vars.NEZTY_LICENSE_PUBKEY }}
+        run: |
+          if (-not $env:NEZTY_LICENSE_PUBKEY) { throw "Variable NEZTY_LICENSE_PUBKEY ontbreekt: deze build zou zonder inlogscherm zijn." }
+          $cfg = @{ plugins = @{ "nezty-update" = @{ endpoints = @("${{ steps.versie.outputs.base }}/latest.json") } } }
+          $path = "$env:RUNNER_TEMP\nezty-ci.conf.json"
+          $cfg | ConvertTo-Json -Depth 6 | Set-Content -Path $path -Encoding utf8
+          npm run tauri build -- --config $path
+          if ($LASTEXITCODE -ne 0) { throw "Build mislukt." }
+
+      - name: Installer hernoemen, update ondertekenen en latest.json maken
+        if: steps.versie.outputs.publish == 'true'
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          if (-not $env:TAURI_SIGNING_PRIVATE_KEY) { throw "Secret TAURI_SIGNING_PRIVATE_KEY ontbreekt: zonder handtekening installeert de app geen update." }
+          $version = "${{ steps.versie.outputs.version }}"
+          $base = "${{ steps.versie.outputs.base }}"
+          $bundle = "src-tauri/target/release/bundle/nsis"
+          $setup = "Nezty-Tweaks-Setup-$version.exe"
+          New-Item -ItemType Directory out | Out-Null
+          Copy-Item "$bundle/nezty_${version}_x64-setup.exe" "out/$setup"
+          npx tauri signer sign "out/$setup"
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path "out/$setup.sig")) { throw "Ondertekenen mislukt." }
+          # De tekst voor gebruikers: het eerste commitbericht van deze push.
+          $notes = (git log -1 --pretty=%s).Trim()
+          $latest = [ordered]@{
+            version   = $version
+            notes     = $notes
+            pub_date  = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+            platforms = [ordered]@{
+              "windows-x86_64" = [ordered]@{
+                signature = (Get-Content "out/$setup.sig" -Raw).Trim()
+                url       = "$base/$setup"
+              }
+            }
+          }
+          [IO.File]::WriteAllText("$PWD/out/latest.json", ($latest | ConvertTo-Json -Depth 6), (New-Object Text.UTF8Encoding $false))
+          Get-ChildItem out | ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName).Hash, $_.Name }
+
+      - name: Online zetten (Supabase Storage)
+        if: steps.versie.outputs.publish == 'true'
+        shell: pwsh
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if (-not $env:SUPABASE_SERVICE_ROLE_KEY) { throw "Secret SUPABASE_SERVICE_ROLE_KEY ontbreekt." }
+          $version = "${{ steps.versie.outputs.version }}"
+          $setup = "Nezty-Tweaks-Setup-$version.exe"
+          ./scripts/upload-supabase.ps1 -ProjectRef "${{ vars.SUPABASE_PROJECT_REF }}" -ServiceRoleKey $env:SUPABASE_SERVICE_ROLE_KEY -Files @("out/$setup", "out/$setup.sig", "out/latest.json")
+          $base = "${{ steps.versie.outputs.base }}"
+          $check = $null
+          for ($i = 0; $i -lt 10 -and -not $check; $i++) {
+            try { $check = Invoke-RestMethod "$base/latest.json" -Headers @{ "Cache-Control" = "no-cache" } -TimeoutSec 30 } catch { Start-Sleep -Seconds 5 }
+            if ($check -and $check.version -ne $version) { $check = $null; Start-Sleep -Seconds 5 }
+          }
+          if (-not $check) { throw "Geüpload, maar $base/latest.json geeft nog niet versie $version. Is de bucket 'updates' openbaar?" }
+          Write-Host "nezty $version staat online: $base/$setup"
+
+      - uses: actions/upload-artifact@v4
+        if: steps.versie.outputs.publish == 'true'
+        with:
+          name: nezty-${{ steps.versie.outputs.version }}
+          path: out/

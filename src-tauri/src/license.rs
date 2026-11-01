@@ -7,6 +7,9 @@
 //! - De sessie en het token staan in Windows Credential Manager (alleen met "Ingelogd blijven").
 //! - Zonder internet werkt een maandlicentie maximaal 24 uur door; een demo alleen online.
 //! - "Alles terugzetten" en tweaks uitzetten werken altijd, ook zonder licentie.
+//! - Is de licentie niet (meer) geldig, dan zet nezty zelf alles terug (`enforce`). Dat gebeurt bij het starten,
+//!   daarna elke 15 minuten, en bij het inloggen in Windows via een stille geplande taak (`--license-check`),
+//!   ook als de app zelf niet geopend wordt.
 
 use crate::error::{AppError, AppResult};
 use crate::models::now_ms;
@@ -144,11 +147,13 @@ pub struct Runtime {
     /// Laatste reden waarom de sessie verviel (bv. "device_mismatch").
     reason: Option<String>,
     config: Option<PublicConfig>,
+    /// De server kent deze licentie niet meer (verwijderd door de eigenaar): telt als ingetrokken.
+    gone: bool,
 }
 
 impl Default for Runtime {
     fn default() -> Self {
-        Runtime { session: None, token: None, payload: None, received: None, remember: false, cred_target: DEFAULT_TARGET.into(), device: String::new(), reason: None, config: None }
+        Runtime { session: None, token: None, payload: None, received: None, remember: false, cred_target: DEFAULT_TARGET.into(), device: String::new(), reason: None, config: None, gone: false }
     }
 }
 
@@ -225,7 +230,7 @@ impl Runtime {
         st.activated_at = p.a;
         st.expires_at = p.e;
         st.check_by = Some(p.c);
-        st.mode = if p.s == "revoked" {
+        st.mode = if p.s == "revoked" || self.gone {
             "revoked"
         } else if p.s == "expired" || p.e.is_some_and(|e| now >= e) {
             "expired"
@@ -246,6 +251,7 @@ impl Runtime {
         self.payload = Some(payload);
         self.received = Some(Instant::now());
         self.reason = None;
+        self.gone = false;
         self.persist();
     }
 
@@ -264,7 +270,18 @@ impl Runtime {
         self.token = None;
         self.payload = None;
         self.received = None;
+        self.gone = false;
         self.reason = reason.map(|s| s.to_string());
+        cred::delete(&self.cred_target);
+    }
+
+    /// Verwijderd op de server: sessie en bewaard token weg, maar de gegevens blijven zichtbaar als "ingetrokken".
+    /// Na een herstart van de app is er geen token meer en komt het inlogscherm.
+    fn mark_gone(&mut self) {
+        self.session = None;
+        self.token = None;
+        self.gone = true;
+        self.reason = Some("license_deleted".into());
         cred::delete(&self.cred_target);
     }
 }
@@ -408,13 +425,20 @@ pub fn refresh(state: &AppState) -> AppResult<LicenseStatus> {
         (rt.session.clone(), rt.device.clone())
     };
     let Some(session) = session else { return Ok(status(state)) };
-    match post("/refresh", serde_json::json!({ "session": session, "device": device })) {
+    // Het licentie-id gaat mee: zo kan de server zeggen of de sleutel verwijderd is (en niet zomaar de sessie weg).
+    let license_id = lock(&state.license).payload.as_ref().map(|p| p.l.clone());
+    match post("/refresh", serde_json::json!({ "session": session, "device": device, "license": license_id })) {
         Ok(v) => accept(state, &v, None),
         Err(NetError::Offline) => Ok(status(state)),
         Err(NetError::Server(code)) => {
+            let mut rt = lock(&state.license);
+            // Verwijderd door de eigenaar: hetzelfde als ingetrokken.
+            if code == "license_deleted" {
+                rt.mark_gone();
+                return Ok(rt.status());
+            }
             // Sessie verlopen, ander apparaat of uitgelogd door een wachtwoordreset: opnieuw inloggen.
             if matches!(code.as_str(), "session_invalid" | "device_mismatch") {
-                let mut rt = lock(&state.license);
                 rt.clear(Some(&code));
                 return Ok(rt.status());
             }
@@ -458,6 +482,46 @@ pub fn reset_changes(state: &AppState) -> crate::models::RevertResult {
     result
 }
 
+/// Stille controle zonder venster (`nezty.exe --license-check`, de geplande taak bij het inloggen).
+/// Laadt het bewaarde token, vraagt de server en zet alles terug als de licentie niet geldig is.
+/// Zonder bewaard token ("Ingelogd blijven" stond uit) is er geen geldige licentie en gaat ook alles terug,
+/// net als bij het starten van de app zelf.
+pub fn check_headless(state: &AppState) -> serde_json::Value {
+    init(state);
+    if !enabled() {
+        return serde_json::json!({ "enabled": false });
+    }
+    let _ = refresh(state);
+    let st = status(state);
+    let pending = lock(&state.journal).has_any_active();
+    let reverted = if st.mode != "active" && pending { reset_changes(state).reverted } else { 0 };
+    log::info!("licentiecontrole bij inloggen: {} ({}), {} wijzigingen teruggezet", st.mode, st.reason.clone().unwrap_or_default(), reverted);
+    serde_json::json!({ "enabled": true, "mode": st.mode, "reason": st.reason, "pendingChanges": pending, "reverted": reverted })
+}
+
+/// Zorgt dat de geplande taak voor de licentiecontrole bestaat. Alleen als de licentie aan staat.
+pub fn ensure_check_task() {
+    if !enabled() {
+        return;
+    }
+    if crate::autostart::task_exists(crate::autostart::LICENSE_TASK) {
+        return;
+    }
+    if let Err(e) = crate::autostart::create_task(crate::autostart::LICENSE_TASK, "--license-check") {
+        log::warn!("taak licentiecontrole maken: {e}");
+    }
+}
+
+/// Bij het verwijderen van de app: sessie op de server sluiten en het bewaarde token weghalen.
+pub fn forget(state: &AppState) {
+    let session = lock(&state.license).session.clone();
+    if let Some(s) = session {
+        let _ = post("/logout", serde_json::json!({ "session": s }));
+    }
+    lock(&state.license).clear(None);
+    cred::delete(DEFAULT_TARGET);
+}
+
 /// Zelftest: zonder licentie zet nezty een gelogde wijziging terug. Gebruikt een eigen testwaarde in HKCU.
 pub fn selftest_enforce() -> serde_json::Value {
     use crate::journal::{JournalEntry, RevertPayload};
@@ -481,7 +545,7 @@ pub fn selftest_enforce() -> serde_json::Value {
     serde_json::json!({ "enabled": enabled(), "mode": mode, "wroteTestValue": wrote && recorded, "valueBefore": before, "reverted": reverted, "valueAfter": after, "stillActiveInLog": left })
 }
 
-/// Achtergrondcontrole: demo elke minuut, anders elke 10 minuten. Stuurt de stand naar de frontend.
+/// Achtergrondcontrole: demo elke minuut, anders elke 15 minuten. Stuurt de stand naar de frontend.
 pub fn start(app: AppHandle, state: std::sync::Arc<AppState>) {
     if !enabled() {
         return;
@@ -492,11 +556,12 @@ pub fn start(app: AppHandle, state: std::sync::Arc<AppState>) {
         let _ = refresh(&state);
         enforce(&app, &state);
         let _ = app.emit("license-state", status(&state));
+        ensure_check_task();
         loop {
             std::thread::sleep(Duration::from_secs(15));
             since_refresh += Duration::from_secs(15);
             let st = status(&state);
-            let every = if st.kind.as_deref() == Some("demo") || st.mode == "offline" { 60 } else { 600 };
+            let every = if st.kind.as_deref() == Some("demo") || st.mode == "offline" { 60 } else { 900 };
             if since_refresh.as_secs() >= every {
                 since_refresh = Duration::from_secs(0);
                 let _ = refresh(&state);

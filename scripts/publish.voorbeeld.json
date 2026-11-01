@@ -1,3 +1,5 @@
 {
-  "repo": "JOUW-NAAM/nezty"
+  "projectRef": "JOUW-PROJECT-REF",
+  "serviceRoleKey": "service_role-sleutel uit Supabase > Project Settings > API (geheim, nooit delen)",
+  "discordWebhook": ""
 }

@@ -1,7 +1,7 @@
 {
   "name": "nezty",
   "private": true,
-  "version": "0.3.16",
+  "version": "0.4.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,6 +12,7 @@
     "licentie:maak": "node --no-warnings tools/licentie/cli.ts maak",
     "licentie:verleng": "node --no-warnings tools/licentie/cli.ts verleng",
     "licentie:intrekken": "node --no-warnings tools/licentie/cli.ts intrekken",
+    "licentie:verwijder": "node --no-warnings tools/licentie/cli.ts verwijder",
     "licentie:reset-apparaat": "node --no-warnings tools/licentie/cli.ts reset-apparaat",
     "licentie:lijst": "node --no-warnings tools/licentie/cli.ts lijst",
     "licentie:info": "node --no-warnings tools/licentie/cli.ts info",

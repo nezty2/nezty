@@ -8,7 +8,7 @@ De licentiecontrole draait op een server. De app vertrouwt alleen wat de server 
 - **Geheimen blijven op de server.** De privésleutel voor tokens, het geheim om sleutels te hashen en de hash van je beheerderssleutel staan als "secrets" in Supabase. De app krijgt alleen een publieke sleutel.
 - **Eén functie.** Alle logica zit in `supabase/functions/_shared/core.ts`. Dezelfde code draait ook in de lokale testserver en in de tests.
 
-Let op: een gratis Supabase-project wordt na een week zonder verkeer gepauzeerd. Met actieve klanten (de app controleert elke 10 minuten) gebeurt dat niet. Wil je zekerheid, neem dan het Pro-abonnement.
+Let op: een gratis Supabase-project wordt na een week zonder verkeer gepauzeerd. Met actieve klanten (de app controleert elke 15 minuten) gebeurt dat niet. Wil je zekerheid, neem dan het Pro-abonnement.
 
 ## Wat wordt opgeslagen
 
@@ -72,6 +72,7 @@ npm run licentie:maak -- --type demo
 npm run licentie:maak -- --type maand --aantal 5
 npm run licentie:verleng -- --sleutel nezty-xxxx-xxxx-xxx --dagen 30
 npm run licentie:intrekken -- --sleutel nezty-...
+npm run licentie:verwijder -- --sleutel nezty-...                (sleutel, sessie en account helemaal weg)
 npm run licentie:reset-apparaat -- --sleutel nezty-...     (klant heeft een nieuwe pc)
 npm run licentie:lijst
 npm run licentie:info -- --sleutel nezty-...
@@ -88,7 +89,9 @@ In plaats van `--sleutel` kun je `--id` gebruiken (de eerste tekens uit `licenti
 - **Eén apparaat.** De app stuurt een apparaat-ID (een hash van de Windows MachineGuid). Inloggen op een ander apparaat kan pas na `licentie:reset-apparaat`.
 - **Token.** De server ondertekent de uitkomst met Ed25519. De app controleert de handtekening en bewaart sessie en token in Windows Credential Manager (alleen met "Ingelogd blijven").
 - **Offline.** Een maandlicentie werkt zonder internet nog 24 uur, een demo alleen online.
-- **Intrekken en verlengen.** Dit ziet de klant bij de volgende controle: elke 10 minuten, en bij de demo elke minuut.
+- **Intrekken, verwijderen en verlengen.** Dit ziet de klant bij de volgende controle: bij het starten, daarna elke 15 minuten, en bij de demo elke minuut. Is de licentie niet meer geldig, dan zet de app meteen alle tweaks terug naar hoe het stond (op basis van het herstellogboek), stopt Game Boost en de crosshair en toont "Licentie ingetrokken" of "Licentie verlopen" met je contactgegevens.
+- **Verwijderen** (`licentie:verwijder`) haalt sleutel, sessie en account weg. Voor de klant is dat hetzelfde als intrekken. Wil hij verder, dan heeft hij een nieuwe sleutel nodig en maakt hij opnieuw een account (dezelfde gebruikersnaam mag weer).
+- **Ook zonder de app te openen.** De installatie maakt een geplande taak "nezty licentiecontrole" die bij het inloggen in Windows stil de licentie controleert en zo nodig alles terugzet. Die taak doet verder niets.
 
 ## Testen zonder Supabase
 

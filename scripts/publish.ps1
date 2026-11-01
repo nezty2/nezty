@@ -1,71 +1,58 @@
-# Zet de gebouwde update online (GitHub Releases) en kondigt hem aan in Discord.
+# Zet de gebouwde update online (Supabase Storage, bucket "updates") en kondigt hem aan in Discord.
 # Gebruik:  .\scripts\publish.ps1 [-Notes "Wat er nieuw is"] [-SkipDiscord]
 #
 # Nodig (eenmalig):
-#   - gh (GitHub CLI), ingelogd met:  gh auth login
-#   - scripts\update.json  met baseUrl  https://github.com/<naam>/nezty/releases/latest/download
-#   - scripts\publish.json met repo  "<naam>/nezty"  en eventueel discordWebhook
+#   - scripts\update.json  met baseUrl  https://<project-ref>.supabase.co/storage/v1/object/public/updates
+#   - scripts\publish.json met projectRef, serviceRoleKey (Supabase > Project Settings > API) en eventueel discordWebhook
 # Bouw eerst met .\scripts\build.ps1 (of gebruik .\scripts\release.ps1, dat beide doet).
+# Normaal gesproken hoef je dit niet zelf te doen: een push naar main laat GitHub Actions bouwen en publiceren.
 param([string]$Notes = "", [switch]$SkipDiscord)
 $ErrorActionPreference = "Stop"
 Set-Location (Join-Path $PSScriptRoot "..")
 
-$gh = (Get-Command gh -ErrorAction SilentlyContinue).Source
-if (-not $gh) { $gh = "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\GitHub.cli_Microsoft.Winget.Source_8wekyb3d8bbwe\bin\gh.exe" }
-if (-not (Test-Path $gh)) { throw "GitHub CLI (gh) niet gevonden. Installeer met: winget install --id GitHub.cli --scope user" }
-
 $updateCfg = Join-Path $PSScriptRoot "update.json"
 $publishCfg = Join-Path $PSScriptRoot "publish.json"
 if (-not (Test-Path $updateCfg)) { throw "scripts\update.json ontbreekt (baseUrl)." }
-if (-not (Test-Path $publishCfg)) { throw "scripts\publish.json ontbreekt (repo, discordWebhook)." }
+if (-not (Test-Path $publishCfg)) { throw "scripts\publish.json ontbreekt (projectRef, serviceRoleKey, discordWebhook)." }
 $update = Get-Content $updateCfg -Raw | ConvertFrom-Json
 $publish = Get-Content $publishCfg -Raw | ConvertFrom-Json
 $baseUrl = ([string]$update.baseUrl).TrimEnd("/")
-$repo = [string]$publish.repo
-if (-not $repo) { throw "scripts\publish.json: repo ontbreekt, bijvoorbeeld ""naam/nezty""." }
+$ref = [string]$publish.projectRef
+$key = [string]$publish.serviceRoleKey
+if (-not $ref -or -not $key) { throw "scripts\publish.json: projectRef of serviceRoleKey ontbreekt." }
 
 $version = (Get-Content (Join-Path $PSScriptRoot "..\src-tauri\tauri.conf.json") -Raw | ConvertFrom-Json).version
 $dir = Join-Path (Get-Location) "release\update"
-$setup = "nezty_${version}_x64-setup.exe"
-$files = @("$dir\latest.json", "$dir\$setup", "$dir\$setup.sig")
+$setup = "Nezty-Tweaks-Setup-${version}.exe"
+$files = @("$dir\$setup", "$dir\$setup.sig", "$dir\latest.json")
 foreach ($f in $files) { if (-not (Test-Path $f)) { throw "Ontbreekt: $f. Bouw eerst versie $version met .\scripts\build.ps1." } }
 $latest = Get-Content "$dir\latest.json" -Raw | ConvertFrom-Json
 if ($latest.version -ne $version) { throw "latest.json is voor versie $($latest.version), maar de app is $version. Bouw opnieuw." }
 if (-not $Notes) { $Notes = [string]$latest.notes }
 if (-not $Notes) { $Notes = "Nieuwe versie van nezty." }
 
-# Controleren dat gh ingelogd is, vóór er iets online gaat.
-$ErrorActionPreference = "Continue"
-& $gh auth status 2>&1 | Out-Null
-$authOk = $LASTEXITCODE -eq 0
-$ErrorActionPreference = "Stop"
-if (-not $authOk) { throw "gh is niet ingelogd. Voer eenmalig uit:  gh auth login" }
+# Staat deze versie al online? Dan niets overschrijven.
+try {
+    $online = Invoke-RestMethod "$baseUrl/latest.json" -Headers @{ "Cache-Control" = "no-cache" } -TimeoutSec 20
+    if ([version]$online.version -ge [version]$version) { throw "Versie $($online.version) staat al online. Verhoog het versienummer voor een nieuwe update." }
+} catch [System.Net.WebException] {
+    # Nog geen latest.json: eerste keer publiceren.
+}
 
-$tag = "v$version"
-$ErrorActionPreference = "Continue"
-& $gh release view $tag --repo $repo 2>&1 | Out-Null
-$exists = $LASTEXITCODE -eq 0
-$ErrorActionPreference = "Stop"
-if ($exists) { throw "Versie $version staat al online ($tag). Verhoog het versienummer voor een nieuwe update." }
-
-Write-Host "Online zetten: nezty $version naar github.com/$repo ..."
-$ErrorActionPreference = "Continue"
-& $gh release create $tag @files --repo $repo --title "nezty $version" --notes $Notes --latest 2>&1 | ForEach-Object { "$_" }
-$code = $LASTEXITCODE
-$ErrorActionPreference = "Stop"
-if ($code -ne 0) { throw "GitHub-release maken mislukt (exitcode $code)." }
+& (Join-Path $PSScriptRoot "upload-supabase.ps1") -ProjectRef $ref -ServiceRoleKey $key -Files $files
 
 # Controleren dat de app de update kan vinden.
 $check = $null
 for ($i = 0; $i -lt 10 -and -not $check; $i++) {
     try { $check = Invoke-RestMethod "$baseUrl/latest.json" -Headers @{ "Cache-Control" = "no-cache" } -TimeoutSec 20 } catch { Start-Sleep -Seconds 3 }
+    if ($check -and $check.version -ne $version) { $check = $null; Start-Sleep -Seconds 3 }
 }
-if (-not $check -or $check.version -ne $version) { throw "De update staat online, maar $baseUrl/latest.json geeft nog niet versie $version. Controleer of de repository openbaar is." }
+if (-not $check) { throw "De bestanden zijn geüpload, maar $baseUrl/latest.json geeft nog niet versie $version. Is de bucket 'updates' openbaar?" }
 Write-Host "Online en bereikbaar: $baseUrl/latest.json (versie $version)"
 
 # Aankondiging voor Discord: automatisch via een webhook als die is ingesteld, anders als tekst om zelf te plakken.
 $download = "$baseUrl/$setup"
-$content = "**nezty $version is uit!**`n$Notes`n`nHeb je nezty al? Open nezty en klik op **Nu bijwerken**.`nNog geen nezty? Download: $download"
+$content = "**nezty $version is uit!**`n$Notes`n`nHeb je nezty al? Dan wordt hij vanzelf bijgewerkt.`nNog geen nezty? Download: $download"
 if ($content.Length -gt 1900) { $content = $content.Substring(0, 1900) }
 if (-not $SkipDiscord -and $publish.discordWebhook) {
     $body = @{ content = $content; username = "nezty" } | ConvertTo-Json
@@ -78,4 +65,3 @@ if (-not $SkipDiscord -and $publish.discordWebhook) {
     Write-Host $content
     Write-Host "------------------------------"
 }
-Write-Host "Klaar. Gebruikers zien de update bij de volgende start van nezty."

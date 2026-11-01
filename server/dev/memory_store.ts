@@ -43,6 +43,11 @@ export function memoryStore(file: string | null): Store {
       save();
       return true;
     },
+    deleteLicense: async (id) => {
+      d.licenses = d.licenses.filter((l) => l.id !== id);
+      d.sessions = d.sessions.filter((s) => s.license_id !== id);
+      save();
+    },
     userByName: async (lower) => copy(d.users.find((u) => u.username_lower === lower)),
     userById: async (id) => copy(d.users.find((u) => u.id === id)),
     listUsers: async () => structuredClone(d.users),
@@ -51,6 +56,11 @@ export function memoryStore(file: string | null): Store {
       d.users.push(structuredClone(row));
       save();
       return true;
+    },
+    deleteUser: async (id) => {
+      d.users = d.users.filter((u) => u.id !== id);
+      d.sessions = d.sessions.filter((s) => s.user_id !== id);
+      save();
     },
     updateUser: async (id, patch) => {
       const u = d.users.find((x) => x.id === id);

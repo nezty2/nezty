@@ -35,6 +35,8 @@ export function supabaseStore(url: string, serviceKey: string): Store {
       if (error) throw error;
       return (data ?? []).length > 0;
     },
+    // Sessies gaan mee door "on delete cascade" in de database.
+    deleteLicense: (id) => run(db.from("licenses").delete().eq("id", id)),
 
     userByName: (lower) => one<UserRow>(db.from("users").select("*").eq("username_lower", lower).limit(1)),
     userById: (id) => one<UserRow>(db.from("users").select("*").eq("id", id).limit(1)),
@@ -49,6 +51,7 @@ export function supabaseStore(url: string, serviceKey: string): Store {
       return true;
     },
     updateUser: (id, patch) => run(db.from("users").update(patch).eq("id", id)),
+    deleteUser: (id) => run(db.from("users").delete().eq("id", id)),
 
     sessionByHash: (hash) => one<SessionRow>(db.from("sessions").select("*").eq("token_hash", hash).limit(1)),
     insertSession: (row) => run(db.from("sessions").insert(row)),

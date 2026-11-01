@@ -90,10 +90,13 @@ if ($code -ne 0) { throw "Build mislukt (exitcode $code)." }
 # ---------- release-map ----------
 $release = Join-Path (Get-Location) "release"
 New-Item -ItemType Directory -Force $release | Out-Null
-$setupName = "nezty_${version}_x64-setup.exe"
+# Tauri noemt de installer nezty_<versie>_x64-setup.exe; naar buiten heet hij Nezty-Tweaks-Setup-<versie>.exe.
+$tauriSetup = "nezty_${version}_x64-setup.exe"
+$setupName = "Nezty-Tweaks-Setup-${version}.exe"
 $bundle = "$env:CARGO_TARGET_DIR\release\bundle\nsis"
 # Alleen de installer van de huidige versie: oude installers weghalen zodat er geen verwarring is.
-Get-ChildItem $release -Filter "nezty_*_x64-setup.exe" | Where-Object { $_.Name -ne $setupName } | Remove-Item -Force
+Get-ChildItem $release -Filter "*Setup*.exe" | Where-Object { $_.Name -ne $setupName } | Remove-Item -Force
+Copy-Item "$bundle\$tauriSetup" (Join-Path $bundle $setupName) -Force
 Copy-Item "$bundle\$setupName" $release -Force
 $exeCopied = $true
 try {
