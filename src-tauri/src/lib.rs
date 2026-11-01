@@ -810,6 +810,74 @@ fn get_crosshair_config(state: St<'_>) -> CrosshairConfig {
 // ---------- Opstart ----------
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+/// De gegevensmap zonder draaiende Tauri-app: dezelfde als `app.path().app_data_dir()`
+/// (%APPDATA%\com.nzty.desktop), of NZTY_DATA_DIR om te testen.
+fn standalone_data_dir() -> std::path::PathBuf {
+    if let Some(dir) = std::env::var_os("NZTY_DATA_DIR").filter(|d| !d.is_empty()) {
+        return std::path::PathBuf::from(dir);
+    }
+    let appdata = std::env::var_os("APPDATA").map(std::path::PathBuf::from).unwrap_or_else(std::env::temp_dir);
+    appdata.join("com.nzty.desktop")
+}
+
+/// Andere nezty.exe-processen dan dit (het gewone venster of een tweede stille controle): telt ze en sluit ze
+/// als `kill` aan staat.
+fn other_instances(kill: bool) -> usize {
+    use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System};
+    let own = std::process::id();
+    let mut sys = System::new();
+    sys.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::nothing());
+    let others: Vec<_> = sys.processes().iter().filter(|(pid, p)| pid.as_u32() != own && p.name().to_string_lossy().eq_ignore_ascii_case("nezty.exe")).map(|(_, p)| p).collect();
+    if kill {
+        for p in &others {
+            p.kill();
+        }
+    }
+    others.len()
+}
+
+fn another_instance_running() -> bool {
+    other_instances(false) > 0
+}
+
+/// Sluit een draaiende nezty, zodat het logboek maar door één proces wordt teruggezet. Geeft het aantal.
+fn close_other_instances() -> usize {
+    let n = other_instances(true);
+    if n > 0 {
+        std::thread::sleep(std::time::Duration::from_millis(800));
+    }
+    n
+}
+
+/// Uitkomst van een stille modus in %TEMP%\nezty-<naam>.json, om na te kijken als iets niet klopt.
+fn write_standalone_log(name: &str, result: &serde_json::Value) {
+    let path = std::env::temp_dir().join(format!("nezty-{name}.json"));
+    let _ = std::fs::write(path, serde_json::to_string_pretty(result).unwrap_or_default());
+}
+
+/// `nezty.exe --restore-all`: elke gelogde wijziging terug naar hoe het stond, wifi-gamestand uit, geplande taken en
+/// autostart weg, token uit Credential Manager. Zet niets terug wat nezty niet zelf heeft veranderd.
+fn restore_all_standalone() -> serde_json::Value {
+    let closed = close_other_instances();
+    let state = AppState::new(standalone_data_dir(), winapi::is_elevated());
+    license::init(&state);
+    let pending = lock(&state.journal).has_any_active();
+    let reverted = license::reset_changes(&state);
+    let left = lock(&state.journal).has_any_active();
+    autostart::remove_all();
+    license::forget(&state);
+    log::info!("alles teruggezet voor verwijderen: {} wijzigingen, nog actief in logboek: {}", reverted.reverted, left);
+    serde_json::json!({
+        "elevated": state.elevated,
+        "closedInstances": closed,
+        "pendingChanges": pending,
+        "reverted": reverted.reverted,
+        "failed": reverted.failed,
+        "stillActiveInLog": left,
+        "tasksLeft": [autostart::is_enabled(), autostart::task_exists(autostart::LICENSE_TASK)],
+    })
+}
+
 pub fn run() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     let args: Vec<String> = std::env::args().collect();
@@ -863,6 +931,23 @@ pub fn run() {
         if let Some(out) = args.get(i + 1) {
             selftest::run(out, args[i] == "--selftest-apply");
         }
+        return;
+    }
+    // Stille licentiecontrole bij het inloggen in Windows (geplande taak). Geen venster, geen systeemvak.
+    // Draait nezty al, dan doet die de controle zelf en is er niets te doen.
+    if args.iter().any(|a| a == "--license-check") {
+        if another_instance_running() {
+            return;
+        }
+        let state = AppState::new(standalone_data_dir(), winapi::is_elevated());
+        let result = license::check_headless(&state);
+        write_standalone_log("license-check", &result);
+        return;
+    }
+    // Alles terugzetten en opruimen, vóór het verwijderen van de app (de uninstaller start dit en wacht erop).
+    if args.iter().any(|a| a == "--restore-all") {
+        let result = restore_all_standalone();
+        write_standalone_log("restore-all", &result);
         return;
     }
     // --minimized komt alleen van starten met Windows (geplande taak).

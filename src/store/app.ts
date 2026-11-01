@@ -63,6 +63,8 @@ interface AppStore {
   refreshBigWins: () => Promise<void>;
   refreshDevice: () => Promise<void>;
   setLicense: (l: T.LicenseStatus) => void;
+  /** Eén korte melding "bijgewerkt naar versie X" bij de eerste start na een update. */
+  announceUpdate: (version: string) => void;
   loadLicenseConfig: () => Promise<void>;
   setTweak: (id: string, enabled: boolean, option?: string | null, gameId?: string | null) => Promise<T.TweakInfo | null>;
   runBoost: (gameId: string | null, measureFps: boolean) => Promise<T.BoostReport | null>;
@@ -118,6 +120,7 @@ export const useApp = create<AppStore>()((set, get) => ({
         api.getWatcherStatus(),
       ]);
       set({ appInfo, settings, metrics, boost, restorePoint, watcher, ready: true, lang: resolveLang(settings.language, appInfo.uiLanguage), lastReport: boost.report });
+      get().announceUpdate(appInfo.version);
     } catch (e) {
       set({ ready: true });
       get().handleError(e);
@@ -236,6 +239,20 @@ export const useApp = create<AppStore>()((set, get) => ({
       get().handleError(e);
       return false;
     }
+  },
+
+  announceUpdate(version) {
+    const key = "nezty.lastVersion";
+    let previous: string | null = null;
+    try {
+      previous = localStorage.getItem(key);
+      localStorage.setItem(key, version);
+    } catch {
+      return;
+    }
+    // Eerste start ooit: niets melden. Zelfde versie: niets melden.
+    if (!previous || previous === version) return;
+    get().toast({ level: "success", title: get().tr("update.updatedTitle"), message: get().tr("update.updated", { version }) });
   },
 
   setLicense(l) {

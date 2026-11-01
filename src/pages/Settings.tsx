@@ -277,6 +277,7 @@ export function SettingsPage() {
                 </Button>
               </div>
               <p className="mt-3 text-[12px] text-ink-3">{t("settings.presentMon")}</p>
+              <p className="mt-2 text-[12px] leading-relaxed text-ink-3">{t("settings.privacy")}</p>
             </Card>
           </section>
         </div>

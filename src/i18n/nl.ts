@@ -355,6 +355,7 @@ export const nl = {
     lic_too_many_attempts: "Te vaak een verkeerd wachtwoord. Probeer het over 15 minuten opnieuw.",
     lic_device_mismatch: "Deze sleutel is al op een ander apparaat in gebruik. Heb je een nieuwe pc? Neem contact op, dan zetten we hem over.",
     lic_session_invalid: "Je bent uitgelogd. Log opnieuw in.",
+    lic_license_deleted: "Je licentie is verwijderd. Alles is teruggezet naar hoe het stond. Neem contact op voor een nieuwe sleutel.",
     lic_no_license: "Er hoort geen licentie bij dit account. Neem contact op.",
     lic_demo_disabled: "De gratis demo staat nu uit.",
     lic_demo_used: "Op deze pc is de gratis demo al gebruikt.",
@@ -748,7 +749,7 @@ export const nl = {
     recheck: "Opnieuw controleren",
     logout: "Uitloggen",
     logoutConfirm: "Ja, uitloggen",
-    note: "nezty controleert je licentie elke 10 minuten (de demo elke minuut). Zonder internet werkt een maandlicentie nog 24 uur door.",
+    note: "nezty controleert je licentie bij het starten en daarna elke 15 minuten (de demo elke minuut). Zonder internet werkt een maandlicentie nog 24 uur door. Is je licentie niet meer geldig, dan zet nezty alles vanzelf terug naar hoe het stond.",
     warnDays: "Je licentie loopt over {days} dagen af",
     warnHours: "Je licentie loopt over {hours} uur af",
     warnDemo: "Je demo loopt over {minutes} minuten af",
@@ -1109,6 +1110,8 @@ export const nl = {
     fix: "Oplossing: zet in je router QoS of SQM aan (soms Smart Queue of Cake genoemd) en stel de snelheid in op ongeveer 90% van je abonnement. Een tweak op je pc kan dit niet oplossen.",
   },
   update: {
+    updatedTitle: "nezty is bijgewerkt",
+    updated: "nezty is bijgewerkt naar versie {version}.",
     available: "nezty {version} staat klaar",
     short: "Update {version}",
     availableDesc: "Je instellingen, logboek en vinkjes blijven gewoon bewaard.",
@@ -1371,6 +1374,7 @@ export const nl = {
     openFolder: "Map openen",
     showWelcome: "Welkomstscherm opnieuw tonen",
     presentMon: "FPS-meting met Intel PresentMon (MIT-licentie)",
+    privacy: "Privacy: nezty verzamelt, bewaart en verstuurt geen persoonlijke gegevens. Geen analyse, geen tracking. nezty maakt alleen verbinding met de licentie- en updateserver van Nezty, met Steam, Epic en eventueel SteamGridDB voor game-afbeeldingen (uit te zetten bij Covers), met testservers voor ping (alleen als je die test gebruikt) en met de snelheidstest van Cloudflare (alleen als je zelf de bufferbloat-test start). Elke tweak wordt uitgelegd voordat je hem toepast, wordt gelogd met de oude waarde en is terug te draaien met \"Alles terugzetten\".",
   },
   cleanup: {
     title: "Opruimen",

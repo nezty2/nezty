@@ -357,6 +357,7 @@ export const fr: Dict = {
     lic_too_many_attempts: "Trop de mots de passe incorrects. Réessayez dans 15 minutes.",
     lic_device_mismatch: "Cette clé est déjà utilisée sur un autre appareil. Nouveau PC ? Contactez-nous et nous la transférerons.",
     lic_session_invalid: "Vous avez été déconnecté. Reconnectez-vous.",
+    lic_license_deleted: "Votre licence a été supprimée. Tout a été remis en place. Contactez-nous pour une nouvelle clé.",
     lic_no_license: "Aucune licence n'est liée à ce compte. Contactez-nous.",
     lic_demo_disabled: "La démo gratuite est désactivée pour le moment.",
     lic_demo_used: "La démo gratuite a déjà été utilisée sur ce PC.",
@@ -750,7 +751,7 @@ export const fr: Dict = {
     recheck: "Vérifier à nouveau",
     logout: "Se déconnecter",
     logoutConfirm: "Oui, se déconnecter",
-    note: "nezty vérifie votre licence toutes les 10 minutes (la démo chaque minute). Sans Internet, une licence mensuelle fonctionne encore 24 heures.",
+    note: "nezty vérifie votre licence au démarrage puis toutes les 15 minutes (la démo chaque minute). Sans Internet, une licence mensuelle fonctionne encore 24 heures. Si votre licence n'est plus valable, nezty remet tout en place tout seul.",
     warnDays: "Votre licence expire dans {days} jours",
     warnHours: "Votre licence expire dans {hours} heures",
     warnDemo: "Votre démo se termine dans {minutes} minutes",
@@ -1111,6 +1112,8 @@ export const fr: Dict = {
     fix: "Solution : activez QoS ou SQM dans votre routeur (parfois appelé Smart Queue ou Cake) et réglez la vitesse à environ 90 % de votre abonnement. Un réglage sur le PC ne peut pas corriger cela.",
   },
   update: {
+    updatedTitle: "nezty a été mis à jour",
+    updated: "nezty a été mis à jour vers la version {version}.",
     available: "nezty {version} est prêt",
     short: "Mise à jour {version}",
     availableDesc: "Vos réglages, votre journal et vos coches sont conservés.",
@@ -1373,6 +1376,7 @@ export const fr: Dict = {
     openFolder: "Ouvrir le dossier",
     showWelcome: "Revoir l'écran d'accueil",
     presentMon: "Mesure des FPS avec Intel PresentMon (licence MIT)",
+    privacy: "Confidentialité : nezty ne collecte, ne conserve et n'envoie aucune donnée personnelle. Pas d'analyse, pas de suivi. nezty se connecte uniquement au serveur de licences et de mises à jour de Nezty, à Steam, Epic et éventuellement SteamGridDB pour les images de jeux (désactivable sous Jaquettes), aux serveurs de test de ping (seulement si vous utilisez ce test) et au test de vitesse de Cloudflare (seulement si vous lancez vous-même le test de bufferbloat). Chaque réglage est expliqué avant de l'appliquer, consigné avec son ancienne valeur et réversible avec « Tout rétablir ».",
   },
   cleanup: {
     title: "Nettoyage",

@@ -68,14 +68,27 @@ $env:WEBVIEW2_USER_DATA_FOLDER = "C:\temp\nzty-test\wv"
 
 De app heet nezty (eerder nzty). De interne app-ID is bewust `com.nzty.desktop` gebleven: daaraan hangt de gegevensmap `%APPDATA%\com.nzty.desktop` met instellingen, logboek en covers. Zo houdt iedereen zijn gegevens en blijft "Alles terugzetten" werken. De installer verwijdert een oude nzty-installatie stil in updatemodus (gegevens blijven), ruimt de oude snelkoppelingen op en zet "starten met Windows" over. Zie `src-tauri/installer-hooks.nsh`.
 
+**Installer.** Bestandsnaam `Nezty-Tweaks-Setup-<versie>.exe`, uitgever "Nezty", zonder links. De taal (NL, EN, FR) volgt Windows. Geen licentiepagina; de privacytekst staat in de app onder Instellingen > Over. Op de laatste pagina staan "Snelkoppeling op bureaublad" en "nezty starten" standaard aan. De afbeeldingen staan in `src-tauri/installer/`.
+
+**Verwijderen = alles terug.** De uninstaller start eerst `nezty.exe --restore-all` (sluit nezty, zet elke gelogde wijziging terug, haalt de geplande taken, autostart en het bewaarde token weg) en wist daarna `%APPDATA%\com.nzty.desktop` en `%LOCALAPPDATA%\com.nzty.desktop`. Bij een update (`/UPDATE`) gebeurt dat niet. De uitkomst staat in `%TEMP%\nezty-restore-all.json`.
+
+**Licentie niet meer geldig = alles terug.** Verlopen, ingetrokken, verwijderd of 24 uur offline: nezty stopt Game Boost en de crosshair en zet alle tweaks terug (bij het starten en elke 15 minuten). De geplande taak "nezty licentiecontrole" doet dezelfde controle bij het inloggen in Windows, ook als de app niet geopend wordt (`nezty.exe --license-check`, uitkomst in `%TEMP%\nezty-license-check.json`). Zie `server/README.md`.
+
 ## Updates uitbrengen
 
-nezty zoekt bij het starten naar een nieuwe versie (uit te zetten in Instellingen). Een update wordt alleen geïnstalleerd als de handtekening klopt met de openbare sleutel in de app. De installer draait dan in updatemodus: gegevens blijven staan en nezty start daarna vanzelf opnieuw.
+nezty zoekt bij het starten en daarna elke 30 minuten naar een nieuwe versie, ook op het inlogscherm en als de licentie verlopen of ingetrokken is. Een update wordt alleen geïnstalleerd als de handtekening klopt met de openbare sleutel in de app. De installer draait dan in updatemodus: gegevens blijven staan, nezty start daarna vanzelf opnieuw en meldt kort "nezty is bijgewerkt naar versie X".
 
-1. **Updatebron instellen (eenmalig).** Kopieer `scripts/update.voorbeeld.json` naar `scripts/update.json` en vul bij `baseUrl` de map in waar de updatebestanden online komen, bijvoorbeeld `https://github.com/JOUW-NAAM/nezty/releases/latest/download`. Deze bron wordt in de app ingebouwd, dus stel hem in vóór je de eerste versie deelt.
-2. **Versie ophogen** in `src-tauri/tauri.conf.json` (`version`), bijvoorbeeld van 0.3.0 naar 0.3.1. Alleen een hoger nummer wordt als update gezien.
-3. **Bouwen:** `.\scripts\build.ps1 -Notes "Wat er nieuw is"`.
-4. **Online zetten:** upload alles uit `release\update` (de installer, het `.sig`-bestand en `latest.json`) naar de updatebron. Bij GitHub: maak een nieuwe release en sleep de drie bestanden erin.
+De updatebestanden staan in Supabase Storage (bucket `updates`, openbaar), niet op GitHub. De repo blijft privé.
+
+**Een update uitbrengen in drie stappen:**
+
+1. **Versie ophogen** in `src-tauri/tauri.conf.json`, `package.json` en `src-tauri/Cargo.toml` (`version`), bijvoorbeeld van 0.4.0 naar 0.4.1. Alleen een hoger nummer wordt als update gezien.
+2. **Committen en pushen naar `main`.** Het commitbericht is de tekst die gebruikers bij de update zien, dus schrijf bijvoorbeeld `nezty 0.4.1: crosshair onthoudt zijn kleur`.
+3. **Klaar.** GitHub Actions (`release.yml`) bouwt de app, ondertekent de update en zet `Nezty-Tweaks-Setup-0.4.1.exe`, het `.sig`-bestand en `latest.json` online. Kijk onder **Actions** of de run groen is; klanten krijgen de update binnen een half uur.
+
+Eenmalig instellen staat bovenin `.github/workflows/release.yml`: twee variabelen (`SUPABASE_PROJECT_REF`, `NEZTY_LICENSE_PUBKEY`) en twee geheimen (`SUPABASE_SERVICE_ROLE_KEY`, `TAURI_SIGNING_PRIVATE_KEY`). Zonder die geheimen stopt de workflow met een duidelijke melding en gaat er niets online.
+
+Lokaal bouwen en publiceren kan ook: `.\scripts\release.ps1 -Version 0.4.1 -Notes "Wat er nieuw is"` (vereist `scripts\update.json` en `scripts\publish.json`, zie de voorbeeldbestanden).
 
 De geheime updatesleutel staat in `nezty-update-sleutel` naast de broncode. **Maak er een back-up van.** Zonder die sleutel kunnen bestaande installaties nooit meer een update krijgen. Deel hem met niemand.
 
@@ -89,6 +102,10 @@ De geheime updatesleutel staat in `nezty-update-sleutel` naast de broncode. **Ma
   - `boost.rs`, `watcher.rs` en `fps.rs` Game Boost, automatisch boosten en FPS-meting
   - `covers.rs` en `icons.rs` game-afbeeldingen en programmapictogrammen
   - `crosshair.rs` het overlayvenster en de sneltoets
+  - `license.rs` licentiecontrole en terugzetten, `autostart.rs` geplande taken, `updater.rs` updates
+- `src-tauri/installer-hooks.nsh` extra stappen van de installer en uninstaller, `src-tauri/installer/` afbeeldingen
+- `scripts/` bouwen (`build.ps1`), publiceren (`publish.ps1`, `upload-supabase.ps1`) en de licentietest (`test-licentie.ps1`)
+- `.github/workflows/release.yml` automatische update bij een push naar main
 - `src-tauri/resources/` Intel PresentMon 2.6.0 (MIT-licentie, ondertekend door Intel).
 - App-data (instellingen, profielen, logboek, afbeeldingen): `%APPDATA%\com.nzty.desktop\`.
 
@@ -105,10 +122,11 @@ Every release is built from this repository by GitHub Actions and every signing 
 
 nezty does not collect, store or send any personal data. It has no accounts, no analytics and no tracking. nezty only makes these network connections:
 
-- **Update check:** downloads `latest.json` and, when you click "Update now", the installer from this repository's GitHub Releases. Can be turned off in Settings > Updates.
+- **Update check:** downloads `latest.json` and the installer from the Nezty update server (Supabase Storage). Updates are mandatory so that every installation has the version that cleans up correctly.
+- **License check:** sends a device id (a hash of the Windows MachineGuid, never the real value) and the session to the Nezty license server, at startup and every 15 minutes. No other data is sent.
 - **Game images:** downloads cover images from Steam and Epic, and from SteamGridDB only if you enter your own API key. Can be turned off in Settings > Covers ("Fetch images online").
 - **Network tests:** pings to well-known servers (for example 1.1.1.1) and game region servers, only when you open the Network page or the dashboard ping.
 - **Bufferbloat test:** downloads and uploads test data (up to about 300 MB) to Cloudflare's speed test (speed.cloudflare.com), only when you start that test yourself on the Network page.
 - **What uses your internet:** counts bytes per program on this PC for 3 seconds when you click "Measure now". Nothing is sent anywhere and the content of traffic is never read.
 
-All tweaks are explained in the app before you apply them, are logged with their old value and can be undone with "Undo all". Uninstall nezty through Windows Settings > Apps.
+All tweaks are explained in the app before you apply them, are logged with their old value and can be undone with "Undo all". When the license expires or is revoked, nezty puts everything back by itself. Uninstalling nezty through Windows Settings > Apps also puts everything back first and then removes all nezty data.

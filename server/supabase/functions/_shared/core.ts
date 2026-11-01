@@ -190,10 +190,16 @@ async function refresh(store: Store, env: Env, now: number, b: Record<string, un
   const device = str(b.device, 64);
   if (!secret || !device) return fail("session_invalid", 401);
   const s = await store.sessionByHash(await sha256Hex(secret));
-  if (!s || Date.parse(s.expires_at) <= now) return fail("session_invalid", 401);
+  // De app stuurt het id van zijn licentie mee. Is de sessie weg én bestaat die licentie niet meer,
+  // dan is de sleutel verwijderd: de app behandelt dat als ingetrokken.
+  const known = str(b.license, 64);
+  if (!s || Date.parse(s.expires_at) <= now) {
+    if (known && !(await store.licenseById(known))) return fail("license_deleted", 401);
+    return fail("session_invalid", 401);
+  }
   if (s.device_id !== device) return fail("device_mismatch", 403);
   const l = await store.licenseById(s.license_id);
-  if (!l) return fail("session_invalid", 401);
+  if (!l) return fail("license_deleted", 401);
   if (l.device_id && l.device_id !== device) return fail("device_mismatch", 403);
   const user = s.user_id ? await store.userById(s.user_id) : null;
   await store.updateSession(s.id, { last_seen_at: iso(now), expires_at: iso(now + SESSION_MS) });
@@ -333,6 +339,19 @@ async function adminSimple(store: Store, env: Env, now: number, b: Record<string
   return ok({ license: describe(l, users, now) });
 }
 
+/** Verwijdert sleutel, sessies en het account erbij. De klant kan met een nieuwe sleutel opnieuw een account maken. */
+async function adminDelete(store: Store, env: Env, now: number, b: Record<string, unknown>): Promise<Reply> {
+  const found = await findLicense(store, env, b);
+  if ("status" in found && "body" in found) return found;
+  const l = found as LicenseRow;
+  const users = new Map((await store.listUsers()).map((u) => [u.id, u]));
+  const info = describe(l, users, now);
+  await store.deleteSessionsWhere("license_id", l.id);
+  await store.deleteLicense(l.id);
+  if (l.user_id) await store.deleteUser(l.user_id);
+  return ok({ license: { ...info, status: "deleted" } });
+}
+
 async function adminList(store: Store, now: number): Promise<Reply> {
   const users = new Map((await store.listUsers()).map((u) => [u.id, u]));
   const list = (await store.listLicenses()).sort((a, b) => b.created_at.localeCompare(a.created_at));
@@ -395,6 +414,8 @@ export async function handle(path: string, body: Record<string, unknown>, header
           return await adminExtend(store, env, now, body);
         case "/admin/revoke":
           return await adminSimple(store, env, now, body, "revoke");
+        case "/admin/delete":
+          return await adminDelete(store, env, now, body);
         case "/admin/reset-device":
           return await adminSimple(store, env, now, body, "reset-device");
         case "/admin/info":

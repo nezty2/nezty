@@ -139,6 +139,27 @@ test("beheer: verlengen, intrekken, nieuw apparaat, wachtwoord resetten, lijst",
   assert.equal(byId.license.username, "klant");
 });
 
+test("verwijderen: sleutel, sessie en account weg; de app hoort 'license_deleted'", async () => {
+  const { call, token } = await setup();
+  const key = (await call("/admin/create", { type: "month" }, true)).keys[0];
+  const reg = await call("/register", { username: "weg", password: "geheim123", key, device: DEV_A });
+  const id = (await token(reg.token)).l;
+  // Een verlopen of vreemde sessie van een bestaande licentie blijft gewoon "session_invalid".
+  assert.equal((await call("/refresh", { session: "onzin", device: DEV_A, license: id })).error, "session_invalid");
+
+  const del = await call("/admin/delete", { key }, true);
+  assert.equal(del.ok, true);
+  assert.equal(del.license.status, "deleted");
+  assert.equal((await call("/refresh", { session: reg.session, device: DEV_A, license: id })).error, "license_deleted");
+  assert.equal((await call("/refresh", { session: reg.session, device: DEV_A })).error, "session_invalid", "zonder licentie-id weet de server het niet");
+  assert.equal((await call("/admin/info", { key }, true)).error, "key_unknown");
+  assert.equal((await call("/login", { username: "weg", password: "geheim123", device: DEV_A })).error, "login_failed", "account is weg");
+  assert.equal((await call("/register", { username: "weg", password: "geheim123", key, device: DEV_A })).error, "key_unknown");
+  const key2 = (await call("/admin/create", { type: "month" }, true)).keys[0];
+  assert.equal((await call("/register", { username: "weg", password: "geheim123", key: key2, device: DEV_A })).ok, true, "zelfde naam met nieuwe sleutel mag weer");
+  assert.equal((await call("/admin/list", {}, true)).licenses.length, 1);
+});
+
 test("demo: 2 uur, alleen online, één keer per apparaat, aan/uit op de server", async () => {
   const { call, token } = await setup();
   assert.equal((await call("/demo", { device: DEV_A })).error, "demo_disabled");

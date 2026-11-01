@@ -10,6 +10,7 @@
 //   npm run licentie:maak -- --type maand --aantal 5
 //   npm run licentie:verleng -- --sleutel nezty-xxxx-xxxx-xxx --dagen 30
 //   npm run licentie:intrekken -- --sleutel nezty-...
+//   npm run licentie:verwijder -- --sleutel nezty-...
 //   npm run licentie:reset-apparaat -- --sleutel nezty-...
 //   npm run licentie:lijst
 //   npm run licentie:info -- --sleutel nezty-...
@@ -34,7 +35,7 @@ function stop(msg: string): never {
   process.exit(1);
 }
 
-const STATUS: Record<string, string> = { unused: "niet gebruikt", active: "actief", expired: "verlopen", revoked: "ingetrokken" };
+const STATUS: Record<string, string> = { unused: "niet gebruikt", active: "actief", expired: "verlopen", revoked: "ingetrokken", deleted: "verwijderd" };
 const TYPE: Record<string, string> = { month: "maand", demo: "demo" };
 const ERRORS: Record<string, string> = {
   unauthorized: "De server accepteert je beheerderssleutel niet. Controleer NEZTY_ADMIN_KEY.",
@@ -141,13 +142,20 @@ async function main() {
       const days = Number(opt("dagen"));
       if (!Number.isFinite(days) || days <= 0) stop("Geef --dagen, bijvoorbeeld --dagen 30.");
       const r = await api("/admin/extend", { ...target(), days });
-      console.log(`\n  Verlengd met ${days} dagen. De klant ziet de nieuwe einddatum bij de volgende controle (binnen 10 minuten).`);
+      console.log(`\n  Verlengd met ${days} dagen. De klant ziet de nieuwe einddatum bij de volgende controle (binnen 15 minuten).`);
       showLicense(r.license);
       break;
     }
     case "intrekken": {
       const r = await api("/admin/revoke", target());
-      console.log("\n  Ingetrokken. De app vergrendelt bij de volgende controle (binnen 10 minuten, offline uiterlijk na 24 uur).");
+      console.log("\n  Ingetrokken. De app vergrendelt bij de volgende controle (binnen 15 minuten, offline uiterlijk na 24 uur).");
+      showLicense(r.license);
+      break;
+    }
+    case "verwijder": {
+      const r = await api("/admin/delete", target());
+      console.log("\n  Verwijderd: sleutel, sessie en account zijn weg. De app vergrendelt bij de volgende controle (binnen 15 minuten, offline uiterlijk na 24 uur).");
+      console.log("  Wil de klant verder, dan heeft hij een nieuwe sleutel nodig en maakt hij opnieuw een account.");
       showLicense(r.license);
       break;
     }
@@ -254,6 +262,7 @@ async function main() {
   npm run licentie:maak -- --type maand|demo [--aantal 5] [--notitie "klant X"]
   npm run licentie:verleng -- --sleutel nezty-... --dagen 30
   npm run licentie:intrekken -- --sleutel nezty-...
+  npm run licentie:verwijder -- --sleutel nezty-...
   npm run licentie:reset-apparaat -- --sleutel nezty-...
   npm run licentie:lijst
   npm run licentie:info -- --sleutel nezty-...

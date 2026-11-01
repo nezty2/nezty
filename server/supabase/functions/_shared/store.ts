@@ -54,6 +54,8 @@ export interface Store {
   updateLicense(id: string, patch: Partial<LicenseRow>): Promise<void>;
   /** Koppelt een ongebruikte licentie aan een gebruiker. False als een ander net eerder was. */
   claimLicense(id: string, patch: Partial<LicenseRow>): Promise<boolean>;
+  /** Haalt een licentie helemaal weg (de sessies erbij gaan mee). */
+  deleteLicense(id: string): Promise<void>;
 
   userByName(usernameLower: string): Promise<UserRow | null>;
   userById(id: string): Promise<UserRow | null>;
@@ -61,6 +63,7 @@ export interface Store {
   /** False als de gebruikersnaam al bestaat. */
   insertUser(row: UserRow): Promise<boolean>;
   updateUser(id: string, patch: Partial<UserRow>): Promise<void>;
+  deleteUser(id: string): Promise<void>;
 
   sessionByHash(hash: string): Promise<SessionRow | null>;
   insertSession(row: SessionRow): Promise<void>;
