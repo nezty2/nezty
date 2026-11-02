@@ -1203,7 +1203,7 @@ export const nl = {
     hotkey: "Sneltoets",
     hotkeyHint: "Werkt ook als nezty op de achtergrond staat.",
     hotkeySaved: "Sneltoets ingesteld: {hotkey}",
-    fullscreenNote: "Niet zichtbaar in exclusief volledig scherm. Kies in je game 'Venster zonder rand' (borderless).",
+    fullscreenNote: "Werkt in venster, zonder rand en op volledig scherm. nezty houdt het crosshair bovenop en op het scherm waar je game draait. Alleen als je in Windows 'Optimalisaties voor volledig scherm' hebt uitgezet, kan geen enkel venster boven de game komen.",
     rulesNote: "Puur een venster bovenop je scherm. Er gaat niets de game in. Sommige toernooien staan een eigen crosshair niet toe.",
     shape: "Vorm",
     shapes: { cross: "Kruis", cross_dot: "Kruis met punt", dot: "Punt", circle: "Cirkel", circle_dot: "Cirkel met punt", t: "T-vorm", x: "X", square: "Vierkant" },

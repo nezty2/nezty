@@ -1205,7 +1205,7 @@ export const fr: Dict = {
     hotkey: "Raccourci",
     hotkeyHint: "Marche aussi quand nezty est en arrière-plan.",
     hotkeySaved: "Raccourci défini : {hotkey}",
-    fullscreenNote: "Invisible en plein écran exclusif. Choisissez « Fenêtre sans bordure » dans votre jeu.",
+    fullscreenNote: "Fonctionne en fenêtre, sans bordure et en plein écran. nezty garde le viseur au premier plan et sur l'écran où tourne votre jeu. Seulement si vous avez désactivé « Optimisations plein écran » dans Windows, aucune fenêtre ne peut passer au-dessus du jeu.",
     rulesNote: "Une simple fenêtre au-dessus de votre écran. Rien n'entre dans le jeu. Certains tournois n'autorisent pas un viseur personnalisé.",
     shape: "Forme",
     shapes: { cross: "Croix", cross_dot: "Croix avec point", dot: "Point", circle: "Cercle", circle_dot: "Cercle avec point", t: "Forme en T", x: "X", square: "Carré" },

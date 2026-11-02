@@ -1205,7 +1205,7 @@ export const en: Dict = {
     hotkey: "Shortcut",
     hotkeyHint: "Also works when nezty is in the background.",
     hotkeySaved: "Shortcut set: {hotkey}",
-    fullscreenNote: "Not visible in exclusive fullscreen. Choose 'Borderless window' in your game.",
+    fullscreenNote: "Works in windowed, borderless and fullscreen. nezty keeps the crosshair on top and on the display your game runs on. Only if you turned off 'Fullscreen optimizations' in Windows can no window appear above the game.",
     rulesNote: "Just a window on top of your screen. Nothing goes into the game. Some tournaments don't allow a custom crosshair.",
     shape: "Shape",
     shapes: { cross: "Cross", cross_dot: "Cross with dot", dot: "Dot", circle: "Circle", circle_dot: "Circle with dot", t: "T shape", x: "X", square: "Square" },

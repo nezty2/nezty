@@ -1,16 +1,114 @@
-//! Crosshair-overlay: een klein, transparant, altijd-bovenop en doorklikbaar venster in het midden
-//! van het hoofdscherm. Puur een venster bovenop de game: er wordt niets in de game geïnjecteerd.
-//! Zichtbaar in venster- en borderless-modus, niet in exclusief volledig scherm.
+//! Crosshair-overlay: een klein, transparant, altijd-bovenop en doorklikbaar venster in het midden van het
+//! scherm. Puur een venster bovenop de game: er wordt niets in de game geïnjecteerd.
+//!
+//! Een game op volledig scherm pakt bij elke focuswissel zelf de bovenste plek, en op een pc met twee schermen
+//! kan de game op het andere scherm staan dan het hoofdscherm. Daarom houdt een bewaker (zie `start_keeper`)
+//! de overlay elke halve seconde bovenop en midden op het scherm waar de game draait. Dat werkt in venster,
+//! borderless en volledig scherm met "Optimalisaties voor volledig scherm" aan (standaard in Windows). Alleen met
+//! die optimalisaties uit kan geen enkel venster boven de game komen.
 
 use crate::error::{AppError, AppResult};
 use crate::state::{lock, AppState};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
+use windows_sys::Win32::Foundation::{CloseHandle, HWND, RECT};
+use windows_sys::Win32::Graphics::Gdi::{GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST};
+use windows_sys::Win32::System::Threading::{OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION};
+use windows_sys::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId, SetWindowPos, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE};
 
 pub const LABEL: &str = "crosshair";
 /// Logische grootte van het overlayvenster (ruim genoeg voor de grootste crosshair).
 const SIZE: f64 = 400.0;
+
+static KEEPER: AtomicBool = AtomicBool::new(false);
+
+/// Bestandsnaam (bv. "cs2.exe") van het proces achter een venster.
+fn exe_name_of(hwnd: HWND) -> Option<String> {
+    unsafe {
+        let mut pid = 0u32;
+        GetWindowThreadProcessId(hwnd, &mut pid);
+        if pid == 0 {
+            return None;
+        }
+        let h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if h.is_null() {
+            return None;
+        }
+        let mut buf = [0u16; 1024];
+        let mut len = buf.len() as u32;
+        let ok = QueryFullProcessImageNameW(h, 0, buf.as_mut_ptr(), &mut len) != 0;
+        CloseHandle(h);
+        if !ok {
+            return None;
+        }
+        let path = String::from_utf16_lossy(&buf[..len as usize]);
+        path.rsplit(['\\', '/']).next().map(|s| s.to_lowercase())
+    }
+}
+
+/// Het venster van een game dat nu de focus heeft, als dat er is.
+fn foreground_game(state: &AppState) -> Option<HWND> {
+    let fg = unsafe { GetForegroundWindow() };
+    if fg.is_null() {
+        return None;
+    }
+    let name = exe_name_of(fg)?;
+    let is_game = state.all_games().iter().any(|g| g.process_names.iter().any(|n| n.eq_ignore_ascii_case(&name)));
+    is_game.then_some(fg)
+}
+
+/// Het scherm (fysieke pixels) waar een venster op staat.
+fn monitor_rect(hwnd: HWND) -> Option<RECT> {
+    unsafe {
+        let m = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        if m.is_null() {
+            return None;
+        }
+        let mut info: MONITORINFO = std::mem::zeroed();
+        info.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
+        (GetMonitorInfoW(m, &mut info) != 0).then_some(info.rcMonitor)
+    }
+}
+
+/// Bewaker: zolang de overlay aan staat, elke halve seconde bovenop zetten en op het scherm van de game
+/// centreren. Draait één keer per app; zonder overlay doet hij niets.
+pub fn start_keeper(app: AppHandle, state: Arc<AppState>) {
+    if KEEPER.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let _ = std::thread::Builder::new().name("crosshair-keeper".into()).spawn(move || {
+        let mut last_rect: Option<(i32, i32, i32, i32)> = None;
+        loop {
+            std::thread::sleep(Duration::from_millis(500));
+            if !lock(&state.settings).crosshair_enabled {
+                last_rect = None;
+                continue;
+            }
+            let Some(win) = app.get_webview_window(LABEL) else { continue };
+            let Ok(hwnd) = win.hwnd() else { continue };
+            let hwnd = hwnd.0 as HWND;
+            // Volg het scherm van de game: alleen verplaatsen als dat anders is dan de vorige keer.
+            if let Some(r) = foreground_game(&state).and_then(monitor_rect) {
+                let key = (r.left, r.top, r.right, r.bottom);
+                if last_rect != Some(key) {
+                    let px = (SIZE * win.scale_factor().unwrap_or(1.0)).round() as u32;
+                    let x = r.left + (r.right - r.left - px as i32) / 2;
+                    let y = r.top + (r.bottom - r.top - px as i32) / 2;
+                    let _ = win.set_size(PhysicalSize::new(px, px));
+                    let _ = win.set_position(PhysicalPosition::new(x, y));
+                    last_rect = Some(key);
+                }
+            }
+            // De game neemt bij een focuswissel de bovenste plek: steeds opnieuw bovenop, zonder focus te pakken.
+            unsafe {
+                SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            }
+        }
+    });
+}
 
 fn place(app: &AppHandle, win: &tauri::WebviewWindow) -> AppResult<()> {
     let monitor = app
