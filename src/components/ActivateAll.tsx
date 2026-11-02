@@ -32,6 +32,7 @@ const COVERS: { id: string; kind: "check" | "tweak" | "game" }[] = [
   { id: "gpu_high_perf", kind: "game" },
   { id: "fortnite_vsync", kind: "game" },
   { id: "fortnite_reflex", kind: "game" },
+  { id: "fortnite_fullscreen", kind: "game" },
   { id: "game_vsync", kind: "game" },
 ];
 
