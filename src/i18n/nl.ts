@@ -1244,8 +1244,6 @@ export const nl = {
     startWithWindowsDesc: "Opent nezty vanzelf als je pc opstart.",
     startMinimized: "In het systeemvak starten met Windows",
     startMinimizedDesc: "Alleen bij automatisch starten. Dubbelklikken opent nezty altijd gewoon.",
-    minimizeToTray: "Minimaliseren naar het systeemvak",
-    minimizeToTrayDesc: "Het venster verdwijnt dan uit de taakbalk. Klik op het pictogram bij de klok om het terug te halen.",
     dashboardPing: "Ping op het dashboard",
     dashboardPingDesc: "Host of IP-adres. Met :poort meet nezty via TCP.",
     covers: "Game-afbeeldingen",

@@ -79,7 +79,6 @@ let settings: T.Settings = {
   closeDuringGaming: ["OneDrive.exe"],
   customPingTargets: [],
   customGames: [],
-  minimizeToTray: false,
   startMinimized: false,
   firstRunDone: true,
   defaultProfileTweaks: { game_mode: true, game_bar_dvr_off: true, power_plan: true, mouse_precision_off: true },

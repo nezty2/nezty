@@ -1246,8 +1246,6 @@ export const fr: Dict = {
     startWithWindowsDesc: "Ouvre nezty tout seul au dÃ©marrage du PC.",
     startMinimized: "Démarrer dans la zone de notification avec Windows",
     startMinimizedDesc: "Seulement au démarrage automatique. Un double-clic ouvre toujours nezty normalement.",
-    minimizeToTray: "Réduire dans la zone de notification",
-    minimizeToTrayDesc: "La fenêtre quitte alors la barre des tâches. Cliquez sur l'icône près de l'horloge pour la rouvrir.",
     dashboardPing: "Ping sur le tableau de bord",
     dashboardPingDesc: "Hôte ou adresse IP. Avec :port, nezty mesure via TCP.",
     covers: "Images des jeux",
