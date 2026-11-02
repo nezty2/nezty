@@ -1,6 +1,7 @@
-# Automatische update: elke push naar main met een hoger versienummer in src-tauri/tauri.conf.json wordt
-# gebouwd, ondertekend (minisign, voor de updater in de app) en online gezet in Supabase Storage.
-# Staat die versie al online, dan doet de workflow niets.
+# Update bouwen en online zetten in de cloud. Normaal publiceren we lokaal (scripts\build.ps1 en
+# scripts\publish.ps1, veel sneller). Deze workflow start alleen als je hem zelf aanklikt
+# (Actions > release > Run workflow), bijvoorbeeld als je pc niet beschikbaar is.
+# Staat de versie al online, dan doet de workflow niets.
 #
 # Instellen (eenmalig, Settings > Secrets and variables > Actions):
 #   Variables:  SUPABASE_PROJECT_REF   (uit de url https://<ref>.supabase.co)
@@ -11,8 +12,6 @@
 name: release
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
