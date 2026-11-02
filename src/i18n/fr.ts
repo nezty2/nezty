@@ -141,7 +141,12 @@ export const fr: Dict = {
         "Les sons des applis elles-mêmes (par exemple Discord) se coupent dans l'appli.",
       ],
     },
-    timer_resolution: { name: "Résolution du minuteur plus fine en jeu" },
+    timer_resolution: {
+      name: "Minuteur plus fin en jeu",
+      what: "Pendant qu'un jeu tourne, nezty règle le minuteur de Windows sur 0,5 ms au lieu de 1 ms ou 15,6 ms.",
+      effect: "Les images arrivent plus régulièrement, surtout avec une limite de fps, et le jeu réagit plus directement. Le nombre de fps ne monte pas, mais c'est plus fluide.",
+      tech: ["NtSetTimerResolution(0,5 ms) tant qu'un jeu tourne et que nezty est ouvert.", "GlobalTimerResolutionRequests = 1 (HKLM\\...\\Session Manager\\kernel) : sans cela, depuis Windows 11 le minuteur ne vaut que pour nezty. Fonctionne après un redémarrage."],
+    },
     interrupt_moderation_off: { name: "Modération des interruptions désactivée" },
     game_config: { name: "Réglages du jeu", what: "", effect: "", tech: [] },
     wifi_power_max: {
@@ -551,6 +556,7 @@ export const fr: Dict = {
       refresh_rate: "Écran réglé sur la fréquence la plus haute…",
       game_mode: "Vérification du Mode Jeu…",
       windowed_opt: "Accélération des jeux en fenêtre…",
+      timer_resolution: "Réglage d'un minuteur plus fin…",
       mouse_precision_off: "Désactivation de l'accélération de la souris…",
       accessibility_hotkeys_off: "Désactivation des fenêtres des touches rémanentes…",
       power_mode_best: "Mode d'alimentation sur meilleures performances…",

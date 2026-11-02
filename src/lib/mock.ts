@@ -113,6 +113,7 @@ let tweaks: T.TweakInfo[] = [
   tw({ id: "notifications_off", category: "system", gain: "negligible" }),
   tw({ id: "hags", category: "system", risk: "medium", timing: "pc_restart", requiresAdmin: true, state: "on", active: "after_pc_restart" }),
   tw({ id: "windowed_opt", category: "system", timing: "game_restart" }),
+  tw({ id: "timer_resolution", category: "system", gain: "measurable", timing: "pc_restart", requiresAdmin: true }),
   tw({ id: "mouse_precision_off", category: "input", state: "on", active: "now" }),
   tw({ id: "accessibility_hotkeys_off", category: "input", state: "on", active: "now" }),
   tw({ id: "lang_hotkey_off", category: "input", state: "off" }),

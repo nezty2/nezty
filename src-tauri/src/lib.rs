@@ -41,6 +41,7 @@ mod restore;
 mod selftest;
 mod startup;
 mod state;
+mod timer;
 mod tray;
 mod tweaks;
 mod updater;

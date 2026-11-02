@@ -796,6 +796,7 @@ export type ApplyStep =
   | "refresh_rate"
   | "game_mode"
   | "windowed_opt"
+  | "timer_resolution"
   | "mouse_precision_off"
   | "accessibility_hotkeys_off"
   | "power_mode_best"
