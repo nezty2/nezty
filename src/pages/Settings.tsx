@@ -144,9 +144,6 @@ export function SettingsPage() {
               <Row title={t("settings.startMinimized")} desc={t("settings.startMinimizedDesc")}>
                 <Toggle checked={settings.startMinimized} onChange={(v) => void updateSettings({ startMinimized: v })} label={t("settings.startMinimized")} />
               </Row>
-              <Row title={t("settings.minimizeToTray")} desc={t("settings.minimizeToTrayDesc")}>
-                <Toggle checked={settings.minimizeToTray} onChange={(v) => void updateSettings({ minimizeToTray: v })} label={t("settings.minimizeToTray")} />
-              </Row>
               <Row title={t("settings.dashboardPing")} desc={t("settings.dashboardPingDesc")}>
                 <TextInput value={pingHost} onChange={setPingHost} className="w-40" mono />
                 <Button size="sm" disabled={pingHost.trim() === settings.dashboardPingHost || !pingHost.trim()} onClick={() => void updateSettings({ dashboardPingHost: pingHost.trim() })}>

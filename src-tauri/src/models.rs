@@ -399,8 +399,6 @@ pub struct Settings {
     pub custom_games: Vec<Game>,
     /// Bij starten met Windows verborgen in het systeemvak starten.
     pub start_minimized: bool,
-    /// Minimaliseren verbergt het venster in het systeemvak.
-    pub minimize_to_tray: bool,
     pub first_run_done: bool,
     pub default_profile_tweaks: HashMap<String, bool>,
     pub steam_grid_db_key: String,
@@ -449,7 +447,6 @@ impl Default for Settings {
             custom_ping_targets: vec![],
             custom_games: vec![],
             start_minimized: true,
-            minimize_to_tray: false,
             first_run_done: false,
             default_profile_tweaks,
             steam_grid_db_key: String::new(),

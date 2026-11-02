@@ -209,7 +209,6 @@ export interface Settings {
   customPingTargets: unknown[];
   customGames: Game[];
   startMinimized: boolean;
-  minimizeToTray: boolean;
   firstRunDone: boolean;
   defaultProfileTweaks: Record<string, boolean>;
   steamGridDbKey: string;

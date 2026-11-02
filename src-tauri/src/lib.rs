@@ -1119,19 +1119,10 @@ pub fn run() {
         .on_window_event(|window, event| {
             // Als het hoofdvenster sluit, sluit ook de crosshair-overlay en stopt de app.
             if window.label() == "main" {
-                match event {
-                    tauri::WindowEvent::CloseRequested { .. } => window.app_handle().exit(0),
-                    // Minimaliseren naar het systeemvak (als dat in Instellingen aan staat).
-                    tauri::WindowEvent::Resized(_) => {
-                        if window.is_minimized().unwrap_or(false) {
-                            if let Some(st) = window.app_handle().try_state::<Arc<AppState>>() {
-                                if lock(&st.settings).minimize_to_tray {
-                                    let _ = window.hide();
-                                }
-                            }
-                        }
-                    }
-                    _ => {}
+                // Minimaliseren is gewoon minimaliseren: het venster blijft in de taakbalk. Verbergen in het
+                // systeemvak gebeurt alleen bij starten met Windows.
+                if let tauri::WindowEvent::CloseRequested { .. } = event {
+                    window.app_handle().exit(0);
                 }
             }
         })

@@ -1246,8 +1246,6 @@ export const en: Dict = {
     startWithWindowsDesc: "Opens nezty by itself when your PC starts.",
     startMinimized: "Start in the system tray with Windows",
     startMinimizedDesc: "Only when starting automatically. Double-clicking always opens nezty normally.",
-    minimizeToTray: "Minimize to the system tray",
-    minimizeToTrayDesc: "The window then leaves the taskbar. Click the icon next to the clock to bring it back.",
     dashboardPing: "Ping on the dashboard",
     dashboardPingDesc: "Host or IP address. With :port nezty measures via TCP.",
     covers: "Game images",
