@@ -79,6 +79,7 @@ jobs:
           $cfg = @{ plugins = @{ "nezty-update" = @{ endpoints = @("${{ steps.versie.outputs.base }}/latest.json") } } }
           $path = "$env:RUNNER_TEMP\nezty-ci.conf.json"
           $cfg | ConvertTo-Json -Depth 6 | Set-Content -Path $path -Encoding utf8
+          # Bewust zonder --features selftest: de zelftests (--selftest*) horen niet in een release.
           npm run tauri build -- --config $path
           if ($LASTEXITCODE -ne 0) { throw "Build mislukt." }
 

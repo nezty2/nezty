@@ -90,6 +90,17 @@ pub fn write_key(text: &str, format: &str, key: &str, value: &str) -> Option<Str
     changed.then(|| lines.join(nl))
 }
 
+/// Games waarvoor nezty een configbestand kent.
+pub fn game_ids() -> Vec<&'static str> {
+    SPECS.iter().map(|s| s.game_id).collect()
+}
+
+/// Draait de game nu (dan schrijft hij zijn bestand bij het afsluiten terug)?
+pub fn is_running(state: &AppState, game_id: &str) -> bool {
+    let running = processes::running_names(state);
+    SPECS.iter().filter(|s| s.game_id == game_id).any(|s| s.processes.iter().any(|p| running.contains(*p)))
+}
+
 pub fn list(game_id: &str) -> Vec<GameConfigCheck> {
     let mut out = vec![];
     for spec in SPECS.iter().filter(|s| s.game_id == game_id) {

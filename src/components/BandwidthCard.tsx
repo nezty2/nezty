@@ -15,12 +15,9 @@ function rate(kbps: number, lang: string): string {
 export function BandwidthCard() {
   const { t, lang } = useT();
   const handleError = useApp((s) => s.handleError);
-  const setTweak = useApp((s) => s.setTweak);
-  const tweaks = useApp((s) => s.tweaks);
   const [report, setReport] = useState<BandwidthReport | null>(null);
   const [busy, setBusy] = useState(false);
   const [action, setAction] = useState<string | null>(null);
-  const doOff = tweaks.find((tw) => tw.id === "delivery_optimization_off")?.state === "on";
 
   const measure = async () => {
     setBusy(true);
@@ -34,21 +31,6 @@ export function BandwidthCard() {
   };
 
   const fix = (label: string | null) => {
-    if (label === "delivery_optimization" && !doOff) {
-      return (
-        <Button
-          size="sm"
-          loading={action === label}
-          onClick={async () => {
-            setAction(label);
-            await setTweak("delivery_optimization_off", true);
-            setAction(null);
-          }}
-        >
-          {t("bandwidth.doOff")}
-        </Button>
-      );
-    }
     if (label === "windows_update") {
       return (
         <Button size="sm" onClick={() => void api.openUrl("ms-settings:windowsupdate").catch(handleError)}>
@@ -94,7 +76,7 @@ export function BandwidthCard() {
             </span>
           )}
         </div>
-        {report && !report.elevated && <p className="mt-3 text-[13px] text-warn">{t("bandwidth.needsAdmin")}</p>}
+        {report && !report.elevated && <p className="mt-3 text-[13px] text-ink-3">{t("bandwidth.needsAdmin")}</p>}
         {report && report.elevated && report.users.length === 0 && <p className="mt-3 text-[13px] text-ok">{t("bandwidth.quiet")}</p>}
         {report && report.users.length > 0 && (
           <ul className="mt-3 divide-y divide-line">

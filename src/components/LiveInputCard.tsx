@@ -28,13 +28,13 @@ export function LiveInputCard() {
   return (
     <Card>
       <div className="flex items-start gap-3">
-        <ShieldCheck className={off.length ? "mt-0.5 h-5 w-5 shrink-0 text-warn" : "mt-0.5 h-5 w-5 shrink-0 text-ok"} />
+        <ShieldCheck className={off.length ? "mt-0.5 h-5 w-5 shrink-0 text-ink-3" : "mt-0.5 h-5 w-5 shrink-0 text-ok"} />
         <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold">{off.length ? t("live.mismatch", { count: String(off.length) }) : t("live.ok", { count: String(saved.length) })}</div>
           <ul className="mt-2 space-y-1">
             {saved.map((c) => (
               <li key={c.id} className="flex items-center gap-2 text-[13px] text-ink-2">
-                {c.live ? <CheckCircle2 className="h-4 w-4 text-ok" /> : <XCircle className="h-4 w-4 text-warn" />}
+                {c.live ? <CheckCircle2 className="h-4 w-4 text-ok" /> : <XCircle className="h-4 w-4 text-ink-3" />}
                 {td(`tweak.${c.id}.name` as TKey)}
                 <span className="text-ink-3">{c.live ? t("live.active") : t("live.notActive")}</span>
               </li>

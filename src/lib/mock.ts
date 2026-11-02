@@ -40,7 +40,6 @@ let fortniteOverview: T.FortniteOverview = {
 };
 let liveChecks: T.LiveCheck[] = [
   { id: "mouse_precision_off", saved: true, live: true },
-  { id: "keyboard_fast_repeat", saved: true, live: false },
   { id: "accessibility_hotkeys_off", saved: false, live: false },
 ];
 let gameConfig: T.GameConfigCheck[] = [
@@ -91,6 +90,10 @@ let settings: T.Settings = {
   crosshairHotkey: "ctrl+alt+c",
   autoUpdateCheck: true,
   onlineCovers: true,
+  migratedV050: true,
+  allActive: false,
+  activatedGames: [],
+  licenseNoTokenSince: null,
 };
 
 function tw(p: Partial<T.TweakInfo> & { id: string; category: T.TweakCategory }): T.TweakInfo {
@@ -101,21 +104,16 @@ function tw(p: Partial<T.TweakInfo> & { id: string; category: T.TweakCategory })
 }
 
 let tweaks: T.TweakInfo[] = [
-  tw({ id: "game_mode", category: "system", timing: "game_restart", state: "on", active: "now" }),
-  tw({ id: "game_bar_dvr_off", category: "system", gain: "measurable", timing: "game_restart", state: "off" }),
+  tw({ id: "game_mode", category: "system", state: "on", active: "now" }),
+  tw({ id: "game_bar_dvr_off", category: "system", timing: "game_restart", state: "off" }),
   tw({ id: "power_plan", category: "system", options: ["high", "ultimate"], currentOption: "high", detail: msg("power_current", { name: "Balanced" }) }),
   tw({ id: "wifi_power_max", category: "network", state: "unavailable", detail: msg("wifi_none") }),
   tw({ id: "wifi_gaming_mode", category: "network", gain: "measurable" }),
-  tw({ id: "delivery_optimization_off", category: "network", requiresAdmin: true }),
-  tw({ id: "timer_resolution", category: "system", gain: "negligible", timing: "pc_restart", experimental: true, requiresAdmin: true }),
-  tw({ id: "interrupt_moderation_off", category: "network", gain: "negligible", experimental: true, requiresAdmin: true, state: "on", active: "now" }),
-  tw({ id: "notifications_off", category: "system", gain: "negligible", timing: "pc_restart" }),
+  tw({ id: "notifications_off", category: "system", gain: "negligible" }),
   tw({ id: "hags", category: "system", risk: "medium", timing: "pc_restart", requiresAdmin: true, state: "on", active: "after_pc_restart" }),
-  tw({ id: "visual_effects", category: "system", gain: "negligible" }),
-  tw({ id: "mouse_precision_off", category: "input", gain: "measurable", state: "on", active: "now" }),
-  tw({ id: "keyboard_fast_repeat", category: "input" }),
+  tw({ id: "windowed_opt", category: "system", timing: "game_restart" }),
+  tw({ id: "mouse_precision_off", category: "input", state: "on", active: "now" }),
   tw({ id: "accessibility_hotkeys_off", category: "input", state: "on", active: "now" }),
-  tw({ id: "input_device_power_off", category: "input", requiresAdmin: true, state: "off", detail: { key: "device_power_count", params: { n: "3" } } }),
   tw({ id: "lang_hotkey_off", category: "input", state: "off" }),
   tw({ id: "usb_suspend_off", category: "input", platform: "pc_only" }),
   tw({ id: "power_mode_best", category: "laptop", gain: "measurable", requiresAdmin: true, platform: "laptop_only" }),
@@ -123,15 +121,9 @@ let tweaks: T.TweakInfo[] = [
   tw({ id: "cpu_full_speed", category: "laptop", gain: "measurable", platform: "laptop_only", detail: { key: "cpu_capped", params: { pct: "99" } } }),
   tw({ id: "cpu_epp_performance", category: "laptop", gain: "measurable", platform: "laptop_only", detail: { key: "cpu_epp_now", params: { pct: "50" } } }),
   tw({ id: "cpu_prefer_pcores", category: "laptop", gain: "measurable", platform: "laptop_only" }),
-  tw({ id: "pcie_aspm_off", category: "laptop", platform: "laptop_only", detail: { key: "aspm_on", params: {} } }),
   tw({ id: "usb_suspend_ac_off", category: "laptop", platform: "laptop_only", detail: { key: "usb_ac_on", params: {} } }),
   tw({ id: "touchpad_off_with_mouse", category: "laptop", platform: "laptop_only" }),
-  tw({ id: "adapter_power_saving_off", category: "network", requiresAdmin: true, state: "unknown", detail: msg("adapter_needs_admin") }),
-  tw({ id: "nagle_off", category: "network", gain: "negligible", timing: "pc_restart", experimental: true, requiresAdmin: true, detail: msg("nagle_ifaces", { count: "1" }) }),
-  tw({ id: "network_throttling_off", category: "network", gain: "negligible", timing: "pc_restart", experimental: true, requiresAdmin: true }),
-  tw({ id: "fullscreen_opt_off", category: "game", scope: "per_game", timing: "game_restart", state: "unknown", detail: msg("per_game_hint") }),
   tw({ id: "gpu_high_perf", category: "game", scope: "per_game", gain: "big", timing: "game_restart", state: "unknown", detail: msg("per_game_hint") }),
-  tw({ id: "high_priority", category: "game", scope: "per_game", state: "unknown", detail: msg("per_game_hint") }),
   tw({ id: "cleanup_temp", category: "cleanup", kind: "action", gain: "negligible", state: "unknown" }),
 ];
 
@@ -153,7 +145,7 @@ let games: T.Game[] = [
 
 let profiles: T.GameProfile[] = games.map((x) => ({
   gameId: x.id, autoBoost: x.id === "epic:fortnite", revertOnExit: true, globalTweaks: { ...settings.defaultProfileTweaks },
-  fullscreenOptOff: true, gpuHighPerf: true, highPriority: true, closeApps: [], useGlobalCloseList: true,
+  gpuHighPerf: true, closeApps: [], useGlobalCloseList: true,
 }));
 
 let journal: T.JournalEntry[] = [
@@ -250,7 +242,7 @@ let bigWins: T.BigWin[] = [
 export const mockApi: Api = {
   async getAppInfo() {
     await delay();
-    return { version: "0.3.0", isElevated: true, dataDir: "C:\\Users\\you\\AppData\\Roaming\\com.nzty.desktop", osVersion: "Windows 11 (build 26300)", windows11: true, cpuName: "AMD Ryzen 7 9800X3D 8-Core Processor", gpuName: "NVIDIA GeForce RTX 5070 Ti", totalMemoryMb: 31861, uiLanguage: "nl" };
+    return { version: "0.5.0", isElevated: true, dataDir: "C:\\Users\\you\\AppData\\Roaming\\com.nzty.desktop", osVersion: "Windows 11 (build 26300)", windows11: true, cpuName: "AMD Ryzen 7 9800X3D 8-Core Processor", gpuName: "NVIDIA GeForce RTX 5070 Ti", totalMemoryMb: 31861, uiLanguage: "nl" };
   },
   async getSettings() { await delay(); return settings; },
   async saveSettings(s) { await delay(); settings = s; return settings; },
@@ -292,8 +284,8 @@ export const mockApi: Api = {
     const game = games.find((x) => x.id === gameId);
     return tweaks.filter((t) => t.scope === "per_game").map((t) => ({
       ...t,
-      state: !game?.exePath ? "unavailable" : t.id === "high_priority" ? (running.includes(gameId) ? "on" : "off") : t.id === "fullscreen_opt_off" ? "on" : "off",
-      detail: !game?.exePath ? msg("no_exe", { game: game?.name ?? "" }) : t.id === "high_priority" && !running.includes(gameId) ? msg("game_not_running") : null,
+      state: !game?.exePath ? "unavailable" : "off",
+      detail: !game?.exePath ? msg("no_exe", { game: game?.name ?? "" }) : null,
     }));
   },
   async setTweak(id, enabled, option, gameId) {
@@ -304,6 +296,70 @@ export const mockApi: Api = {
     tweaks = tweaks.map((x) => (x.id === id ? { ...x, state: enabled ? "on" : "off", appliedByApp: enabled, currentOption: option ?? x.currentOption } : x));
     journal = [{ id: `j${now()}`, ts: now(), tweakId: id, tweakName: id, kind: "registry", target: `HKCU\\...\\${id}`, oldValue: enabled ? "0" : "1", newValue: enabled ? "1" : "0", reverted: false, revertable: true, sessionId: null, gameId: null, note: enabled ? null : "manual_off", detail: null }, ...journal];
     return tweaks.find((x) => x.id === id)!;
+  },
+  async applyAll() {
+    const steps: T.ApplyStep[] = ["restore_point", "power_source", "refresh_rate", "game_mode", "windowed_opt", "mouse_precision_off", "accessibility_hotkeys_off", "power_mode_best", "cpu_full_speed", "wifi_power_max", "wifi_gaming_mode", "gpu_high_perf", "fortnite", "game_config"];
+    for (let i = 0; i < steps.length; i++) {
+      emit("apply-progress", { step: steps[i], done: i, total: steps.length });
+      await delay(steps[i] === "restore_point" && !settings.restorePointDone ? 900 : 220);
+    }
+    emit("apply-progress", { step: "done", done: steps.length, total: steps.length });
+    const ids = ["game_mode", "windowed_opt", "mouse_precision_off", "accessibility_hotkeys_off", "power_mode_best", "cpu_full_speed", "wifi_gaming_mode"];
+    const items: T.ApplyItem[] = [
+      { id: "power_source", gameId: null, outcome: "already", reason: null },
+      { id: "refresh_rate", gameId: null, outcome: "applied", reason: null },
+      ...ids.map((id): T.ApplyItem => ({ id, gameId: null, outcome: tweaks.find((x) => x.id === id)?.state === "on" ? "already" : "applied", reason: null })),
+      { id: "wifi_power_max", gameId: null, outcome: "skipped", reason: msg("wifi_none") },
+      ...games.filter((x) => x.exePath).map((x): T.ApplyItem => ({ id: "gpu_high_perf", gameId: x.id, outcome: "applied", reason: null })),
+      { id: "fortnite_vsync", gameId: "epic:fortnite", outcome: "skipped", reason: msg("game_running") },
+      { id: "fortnite_reflex", gameId: "epic:fortnite", outcome: "skipped", reason: msg("game_running") },
+      { id: "game_vsync", gameId: "steam:cs2", outcome: "applied", reason: null },
+    ];
+    tweaks = tweaks.map((x) => (ids.includes(x.id) ? { ...x, state: "on", appliedByApp: true, active: "now" } : x));
+    bigWins = bigWins.map((b) => (b.id === "refresh_rate" || b.id === "gpu_choice" ? { ...b, status: "ok", action: "none" } : b));
+    gameConfig = gameConfig.map((c) => ({ ...c, ok: true, current: c.recommended }));
+    settings = { ...settings, restorePointDone: true, allActive: true, activatedGames: games.map((x) => x.id) };
+    const count = (o: T.ApplyOutcome) => items.filter((i) => i.outcome === o).length;
+    return {
+      items, applied: count("applied"), already: count("already"), skipped: count("skipped"), failed: count("failed"),
+      restorePoint: null, restart: await mockApi.getRestartStatus(),
+    };
+  },
+  async applyAllStatus() {
+    await delay(200);
+    // Zelfde opbouw als activate::status in de backend: alleen wat op dit apparaat kan, telt mee.
+    const list: { id: string; gameId: string | null; on: boolean }[] = [];
+    for (const id of ["power_source", "refresh_rate"]) {
+      const b = bigWins.find((x) => x.id === id);
+      if (b?.status === "ok") list.push({ id, gameId: null, on: true });
+      else if (b?.status === "issue" && b.action === "fix") list.push({ id, gameId: null, on: false });
+    }
+    for (const id of ["game_mode", "windowed_opt", "mouse_precision_off", "accessibility_hotkeys_off", "power_mode_best", "cpu_full_speed", "wifi_power_max", "wifi_gaming_mode"]) {
+      const x = tweaks.find((tw) => tw.id === id);
+      if (!x || x.platformLocked || x.state === "unavailable") continue;
+      list.push({ id, gameId: null, on: x.state === "on" });
+    }
+    if (mockDevice().hybrid) {
+      for (const x of games.filter((gm) => gm.exePath)) list.push({ id: "gpu_high_perf", gameId: x.id, on: settings.allActive });
+    }
+    if (fortniteOverview.iniExists) {
+      for (const c of fortniteOverview.checks.filter((c) => c.id === "vsync" || c.id === "reflex")) list.push({ id: `fortnite_${c.id}`, gameId: "epic:fortnite", on: c.ok });
+    }
+    for (const gid of Array.from(new Set(gameConfig.map((c) => c.gameId)))) {
+      list.push({ id: "game_vsync", gameId: gid, on: gameConfig.filter((c) => c.gameId === gid).every((c) => c.ok) });
+    }
+    const target = (x: { id: string; gameId: string | null }): T.ApplyTarget => ({ id: x.id, gameId: x.gameId });
+    const missing = list.filter((x) => !x.on).map(target);
+    const present = list.filter((x) => x.on).map(target);
+    return { allActive: missing.length === 0, enabled: settings.allActive, active: present.length, total: list.length, missing, present, pendingGame: [] };
+  },
+  async getRestartStatus() {
+    const waiting = tweaks.filter((x) => x.state === "on" && x.active === "after_pc_restart").map((x) => x.id);
+    return { required: waiting.length > 0, tweaks: waiting, fastStartup: true };
+  },
+  async restartPc() {
+    await delay(300);
+    tweaks = tweaks.map((x) => (x.active === "after_pc_restart" ? { ...x, active: "now" } : x));
   },
   async previewCleanup() {
     await delay(600);
@@ -363,9 +419,8 @@ export const mockApi: Api = {
         { id: "game_bar_dvr_off", timing: "game_restart", option: null, count: null },
         { id: "power_plan", timing: "instant", option: "high", count: null },
         { id: "gpu_high_perf", timing: "game_restart", option: null, count: null },
-        { id: "high_priority", timing: "instant", option: null, count: 1 },
       ],
-      alreadyOk: ["game_mode", "mouse_precision_off", "fullscreen_opt_off"],
+      alreadyOk: ["game_mode", "mouse_precision_off"],
       skipped: [{ id: "hags", reason: msg("pc_restart_only") }],
       closedProcesses: [{ name: "OneDrive.exe", exePath: null, memoryMb: 96 }, { name: "chrome.exe", exePath: null, memoryMb: 2050 }],
       restorePoint: settings.restorePointDone ? null : { ok: true, key: "created", detail: null, ts: now() },

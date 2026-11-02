@@ -6,13 +6,13 @@ import { Button, Card, PageHeader, Row, SectionTitle, Skeleton, Toggle } from "@
 import { useT } from "@/i18n/hooks";
 import type { TweakInfo } from "@/lib/types";
 import { useApp } from "@/store/app";
-import { BigWinCard, LAPTOP_CHECKS } from "./Tweaks";
+import { BigWinCard, LAPTOP_CHECKS } from "@/components/BigWinCard";
 
 /** Tweaks per onderwerp. Laptoptweaks plus algemene tweaks die op een laptop veel doen (alleen op een laptop). */
 const GROUPS: { key: "power" | "input" | "network" | "windows"; ids: string[] }[] = [
-  { key: "power", ids: ["power_mode_best", "cpu_full_speed", "cpu_epp_performance", "cpu_prefer_pcores", "battery_saver_off", "pcie_aspm_off"] },
-  { key: "input", ids: ["usb_suspend_ac_off", "touchpad_off_with_mouse", "input_device_power_off", "mouse_precision_off"] },
-  { key: "network", ids: ["wifi_gaming_mode", "wifi_power_max", "adapter_power_saving_off"] },
+  { key: "power", ids: ["power_mode_best", "cpu_full_speed", "cpu_epp_performance", "cpu_prefer_pcores", "battery_saver_off"] },
+  { key: "input", ids: ["usb_suspend_ac_off", "touchpad_off_with_mouse", "mouse_precision_off"] },
+  { key: "network", ids: ["wifi_gaming_mode", "wifi_power_max"] },
   { key: "windows", ids: ["hags", "windowed_opt", "game_bar_dvr_off", "game_mode"] },
 ];
 

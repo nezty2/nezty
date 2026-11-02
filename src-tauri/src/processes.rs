@@ -75,6 +75,12 @@ fn protected_category(name_lower: &str, exe_lower: Option<&str>) -> Option<Proce
     }
 }
 
+/// Hoort dit programma bij Windows zelf, bij beveiligingssoftware of bij anti-cheat? Voor het opstartbeheer:
+/// zulke items toont nezty niet en schakelt het nooit uit.
+pub fn is_protected_program(name_lower: &str, exe_lower: &str) -> bool {
+    matches!(protected_category(name_lower, Some(exe_lower)), Some(ProcessCategory::System | ProcessCategory::Security | ProcessCategory::Anticheat))
+}
+
 fn category(name_lower: &str) -> ProcessCategory {
     if BROWSERS.contains(&name_lower) {
         ProcessCategory::Browser

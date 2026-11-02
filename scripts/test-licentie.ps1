@@ -5,7 +5,8 @@
 # en een testaccount. Het script maakt zelf een testsleutel. Gebruik:
 #   .\scripts\test-licentie.ps1                 (alle stappen, met vragen tussendoor)
 #   .\scripts\test-licentie.ps1 -Stap intrekken (één stap)
-# Stappen: intrekken, verwijderen, verlopen, offline, verwijderen-app, update
+# Stappen: uitgelogd, intrekken, verwijderen, verlopen, offline, verwijderen-app, update
+# Voor de zelftests (--selftest-license) is een testbuild nodig: .\scripts\build.ps1 -Selftest
 param([string]$Stap = "alles")
 $ErrorActionPreference = "Stop"
 Set-Location (Join-Path $PSScriptRoot "..")
@@ -78,6 +79,20 @@ Write-Host "  Testsleutel: $key"
 Wacht "Open nezty, maak een account met deze sleutel (vink 'Ingelogd blijven' aan) en zet twee of drie tweaks aan."
 $before = Logboek "Stand vóór de test"
 if ($before.Count -eq 0) { Write-Warning "Er staat niets aan. Zet eerst een tweak aan, anders valt er niets terug te zetten." }
+
+if ($Stap -in "alles", "uitgelogd") {
+    Kop "Test 0: uitloggen en herstarten zet niets terug"
+    Write-Host "  Alleen een uitspraak van de server (of meer dan 24 uur zonder bevestiging) zet tweaks terug."
+    Wacht "Log in nezty uit (of log in zonder 'Ingelogd blijven'), sluit nezty en herstart de pc"
+    $nu = Logboek "Stand na uitloggen en herstart"
+    $ok = $nu.Count -eq $before.Count
+    Write-Host ("  Tweaks gebleven: {0}" -f $(if ($ok) { "JA" } else { "NEE, er is iets teruggezet" })) -ForegroundColor $(if ($ok) { "Green" } else { "Red" })
+    $log = Join-Path $env:TEMP "nezty-license-check.json"
+    if (Test-Path $log) { Write-Host "  Uitkomst van de controle bij het inloggen:"; Get-Content $log }
+    $taken = @("nezty autostart", "nezty licentiecontrole") | Where-Object { schtasks /Query /TN $_ 2>$null }
+    Write-Host ("  Geplande taken: {0} (hoort er precies één te zijn)" -f ($taken -join ", "))
+    Wacht "Log in nezty weer in (met 'Ingelogd blijven')"
+}
 
 if ($Stap -in "alles", "intrekken") {
     Kop "Test 1: sleutel intrekken"

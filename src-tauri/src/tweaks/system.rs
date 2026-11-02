@@ -1,14 +1,20 @@
-//! Systeemtweaks: Game Mode, Game Bar/DVR, energieplan, HAGS en visuele effecten.
+//! Systeemtweaks: Game Mode, Game Bar/DVR, meldingen, energieplan, HAGS en games in een venster.
 
 use crate::error::{AppError, AppResult};
-use crate::journal::{JournalEntry, PostAction, RevertPayload};
+use crate::journal::{JournalEntry, RevertPayload};
 use crate::models::{JournalKind, Msg, TweakState};
 use crate::powershell::run_cmd;
 use crate::registry::{self, Hive, RegData};
 use crate::state::{lock, AppState};
 use crate::tweaks::regtweak::{self, RegSpec};
 use crate::tweaks::{get, revert_via_journal, Status};
-use crate::winapi;
+use std::sync::OnceLock;
+
+/// Buildnummer van Windows (bv. 22631), 0 als onbekend.
+pub fn windows_build() -> u32 {
+    static BUILD: OnceLock<u32> = OnceLock::new();
+    *BUILD.get_or_init(|| sysinfo::System::kernel_version().and_then(|k| k.trim().parse().ok()).unwrap_or(0))
+}
 
 // ---------- Game Mode ----------
 
@@ -88,83 +94,76 @@ pub fn notifications_disable(state: &AppState) -> AppResult<()> {
     regtweak::disable(state, get("notifications_off")?, &notifications_specs(), None, None)
 }
 
-// ---------- Timerresolutie (experimenteel) ----------
-
-/// Laat het timerverzoek van nezty (0,5 ms, alleen tijdens het gamen) voor alle programma's gelden.
-fn timer_specs() -> Vec<RegSpec> {
-    vec![RegSpec::dword(Hive::Hklm, r"SYSTEM\CurrentControlSet\Control\Session Manager\kernel", "GlobalTimerResolutionRequests", 1, 0).off_absent()]
-}
-pub fn timer_status() -> AppResult<Status> {
-    Ok(Status::simple(regtweak::state_of(&timer_specs())?))
-}
-pub fn timer_apply(state: &AppState, session: Option<&str>) -> AppResult<()> {
-    regtweak::apply(state, get("timer_resolution")?, &timer_specs(), session, None, None)
-}
-pub fn timer_disable(state: &AppState) -> AppResult<()> {
-    crate::timer::hold(false);
-    regtweak::disable(state, get("timer_resolution")?, &timer_specs(), None, None)
-}
-
 // ---------- HAGS ----------
 
+const HAGS_PATH: &str = "SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers";
+
 fn hags_specs() -> Vec<RegSpec> {
-    vec![RegSpec::dword(Hive::Hklm, "SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers", "HwSchMode", 2, 1)]
+    vec![RegSpec::dword(Hive::Hklm, HAGS_PATH, "HwSchMode", 2, 1)]
 }
+
+/// HAGS volgens de videodriver zelf: (ondersteund, nu actief). None als Windows het niet kan zeggen
+/// (ouder dan Windows 10 2004). "Nu actief" verandert pas na een herstart van de pc.
+fn hags_caps() -> Option<(bool, bool)> {
+    use std::ffi::c_void;
+    use windows_sys::Wdk::Graphics::Direct3D::{
+        D3DKMTCloseAdapter, D3DKMTEnumAdapters2, D3DKMTQueryAdapterInfo, D3DKMT_ADAPTERINFO, D3DKMT_CLOSEADAPTER, D3DKMT_ENUMADAPTERS2,
+        D3DKMT_QUERYADAPTERINFO, D3DKMT_WDDM_2_7_CAPS, KMTQAITYPE_WDDM_2_7_CAPS,
+    };
+    unsafe {
+        let mut e: D3DKMT_ENUMADAPTERS2 = std::mem::zeroed();
+        if D3DKMTEnumAdapters2(&mut e) != 0 || e.NumAdapters == 0 {
+            return None;
+        }
+        let mut list: Vec<D3DKMT_ADAPTERINFO> = (0..e.NumAdapters).map(|_| std::mem::zeroed()).collect();
+        e.pAdapters = list.as_mut_ptr();
+        if D3DKMTEnumAdapters2(&mut e) != 0 {
+            return None;
+        }
+        let (mut answered, mut supported, mut enabled) = (false, false, false);
+        for a in list.iter().take(e.NumAdapters as usize) {
+            let mut caps: D3DKMT_WDDM_2_7_CAPS = std::mem::zeroed();
+            let mut q = D3DKMT_QUERYADAPTERINFO {
+                hAdapter: a.hAdapter,
+                Type: KMTQAITYPE_WDDM_2_7_CAPS,
+                pPrivateDriverData: &mut caps as *mut D3DKMT_WDDM_2_7_CAPS as *mut c_void,
+                PrivateDriverDataSize: std::mem::size_of::<D3DKMT_WDDM_2_7_CAPS>() as u32,
+            };
+            if D3DKMTQueryAdapterInfo(&mut q) == 0 {
+                // Bit 0: HwSchSupported, bit 1: HwSchEnabled.
+                let v = caps.Anonymous.Value;
+                answered = true;
+                supported |= v & 1 != 0;
+                enabled |= v & 2 != 0;
+            }
+            D3DKMTCloseAdapter(&D3DKMT_CLOSEADAPTER { hAdapter: a.hAdapter });
+        }
+        answered.then_some((supported, enabled))
+    }
+}
+
+/// Zonder waarde in het register kiest Windows zelf: dat is niet hetzelfde als uit.
 pub fn hags_status() -> AppResult<Status> {
-    let specs = hags_specs();
-    let cur = registry::read(specs[0].hive, &specs[0].path, &specs[0].name)?;
-    let state = regtweak::state_of(&specs)?;
-    Ok(match cur {
-        RegData::Absent => Status::with_detail(state, Msg::new("hags_default")),
-        _ => Status::simple(state),
-    })
+    let cur = registry::read(Hive::Hklm, HAGS_PATH, "HwSchMode")?;
+    let caps = hags_caps();
+    if let Some((false, _)) = caps {
+        return Ok(Status::with_detail(TweakState::Unavailable, Msg::new("hags_unsupported")));
+    }
+    let live = caps.map(|(_, on)| on);
+    let mut st = match cur {
+        RegData::Dword(2) => Status::simple(TweakState::On),
+        RegData::Absent if live == Some(true) => Status::with_detail(TweakState::On, Msg::new("hags_default_on")),
+        RegData::Absent => Status::with_detail(TweakState::Off, Msg::new("hags_default")),
+        _ => Status::simple(TweakState::Off),
+    };
+    st.live = live;
+    Ok(st)
 }
 pub fn hags_apply(state: &AppState, session: Option<&str>) -> AppResult<()> {
     regtweak::apply(state, get("hags")?, &hags_specs(), session, None, None)
 }
 pub fn hags_disable(state: &AppState) -> AppResult<()> {
     regtweak::disable(state, get("hags")?, &hags_specs(), None, None)
-}
-
-// ---------- Visuele effecten ----------
-
-fn visual_specs() -> Vec<RegSpec> {
-    let adv = "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced";
-    vec![
-        RegSpec::dword(Hive::Hkcu, "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects", "VisualFXSetting", 2, 0),
-        RegSpec {
-            hive: Hive::Hkcu,
-            path: "Control Panel\\Desktop".to_string(),
-            name: "UserPreferencesMask".to_string(),
-            on: RegData::Binary(vec![0x90, 0x12, 0x03, 0x80, 0x10, 0x00, 0x00, 0x00]),
-            off: RegData::Binary(vec![0x9E, 0x3E, 0x07, 0x80, 0x12, 0x00, 0x00, 0x00]),
-            absent_is_on: false,
-        },
-        RegSpec::string(Hive::Hkcu, "Control Panel\\Desktop\\WindowMetrics", "MinAnimate", "0", "1"),
-        RegSpec::dword(Hive::Hkcu, adv, "TaskbarAnimations", 0, 1),
-        RegSpec::dword(Hive::Hkcu, adv, "ListviewAlphaSelect", 0, 1),
-        RegSpec::dword(Hive::Hkcu, adv, "ListviewShadow", 0, 1),
-        RegSpec::dword(Hive::Hkcu, "Software\\Microsoft\\Windows\\DWM", "EnableAeroPeek", 0, 1),
-    ]
-}
-pub fn visual_effects_status() -> AppResult<Status> {
-    // De hoofdschakelaar bepaalt de status; de rest volgt.
-    let cur = registry::read(Hive::Hkcu, "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects", "VisualFXSetting")?;
-    Ok(Status::simple(if cur == RegData::Dword(2) { TweakState::On } else { TweakState::Off }))
-}
-pub fn visual_effects_apply(state: &AppState, session: Option<&str>) -> AppResult<()> {
-    regtweak::apply(state, get("visual_effects")?, &visual_specs(), session, None, Some(PostAction::UiEffects))?;
-    winapi::set_ui_effects(false);
-    winapi::set_min_animate(false);
-    winapi::broadcast_setting_change("WindowMetrics");
-    Ok(())
-}
-pub fn visual_effects_disable(state: &AppState) -> AppResult<()> {
-    regtweak::disable(state, get("visual_effects")?, &visual_specs(), None, Some(PostAction::UiEffects))?;
-    winapi::set_ui_effects(true);
-    winapi::set_min_animate(true);
-    winapi::broadcast_setting_change("WindowMetrics");
-    Ok(())
 }
 
 // ---------- Energieplan ----------
@@ -205,20 +204,49 @@ pub fn list_schemes() -> AppResult<Vec<(String, String)>> {
     Ok(out.lines().filter_map(parse_scheme_line).collect())
 }
 
+/// Naam van het Ultieme-prestatiesplan in onder meer Engels, Duits, Nederlands en Frans.
 fn is_ultimate(guid: &str, name: &str) -> bool {
-    guid == GUID_ULTIMATE || name.to_lowercase().contains("ultim")
+    let n = name.to_lowercase();
+    guid == GUID_ULTIMATE || n.contains("ultim") || n.contains("ultiem") || n.contains("performances optimales")
 }
 
-pub fn power_plan_status() -> AppResult<Status> {
+/// Plannen die nezty zelf heeft gemaakt (een kopie, als Windows het plan niet had) en die nog bestaan
+/// volgens het logboek: (guid, "high" of "ultimate"). Zo maakt nezty er nooit nog een kopie bij.
+fn created_plans(state: &AppState) -> Vec<(String, Option<String>)> {
+    lock(&state.journal)
+        .entries
+        .iter()
+        .filter(|e| !e.reverted)
+        .filter_map(|e| match &e.payload {
+            RevertPayload::PowerPlan { created_guid: Some(g), created_option, .. } => Some((g.to_lowercase(), created_option.clone())),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Welke optie hoort bij dit plan: "high", "ultimate" of geen van beide.
+fn plan_option(guid: &str, name: &str, created: &[(String, Option<String>)]) -> Option<&'static str> {
+    if guid == GUID_HIGH {
+        return Some("high");
+    }
+    if let Some((_, opt)) = created.iter().find(|(g, _)| g == guid) {
+        return Some(match opt.as_deref() {
+            Some("ultimate") => "ultimate",
+            Some(_) => "high",
+            None if is_ultimate(guid, name) => "ultimate",
+            None => "high",
+        });
+    }
+    is_ultimate(guid, name).then_some("ultimate")
+}
+
+pub fn power_plan_status(state: &AppState) -> AppResult<Status> {
     let (guid, name) = active_scheme()?;
-    let (state, current_option) = if guid == GUID_HIGH {
-        (TweakState::On, Some("high".to_string()))
-    } else if is_ultimate(&guid, &name) {
-        (TweakState::On, Some("ultimate".to_string()))
-    } else {
-        (TweakState::Off, Some("high".to_string()))
+    let (st, current_option) = match plan_option(&guid, &name, &created_plans(state)) {
+        Some(opt) => (TweakState::On, Some(opt.to_string())),
+        None => (TweakState::Off, Some("high".to_string())),
     };
-    Ok(Status { state, detail: Some(Msg::new("power_current").with("name", name)), current_option })
+    Ok(Status { state: st, detail: Some(Msg::new("power_current").with("name", name)), current_option, live: None })
 }
 
 fn set_active(guid: &str) -> AppResult<()> {
@@ -245,32 +273,21 @@ fn duplicate_scheme(state: &AppState, source: &str) -> AppResult<String> {
 }
 
 pub fn power_plan_apply(state: &AppState, option: &str, session: Option<&str>) -> AppResult<()> {
+    let option = if option == "ultimate" { "ultimate" } else { "high" };
     let (old_guid, old_name) = active_scheme()?;
+    let made = created_plans(state);
+    if plan_option(&old_guid, &old_name, &made) == Some(option) {
+        return Ok(());
+    }
+    // Eerst een bestaand plan zoeken (ook een kopie die nezty eerder maakte), pas daarna een nieuwe kopie.
     let schemes = list_schemes()?;
     let mut created: Option<String> = None;
-    let target = if option == "ultimate" {
-        if is_ultimate(&old_guid, &old_name) {
-            return Ok(());
-        }
-        match schemes.iter().find(|(g, n)| is_ultimate(g, n)) {
-            Some((g, _)) => g.clone(),
-            None => {
-                let g = duplicate_scheme(state, GUID_ULTIMATE)?;
-                created = Some(g.clone());
-                g
-            }
-        }
-    } else {
-        if old_guid == GUID_HIGH {
-            return Ok(());
-        }
-        match schemes.iter().find(|(g, _)| g == GUID_HIGH) {
-            Some((g, _)) => g.clone(),
-            None => {
-                let g = duplicate_scheme(state, GUID_HIGH)?;
-                created = Some(g.clone());
-                g
-            }
+    let target = match schemes.iter().find(|(g, n)| plan_option(g, n, &made) == Some(option)) {
+        Some((g, _)) => g.clone(),
+        None => {
+            let g = duplicate_scheme(state, if option == "ultimate" { GUID_ULTIMATE } else { GUID_HIGH })?;
+            created = Some(g.clone());
+            g
         }
     };
     set_active(&target)?;
@@ -281,14 +298,15 @@ pub fn power_plan_apply(state: &AppState, option: &str, session: Option<&str>) -
     e.new_value = Some(format!("{new_name} ({target})"));
     e.revertable = true;
     e.session_id = session.map(|s| s.to_string());
-    e.payload = RevertPayload::PowerPlan { old_guid, created_guid: created };
+    let created_option = created.as_ref().map(|_| option.to_string());
+    e.payload = RevertPayload::PowerPlan { old_guid, created_guid: created, created_option };
     lock(&state.journal).record(e)?;
     Ok(())
 }
 
 pub fn power_plan_disable(state: &AppState) -> AppResult<()> {
     if revert_via_journal(state, "power_plan", None)? {
-        if power_plan_status()?.state == TweakState::Off {
+        if power_plan_status(state)?.state == TweakState::Off {
             return Ok(());
         }
     }
@@ -303,7 +321,7 @@ pub fn power_plan_disable(state: &AppState) -> AppResult<()> {
     e.new_value = Some(format!("Balanced ({GUID_BALANCED})"));
     e.revertable = true;
     e.note = Some("manual_off".to_string());
-    e.payload = RevertPayload::PowerPlan { old_guid, created_guid: None };
+    e.payload = RevertPayload::PowerPlan { old_guid, created_guid: None, created_option: None };
     lock(&state.journal).record(e)?;
     Ok(())
 }
@@ -346,7 +364,15 @@ fn dx_text(data: &RegData) -> String {
     }
 }
 
+/// Windows gebruikt deze instelling pas vanaf Windows 11 22H2 (build 22621). Daaronder doet hij niets.
+fn windowed_opt_supported() -> bool {
+    windows_build() >= 22621
+}
+
 pub fn windowed_opt_status() -> AppResult<Status> {
+    if !windowed_opt_supported() {
+        return Ok(Status::with_detail(TweakState::Unavailable, Msg::new("windowed_opt_os")));
+    }
     let on = dx_get(&dx_text(&dx_settings()?), DX_KEY).as_deref() == Some("1");
     Ok(Status::simple(if on { TweakState::On } else { TweakState::Off }))
 }
@@ -371,6 +397,9 @@ fn windowed_opt_write(state: &AppState, value: &str, session: Option<&str>, note
 }
 
 pub fn windowed_opt_apply(state: &AppState, session: Option<&str>) -> AppResult<()> {
+    if !windowed_opt_supported() {
+        return Err(AppError::coded("windowed_opt_os"));
+    }
     if dx_get(&dx_text(&dx_settings()?), DX_KEY).as_deref() == Some("1") {
         return Ok(());
     }
@@ -378,7 +407,9 @@ pub fn windowed_opt_apply(state: &AppState, session: Option<&str>) -> AppResult<
 }
 
 pub fn windowed_opt_disable(state: &AppState) -> AppResult<()> {
-    if revert_via_journal(state, "windowed_opt", None)? && windowed_opt_status()?.state == TweakState::Off {
+    let reverted = revert_via_journal(state, "windowed_opt", None)?;
+    // Op een Windows-versie zonder deze instelling valt er na het terugzetten niets meer te doen.
+    if !windowed_opt_supported() || (reverted && windowed_opt_status()?.state == TweakState::Off) {
         return Ok(());
     }
     windowed_opt_write(state, "0", None, Some("manual_off"))

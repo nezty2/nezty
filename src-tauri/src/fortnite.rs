@@ -231,7 +231,11 @@ pub fn changes_for(checks: &[FortniteCheck], ids: &[String]) -> Vec<(&'static st
             "vsync" => changes.push((SECTION, "bUseVSync", "False".to_string())),
             "fps_limit" => changes.push((SECTION, "FrameRateLimit", format!("{:.6}", c.recommended.parse::<f32>().unwrap_or(0.0)))),
             "reflex" => changes.push((SECTION, "LatencyTweak2", "2".to_string())),
-            "render_mode" => changes.push((RHI_SECTION, "PreferredFeatureLevel", "es31".to_string())),
+            // Prestatiemodus hoort bij DirectX 11. Blijft PreferredRHI op dx12 staan, dan negeert Fortnite de keuze.
+            "render_mode" => {
+                changes.push((RHI_SECTION, "PreferredFeatureLevel", "es31".to_string()));
+                changes.push((RHI_SECTION, "PreferredRHI", "dx11".to_string()));
+            }
             _ => {}
         }
     }
@@ -244,6 +248,9 @@ pub fn write_changes(path: &Path, changes: &[(&str, &str, String)]) -> AppResult
     let mut entries = vec![];
     for (section, key, value) in changes {
         let old = ini::value(&text, section, key);
+        if old.as_deref().is_some_and(|o| o.eq_ignore_ascii_case(value)) {
+            continue;
+        }
         ini::set(&mut text, section, key, value);
         let mut e = JournalEntry::new("fortnite_ini", &format!("Fortnite: {key}"), JournalKind::File, &format!("GameUserSettings.ini {section} {key}"));
         e.old_value = Some(old.clone().unwrap_or_else(|| "-".into()));

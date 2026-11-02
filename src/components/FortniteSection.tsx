@@ -1,40 +1,33 @@
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Cpu, Hammer, Info, MonitorPlay, Pickaxe, RefreshCw, Sparkles, Wifi, XCircle } from "lucide-react";
-import { OverlaysCard } from "@/components/OverlaysCard";
+import { AnimatePresence, motion } from "framer-motion";
+import { CheckCircle2, ChevronDown, Circle, Info, Pickaxe } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { Badge, Button, Card, EmptyState, SectionTitle, Skeleton, Toggle, cn } from "@/components/ui";
+import { Badge, Button, Card, cn } from "@/components/ui";
 import { useT } from "@/i18n/hooks";
 import type { TKey } from "@/i18n";
 import { api } from "@/lib/ipc";
-import type { FortniteOverview, HwAccelInfo } from "@/lib/types";
-import { FortniteIniTab, FortniteTipsTab, NowTab } from "./GameTabs";
+import type { FortniteOverview } from "@/lib/types";
 import { useApp } from "@/store/app";
+import { FortniteIniTab } from "./GameTabs";
+import { Loader } from "./Loader";
 
-const GAME_ID = "epic:fortnite";
-const QUICK = ["vsync", "fps_limit", "reflex"];
-
-function StatusIcon({ ok }: { ok: boolean }) {
-  return ok ? <CheckCircle2 className="h-[18px] w-[18px] shrink-0 text-ok" /> : <XCircle className="h-[18px] w-[18px] shrink-0 text-warn" />;
-}
-
+/**
+ * Fortnite onder "Meer opties": de keuzes die niet in "Alles activeren" zitten (FPS-limiet en de rendermodus
+ * Prestaties), plus de eigen editor met back-ups. V-Sync en Reflex regelt "Alles activeren" al.
+ */
 export function FortniteSection() {
   const { t } = useT();
   const games = useApp((s) => s.games);
   const handleError = useApp((s) => s.handleError);
   const toast = useApp((s) => s.toast);
-  const setPage = useApp((s) => s.setPage);
-  const [tips, setTips] = useState(false);
-  const game = games.find((g) => g.id === GAME_ID) ?? null;
-
+  const refreshStatus = useApp((s) => s.refreshStatus);
   const [ov, setOv] = useState<FortniteOverview | null>(null);
-  const [hw, setHw] = useState<HwAccelInfo[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [advanced, setAdvanced] = useState(false);
+  const detected = games.some((g) => g.id === "epic:fortnite");
 
   const load = useCallback(async () => {
     try {
-      const [o, h] = await Promise.all([api.getFortniteOverview(), api.listHwAccel()]);
-      setOv(o);
-      setHw(h);
+      setOv(await api.getFortniteOverview());
     } catch (e) {
       handleError(e);
     }
@@ -44,12 +37,12 @@ export function FortniteSection() {
     void load();
   }, [load]);
 
-  const apply = async (ids: string[]) => {
-    setBusy(ids.join(","));
+  const apply = async (id: string) => {
+    setBusy(id);
     try {
-      const before = ov?.checks.filter((c) => ids.includes(c.id) && !c.ok).length ?? 0;
-      setOv(await api.applyFortniteRecommended(ids));
-      toast({ level: "success", title: t("notice.success"), message: before > 0 ? t("fn.applied", { count: String(before) }) : t("fn.allGood") });
+      setOv(await api.applyFortniteRecommended([id]));
+      toast({ level: "success", title: t("notice.success"), message: t("fn.applied", { count: 1 }) });
+      void refreshStatus();
     } catch (e) {
       handleError(e);
     } finally {
@@ -57,244 +50,103 @@ export function FortniteSection() {
     }
   };
 
-  if (!ov) return <Skeleton className="h-64" />;
-  if (!game && !ov.iniExists) {
-    return (
-      <EmptyState icon={Pickaxe} title={t("fn.notFound")} description={t("msg.ini_missing")} />
-    );
-  }
+  if (!ov) return <Loader />;
+  if (!detected && !ov.iniExists) return null;
 
-  const quick = ov.checks.filter((c) => QUICK.includes(c.id));
-  const quickTodo = quick.filter((c) => !c.ok).length;
+  const fps = ov.checks.find((c) => c.id === "fps_limit");
   const render = ov.checks.find((c) => c.id === "render_mode");
   const locked = ov.running || !ov.iniExists;
+  const fpsText = (v: string | null) => (v == null ? t("fn.notSet") : Number(v) === 0 ? t("fn.unlimited") : `${Math.round(Number(v))} FPS`);
 
-  const currentText = (id: string, v: string | null) => {
-    if (v == null) return t("fn.notSet");
-    if (id === "vsync") return v.toLowerCase() === "true" ? t("fn.on") : t("fn.off");
-    if (id === "fps_limit") return Number(v) === 0 ? t("fn.unlimited") : `${Math.round(Number(v))} FPS`;
-    if (id === "reflex") return t(`fn.reflexValue.${v === "2" ? "2" : v === "1" ? "1" : "0"}` as TKey);
-    return v;
-  };
-  const recText = (id: string, v: string) => (id === "fps_limit" ? (Number(v) === 0 ? t("fn.unlimited") : `${v} FPS`) : currentText(id, v));
+  const rows: { id: string; ok: boolean; name: string; why: string; now: string; action: string; done: string }[] = [];
+  if (fps) {
+    rows.push({
+      id: "fps_limit",
+      ok: fps.ok,
+      name: t("fn.check.fps_limit.name"),
+      why: t("fn.check.fps_limit.why"),
+      now: fps.ok ? fpsText(fps.current) : `${fpsText(fps.current)} · ${t("fn.advice", { value: fpsText(fps.recommended) })}`,
+      action: t("fn.set"),
+      done: t("fn.allGood"),
+    });
+  }
+  if (render) {
+    rows.push({
+      id: "render_mode",
+      ok: render.ok,
+      name: t("fn.renderTitle"),
+      why: `${t(`fn.renderAdvice.${ov.advice}` as TKey)} ${t("fn.renderDiff")}`,
+      now: t("fn.renderNow", { mode: t(`fn.mode.${ov.renderMode}` as TKey) }),
+      action: t("fn.renderSet"),
+      done: t("fn.renderOk"),
+    });
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-soft text-accent">
-            <Pickaxe className="h-5 w-5" />
-          </span>
-          <div>
-            <h2 className="text-[17px] font-semibold">Fortnite</h2>
-            <p className="text-[13px] text-ink-2">{t("fn.subtitle")}</p>
-          </div>
+    <Card>
+      <div className="flex items-center gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent">
+          <Pickaxe className="h-4 w-4" />
+        </span>
+        <div className="min-w-0">
+          <h3 className="text-[15px] font-semibold">Fortnite</h3>
+          <p className="text-[13px] text-ink-3">{t("fn.subtitle")}</p>
         </div>
-        <Button size="sm" icon={RefreshCw} onClick={() => void load()}>
-          {t("fn.refresh")}
-        </Button>
       </div>
 
+      {!ov.iniExists && <p className="mt-3 text-[13px] text-ink-3">{t("msg.ini_missing")}</p>}
       {ov.running && (
-        <div className="flex items-start gap-3 rounded-xl border border-warn/40 bg-warn/10 px-4 py-3 text-[13px]">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warn" />
-          <span>{t("fn.running")}</span>
-        </div>
+        <p className="card-inset mt-3 flex items-start gap-2 px-3 py-2.5 text-[13px] text-ink-2">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-ink-3" />
+          {t("fn.running")}
+        </p>
       )}
 
-      {/* Videokaart en per-game tweaks */}
-      <section>
-        <SectionTitle sub={ov.gpuName ? t("fn.gpuSub", { gpu: ov.gpuName }) : undefined}>{t("fn.gpuTitle")}</SectionTitle>
-        {game ? <NowTab game={game} extras={false} /> : <Card className="text-[13px] text-ink-3">{t("fn.notDetected")}</Card>}
-      </section>
-
-      {/* Aanbevolen instellingen in GameUserSettings.ini */}
-      <section>
-        <SectionTitle sub={t("fn.recSub")}>{t("fn.recTitle")}</SectionTitle>
-        <Card>
-          <ul className="divide-y divide-line">
-            {quick.map((c) => (
-              <li key={c.id} className="flex items-start gap-3 py-3 first:pt-0">
-                <StatusIcon ok={c.ok} />
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium">{t(`fn.check.${c.id}.name` as TKey)}</div>
-                  <div className="mt-0.5 text-[13px] text-ink-2">{t(`fn.check.${c.id}.why` as TKey)}</div>
-                </div>
-                <div className="shrink-0 text-right text-[13px]">
-                  <div className={cn(c.ok ? "text-ok" : "text-ink")}>{currentText(c.id, c.current)}</div>
-                  {!c.ok && <div className="text-ink-3">{t("fn.advice", { value: recText(c.id, c.recommended) })}</div>}
-                </div>
-              </li>
-            ))}
-          </ul>
-          <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-line pt-4">
-            {quickTodo === 0 ? (
-              <Badge variant="ok" icon={CheckCircle2}>
-                {t("fn.allGood")}
-              </Badge>
-            ) : (
-              <Button variant="primary" icon={Sparkles} loading={busy === QUICK.join(",")} disabled={locked} onClick={() => void apply(QUICK)}>
-                {t("fn.applyAll", { count: String(quickTodo) })}
-              </Button>
-            )}
-            <span className="text-[12px] text-ink-3">{ov.running ? t("fn.closeFirst") : t("fn.backupNote")}</span>
-          </div>
-        </Card>
-      </section>
-
-      {/* Rendermodus */}
-      {render && (
-        <section>
-          <SectionTitle>{t("fn.renderTitle")}</SectionTitle>
-          <Card>
-            <div className="flex items-start gap-3">
-              <MonitorPlay className="mt-0.5 h-5 w-5 shrink-0 text-accent" />
+      {rows.length > 0 && (
+        <ul className="mt-3 divide-y divide-line">
+          {rows.map((r) => (
+            <li key={r.id} className="flex flex-wrap items-start gap-3 py-3.5">
+              {r.ok ? <CheckCircle2 className="mt-0.5 h-[18px] w-[18px] shrink-0 text-ok" /> : <Circle className="mt-0.5 h-[18px] w-[18px] shrink-0 text-ink-3" />}
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium">{t("fn.renderNow", { mode: t(`fn.mode.${ov.renderMode}` as TKey) })}</div>
-                <p className="mt-1 text-[13px] text-ink-2">{t(`fn.renderAdvice.${ov.advice}` as TKey)}</p>
-                <p className="mt-1 text-[13px] text-ink-3">{t("fn.renderDiff")}</p>
-                <div className="mt-3">
-                  {render.ok ? (
-                    <Badge variant="ok" icon={CheckCircle2}>
-                      {t("fn.renderOk")}
-                    </Badge>
-                  ) : (
-                    <Button loading={busy === "render_mode"} disabled={locked} onClick={() => void apply(["render_mode"])}>
-                      {t("fn.renderSet")}
-                    </Button>
-                  )}
-                </div>
+                <div className="text-sm font-medium">{r.name}</div>
+                <div className="mt-0.5 text-[13px] leading-relaxed text-ink-2">{r.why}</div>
+                <div className="mt-1 text-[12px] text-ink-3">{r.now}</div>
               </div>
-            </div>
-          </Card>
-        </section>
-      )}
-
-      {/* Bouwen en editten: staat in je Epic-account */}
-      <section>
-        <SectionTitle sub={t("fn.buildSub")}>{t("fn.buildTitle")}</SectionTitle>
-        <Card className="!py-1">
-          <ul className="divide-y divide-line">
-            {["turbo", "reset", "hold", "release"].map((id) => (
-              <li key={id} className="flex items-start gap-3 py-3">
-                <Hammer className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium">
-                    {t(`fn.build.${id}.name` as TKey)} <span className="ml-1 text-accent">{t(`fn.build.${id}.value` as TKey)}</span>
-                  </div>
-                  <div className="mt-0.5 text-[13px] text-ink-2">{t(`fn.build.${id}.why` as TKey)}</div>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      </section>
-
-      <OverlaysCard />
-
-      {/* Hardwareversnelling */}
-      {hw && hw.length > 0 && (
-        <section>
-          <SectionTitle sub={t("fn.hwSub")}>{t("fn.hwTitle")}</SectionTitle>
-          <Card className="!py-1">
-            <ul className="divide-y divide-line">
-              {hw.map((h) => (
-                <li key={h.id} className="flex items-center gap-3 py-3">
-                  <Cpu className={cn("h-4 w-4 shrink-0", h.enabled ? "text-warn" : "text-ok")} />
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium">{h.name}</div>
-                    <div className="mt-0.5 text-[13px] text-ink-2">
-                      {h.running ? t("fn.hwRunning", { app: h.name }) : h.enabled ? t("fn.hwOn") : t("fn.hwOff")}
-                    </div>
-                  </div>
-                  <Toggle
-                    checked={!h.enabled}
-                    disabled={h.running}
-                    loading={busy === `hw:${h.id}`}
-                    label={t("fn.hwToggle", { app: h.name })}
-                    onChange={async (v) => {
-                      setBusy(`hw:${h.id}`);
-                      try {
-                        setHw(await api.setHwAccel(h.id, !v));
-                      } catch (e) {
-                        handleError(e);
-                      } finally {
-                        setBusy(null);
-                      }
-                    }}
-                  />
-                </li>
-              ))}
-            </ul>
-          </Card>
-        </section>
-      )}
-
-      {/* Tips: shaders en ping */}
-      <section>
-        <SectionTitle>{t("fn.tipsTitle")}</SectionTitle>
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Card>
-            <div className="flex items-start gap-3">
-              <Info className="mt-0.5 h-5 w-5 shrink-0 text-accent" />
-              <div>
-                <div className="text-sm font-semibold">{t("fn.shaderTitle")}</div>
-                <p className="mt-1 text-[13px] text-ink-2">{t("fn.shaderText")}</p>
-              </div>
-            </div>
-          </Card>
-          <Card>
-            <div className="flex items-start gap-3">
-              <Wifi className="mt-0.5 h-5 w-5 shrink-0 text-accent" />
-              <div>
-                <div className="text-sm font-semibold">{t("fn.pingTitle")}</div>
-                <p className="mt-1 text-[13px] text-ink-2">{t("fn.pingText")}</p>
-                <Button size="sm" className="mt-3" onClick={() => setPage("network")}>
-                  {t("fn.pingOpen")}
+              {r.ok ? (
+                <Badge variant="ready" icon={CheckCircle2}>
+                  {r.done}
+                </Badge>
+              ) : (
+                <Button size="sm" loading={busy === r.id} disabled={locked} onClick={() => void apply(r.id)}>
+                  {r.action}
                 </Button>
-              </div>
-            </div>
-          </Card>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {rows.length > 0 && <p className="text-[12px] text-ink-3">{ov.running ? t("fn.closeFirst") : t("fn.backupNote")}</p>}
+
+      {ov.iniExists && (
+        <div className="mt-4 border-t border-line pt-3">
+          <button onClick={() => setAdvanced((v) => !v)} className="flex w-full items-center justify-between gap-3 text-left">
+            <span>
+              <span className="block text-sm font-medium">{t("fn.advancedTitle")}</span>
+              <span className="block text-[12px] text-ink-3">{t("fn.advancedSub")}</span>
+            </span>
+            <ChevronDown className={cn("h-4 w-4 shrink-0 text-ink-3 transition-transform", advanced && "rotate-180")} />
+          </button>
+          <AnimatePresence initial={false}>
+            {advanced && (
+              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
+                <div className="pt-4">
+                  <FortniteIniTab />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
-      </section>
-
-      {/* Tips voor de instellingen in de game zelf */}
-      <section>
-        <SectionTitle
-          sub={t("fortniteTips.intro")}
-          right={
-            <Button size="sm" variant="ghost" icon={tips ? ChevronUp : ChevronDown} onClick={() => setTips((v) => !v)}>
-              {tips ? t("fn.advancedHide") : t("fn.advancedShow")}
-            </Button>
-          }
-        >
-          {t("games.tabs.tips")}
-        </SectionTitle>
-        {tips && (
-          <Card>
-            <FortniteTipsTab />
-          </Card>
-        )}
-      </section>
-
-      {/* Zelf aanpassen (bestaande editor met back-ups) */}
-      <section>
-        <SectionTitle
-          sub={t("fn.advancedSub")}
-          right={
-            <Button size="sm" variant="ghost" icon={advanced ? ChevronUp : ChevronDown} onClick={() => setAdvanced((v) => !v)}>
-              {advanced ? t("fn.advancedHide") : t("fn.advancedShow")}
-            </Button>
-          }
-        >
-          {t("fn.advancedTitle")}
-        </SectionTitle>
-        {advanced && (
-          <Card>
-            <FortniteIniTab />
-          </Card>
-        )}
-      </section>
-    </div>
+      )}
+    </Card>
   );
 }

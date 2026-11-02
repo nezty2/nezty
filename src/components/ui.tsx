@@ -130,7 +130,9 @@ export function Row({ title, desc, children, className }: { title: ReactNode; de
 
 /* ---------- Labels ---------- */
 
-export type BadgeVariant = "neutral" | "accent" | "ok" | "warn" | "bad" | "info";
+/** Kleuren met een vaste betekenis: "pending" (oranje) betekent alleen "herstart je pc", "ready" (groen) betekent
+ *  "staat aan en werkt". Al het andere bij tweaks is "neutral" (grijs). */
+export type BadgeVariant = "neutral" | "accent" | "ok" | "warn" | "bad" | "info" | "pending" | "ready";
 
 export function Badge({ variant = "neutral", children, icon: Icon, title, className }: { variant?: BadgeVariant; children: ReactNode; icon?: LucideIcon; title?: string; className?: string }) {
   const styles = {
@@ -140,6 +142,8 @@ export function Badge({ variant = "neutral", children, icon: Icon, title, classN
     warn: "bg-warn/10 text-warn border-warn/30",
     bad: "bg-bad/10 text-bad border-bad/30",
     info: "bg-info/10 text-info border-info/30",
+    pending: "bg-warn/10 text-warn border-warn/30",
+    ready: "bg-ok/10 text-ok border-ok/30",
   }[variant];
   return (
     <span title={title} className={cn("inline-flex items-center gap-1 whitespace-nowrap rounded-md border px-1.5 py-0.5 text-[12px] font-medium leading-4", styles, className)}>

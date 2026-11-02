@@ -43,6 +43,7 @@ jobs:
         env:
           NEZTY_LICENSE_URL: https://${{ vars.SUPABASE_PROJECT_REF }}.supabase.co/functions/v1/license
           NEZTY_LICENSE_PUBKEY: ${{ vars.NEZTY_LICENSE_PUBKEY }}
+        # Bewust zonder --features selftest: de zelftests (--selftest*) horen niet in een release.
         run: npm run tauri build -- --config "$env:RUNNER_TEMP\nezty-ci.conf.json"
 
       - name: Bestanden verzamelen

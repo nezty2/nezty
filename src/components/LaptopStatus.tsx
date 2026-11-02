@@ -21,8 +21,8 @@ export function LaptopStatus() {
   return (
     <div className="space-y-3">
       {latest?.onAc === false && (
-        <div className="flex items-center gap-3 rounded-lg border border-warn/40 bg-warn/10 px-4 py-3 text-[13px]">
-          <BatteryWarning className="h-5 w-5 shrink-0 text-warn" />
+        <div className="flex items-center gap-3 rounded-lg border border-line bg-panel-2 px-4 py-3 text-[13px]">
+          <BatteryWarning className="h-5 w-5 shrink-0 text-ink-2" />
           <div>
             <div className="font-semibold text-ink">{t("dashboard.chargerBanner")}</div>
             <div className="text-ink-2">{t("dashboard.chargerBannerSub")}</div>
@@ -39,7 +39,7 @@ export function LaptopStatus() {
           min={0}
           max={100}
           format={(v) => `${Math.round(v)}%`}
-          tone={latest?.onAc === false ? "warn" : "normal"}
+          tone="normal"
         />
         <StatTile
           icon={Flame}

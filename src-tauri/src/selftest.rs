@@ -1,6 +1,7 @@
 //! Verborgen zelftest voor ontwikkelaars: `nzty.exe --selftest <uitvoer.json>` leest alle statussen en
 //! controles uit zonder iets te wijzigen. `--selftest-apply <uitvoer.json>` zet daarnaast de muis- en
 //! toetsenbordtweaks aan, controleert ze en zet ze exact terug (met een apart, tijdelijk logboek).
+//! Beide tonen ook of de pc op een herstart wacht en wat "Alles activeren" nu zou doen.
 
 use crate::models::*;
 use crate::state::{lock, AppState};
@@ -42,10 +43,12 @@ pub fn run(out: &str, apply: bool) {
     report.insert("processes_top".into(), json!(procs.iter().take(8).collect::<Vec<_>>()));
     report.insert("startup_count".into(), json!(startup::list().map(|l| l.len()).unwrap_or(0)));
     report.insert("store_background_allowed".into(), json!(processes::store_background_allowed().ok()));
+    report.insert("restart".into(), json!(crate::restart::status(&state)));
+    report.insert("activate_all".into(), json!(crate::activate::status(&state)));
 
     if apply {
         let mut steps = vec![];
-        for id in ["mouse_precision_off", "keyboard_fast_repeat", "accessibility_hotkeys_off", "usb_suspend_off"] {
+        for id in ["mouse_precision_off", "accessibility_hotkeys_off", "usb_suspend_off"] {
             let before = tweaks::status(&state, id, None).state;
             let applied = if before == TweakState::On {
                 "already_on".to_string()
@@ -93,7 +96,7 @@ pub fn run_network(out: &str) {
     let detail = crate::measure::analyze(&csv, 10.0);
     report.insert("analyze".into(), json!(detail.map(|d| json!({"avg": d.avg_fps, "low1": d.low1_fps, "stutters": d.stutters, "perMin": d.stutters_per_min, "median": d.median_ms, "gpuBusy": d.gpu_busy, "cpuBusy": d.cpu_busy, "graphLen": d.graph.len(), "graphMax": d.graph.iter().cloned().fold(0f32, f32::max)}))));
     report.insert("bufferbloat".into(), json!(crate::bufferbloat::run_with(|_| {}).map_err(|e| format!("{e:?}"))));
-    for id in ["wifi_power_max", "delivery_optimization_off", "adapter_power_saving_off"] {
+    for id in ["wifi_power_max", "wifi_gaming_mode"] {
         let s = tweaks::status(&state, id, None);
         report.insert(id.into(), json!({ "state": s.state, "detail": s.detail }));
     }
@@ -184,10 +187,6 @@ pub fn run_roundtrip(out: &str) {
         report.insert(format!("{game_id}_roundtrip"), json!(result.map_err(|e| e.to_string())));
     }
     report.insert("input_live".into(), json!(crate::tweaks::input::verify_live()));
-    for id in ["timer_resolution", "interrupt_moderation_off"] {
-        let s = tweaks::status(&state, id, None);
-        report.insert(id.into(), json!({ "state": s.state, "detail": s.detail }));
-    }
     let _ = std::fs::write(out, serde_json::to_string_pretty(&serde_json::Value::Object(report)).unwrap_or_default());
     let _ = std::fs::remove_dir_all(&state.data_dir);
 }

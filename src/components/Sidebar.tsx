@@ -33,7 +33,8 @@ const items: { id: PageId; key: TKey; icon: LucideIcon }[] = [
   { id: "log", key: "nav.log", icon: ScrollText },
 ];
 
-function NavButton({ label, icon: Icon, active, dot, onClick }: { id: PageId; label: string; icon: LucideIcon; active: boolean; dot?: boolean; onClick: () => void }) {
+/** Stip achter een menu-item: groen (boost actief) of oranje (alleen: herstart je pc). */
+function NavButton({ label, icon: Icon, active, dot, onClick }: { id: PageId; label: string; icon: LucideIcon; active: boolean; dot?: "ok" | "pending" | null; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
@@ -52,7 +53,7 @@ function NavButton({ label, icon: Icon, active, dot, onClick }: { id: PageId; la
       )}
       <Icon className={cn("relative h-[18px] w-[18px] shrink-0", active && "text-accent")} />
       <span className="relative hidden truncate min-[1120px]:inline">{label}</span>
-      {dot && <span className="relative ml-auto hidden h-2 w-2 rounded-full bg-ok min-[1120px]:block" />}
+      {dot && <span className={cn("absolute right-1.5 top-1.5 h-2 w-2 rounded-full min-[1120px]:relative min-[1120px]:inset-auto min-[1120px]:ml-auto", dot === "pending" ? "bg-warn" : "bg-ok")} />}
     </button>
   );
 }
@@ -63,6 +64,7 @@ export function Sidebar() {
   const setPage = useApp((s) => s.setPage);
   const appInfo = useApp((s) => s.appInfo);
   const boost = useApp((s) => s.boost);
+  const restartNeeded = useApp((s) => s.restart?.required ?? false);
 
   return (
     <aside className="glass relative z-10 flex h-full w-[68px] shrink-0 flex-col border-r border-line min-[1120px]:w-[224px]">
@@ -81,7 +83,7 @@ export function Sidebar() {
 
       <nav className="scroll-thin flex flex-1 flex-col gap-0.5 overflow-y-auto px-2.5 py-2">
         {items.map(({ id, key, icon }) => (
-          <NavButton key={id} id={id} label={t(key)} icon={icon} active={page === id} dot={id === "dashboard" && boost.active} onClick={() => setPage(id)} />
+          <NavButton key={id} id={id} label={t(key)} icon={icon} active={page === id} dot={id === "dashboard" && boost.active ? "ok" : id === "tweaks" && restartNeeded ? "pending" : null} onClick={() => setPage(id)} />
         ))}
       </nav>
 

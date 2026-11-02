@@ -6,7 +6,8 @@ import type { GameProfile } from "@/lib/types";
 import { useApp } from "@/store/app";
 import { GameCover } from "./GameCover";
 import { NowTab, ProfileTab } from "./GameTabs";
-import { Badge, Button, Card, EmptyState, SearchInput, Skeleton, cn } from "./ui";
+import { Loader } from "./Loader";
+import { Badge, Button, Card, EmptyState, SearchInput, cn } from "./ui";
 
 type Tab = "profile" | "now";
 
@@ -89,11 +90,7 @@ export function PerGame() {
       </div>
 
       {loading && games.length === 0 ? (
-        <div className="grid grid-cols-3 gap-3 md:grid-cols-4 2xl:grid-cols-6">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="aspect-[460/260]" />
-          ))}
-        </div>
+        <Loader />
       ) : filtered.length === 0 ? (
         <EmptyState icon={Gamepad2} title={games.length === 0 ? t("games.emptyTitle") : t("games.noMatch")} description={games.length === 0 ? t("games.emptyDesc") : undefined} />
       ) : (
@@ -119,7 +116,7 @@ export function PerGame() {
                   <div className="truncate text-[13px] font-semibold">{g.name}</div>
                   <div className="truncate text-[11px] text-ink-3">
                     {t(`launcher.${g.launcher}`)}
-                    {!g.exePath && <span className="text-warn"> · {t("games.noExe")}</span>}
+                    {!g.exePath && <span> · {t("games.noExe")}</span>}
                   </div>
                 </div>
               </button>

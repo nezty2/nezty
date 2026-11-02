@@ -1,6 +1,6 @@
 [package]
 name = "nezty"
-version = "0.4.0"
+version = "0.5.0"
 description = "nezty: eerlijke, omkeerbare game-tweaks voor Windows 10 en 11"
 authors = ["Nezty"]
 edition = "2021"
@@ -9,6 +9,12 @@ rust-version = "1.80"
 [lib]
 name = "nezty_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
+
+# Zelftests (--selftest, --selftest-license enzovoort) zitten alleen in een build met deze feature:
+#   npm run tauri build -- --features selftest
+# Een gewone release (build.ps1, release.yml) bouwt zonder.
+[features]
+selftest = []
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -60,7 +66,12 @@ windows-sys = { version = "0.61", features = [
   "Win32_UI_Shell",
   "Win32_UI_WindowsAndMessaging",
   "Win32_NetworkManagement_IpHelper",
+  "Win32_NetworkManagement_Ndis",
   "Win32_Networking_WinSock",
+  "Win32_System_Registry",
+  "Win32_System_Shutdown",
+  "Win32_System_Com",
+  "Wdk_Graphics_Direct3D",
 ] }
 
 [profile.release]

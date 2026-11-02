@@ -22,6 +22,7 @@ $key = [string]$publish.serviceRoleKey
 if (-not $ref -or -not $key) { throw "scripts\publish.json: projectRef of serviceRoleKey ontbreekt." }
 
 $version = (Get-Content (Join-Path $PSScriptRoot "..\src-tauri\tauri.conf.json") -Raw | ConvertFrom-Json).version
+if (Test-Path (Join-Path (Get-Location) "release\SELFTEST")) { throw "release bevat een testbuild met zelftests (build.ps1 -Selftest). Bouw eerst opnieuw zonder -Selftest." }
 $dir = Join-Path (Get-Location) "release\update"
 $setup = "Nezty-Tweaks-Setup-${version}.exe"
 $files = @("$dir\$setup", "$dir\$setup.sig", "$dir\latest.json")

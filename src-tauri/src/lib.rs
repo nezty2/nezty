@@ -1,5 +1,6 @@
 //! nezty backend: Tauri-commands, opstart en achtergrondthreads.
 
+mod activate;
 mod autostart;
 mod bigwins;
 mod background;
@@ -22,6 +23,8 @@ mod jsonfile;
 mod license;
 mod icons;
 mod journal;
+// Frametijden analyseren: wordt nu alleen door de zelftest gebruikt.
+#[cfg(feature = "selftest")]
 mod measure;
 mod metrics;
 mod models;
@@ -31,11 +34,12 @@ mod ping;
 mod powershell;
 mod processes;
 mod registry;
+mod restart;
 mod restore;
+#[cfg(feature = "selftest")]
 mod selftest;
 mod startup;
 mod state;
-mod timer;
 mod tray;
 mod tweaks;
 mod updater;
@@ -128,8 +132,13 @@ fn get_settings(state: St<'_>) -> Settings {
 }
 
 #[tauri::command]
-fn save_settings(app: AppHandle, state: St<'_>, settings: Settings) -> AppResult<Settings> {
+fn save_settings(app: AppHandle, state: St<'_>, mut settings: Settings) -> AppResult<Settings> {
     let old = state.settings_clone();
+    // Deze velden houdt alleen de backend bij: een oudere kopie uit de frontend mag ze niet terugzetten.
+    settings.migrated_v050 = old.migrated_v050;
+    settings.all_active = old.all_active;
+    settings.activated_games = old.activated_games.clone();
+    settings.license_no_token_since = old.license_no_token_since;
     *lock(&state.settings) = settings.clone();
     state.save_settings();
     if old.language != settings.language {
@@ -216,17 +225,18 @@ async fn get_game_tweaks(state: St<'_>, game_id: String) -> AppResult<Vec<TweakI
 }
 
 /// Vóór de eerste wijziging aan Windows: automatisch een herstelpunt (beleid "Automatisch"),
-/// met een melding dat het even duurt en daarna de uitkomst.
-fn restore_point_first(app: &AppHandle, st: &AppState) {
+/// met een melding dat het even duurt en daarna de uitkomst. Geeft de uitkomst als er een gemaakt is.
+fn restore_point_first(app: &AppHandle, st: &AppState) -> Option<RestorePointResult> {
     use tauri::Emitter;
     let started = restore::ensure_before_change(st, || {
         let _ = app.emit("notice", Notice::new("info", Msg::new("restore_creating")));
     });
-    if let Some(r) = started {
+    if let Some(r) = &started {
         let level = if r.ok { "success" } else { "warning" };
         let _ = app.emit("notice", Notice::new(level, Msg::new(&format!("restore_{}", r.key))));
-        let _ = app.emit("restore-point", &r);
+        let _ = app.emit("restore-point", r);
     }
+    started
 }
 
 #[tauri::command]
@@ -255,6 +265,34 @@ async fn set_tweak(app: AppHandle, state: St<'_>, tweak_id: String, enabled: boo
         Ok(tweaks::info(&st, d, game.as_ref()))
     })
     .await
+}
+
+/// "Alles activeren": alles wat op dit apparaat echt helpt in één keer, met voortgang ("apply-progress").
+#[tauri::command]
+async fn apply_all(app: AppHandle, state: St<'_>) -> AppResult<ApplyAllReport> {
+    license::require(&state)?;
+    let st = state.inner().clone();
+    blocking(move || Ok(activate::run(&app, &st))).await
+}
+
+/// Staat alles uit "Alles activeren" aan?
+#[tauri::command]
+async fn apply_all_status(state: St<'_>) -> AppResult<ApplyAllStatus> {
+    let st = state.inner().clone();
+    blocking(move || Ok(activate::status(&st))).await
+}
+
+/// Moet de pc herstarten voordat alles werkt?
+#[tauri::command]
+async fn get_restart_status(state: St<'_>) -> AppResult<RestartStatus> {
+    let st = state.inner().clone();
+    blocking(move || Ok(restart::status(&st))).await
+}
+
+/// Start Windows opnieuw op (de gebruiker heeft dat zelf gevraagd).
+#[tauri::command]
+async fn restart_pc() -> AppResult<()> {
+    blocking(restart::restart_pc).await
 }
 
 #[tauri::command]
@@ -304,7 +342,7 @@ async fn revert_all(app: AppHandle, state: St<'_>) -> AppResult<RevertResult> {
     blocking(move || {
         let r = lock(&st.journal).revert_all();
         *lock(&st.boost) = None;
-        lock(&st.priority_applied).clear();
+        activate::forget(&st);
         boost::emit_state(&app, &st);
         Ok(r)
     })
@@ -356,6 +394,7 @@ async fn detect_games(app: AppHandle, state: St<'_>) -> AppResult<Vec<Game>> {
         move || {
             let found = games::detect_all();
             *lock(&st.games) = found;
+            activate::apply_new_games(&st);
             Ok(st.all_games())
         }
     })
@@ -380,6 +419,7 @@ async fn add_custom_game(app: AppHandle, state: St<'_>, exe_path: String, name: 
             let g = games::custom_game(&exe_path, name.as_deref())?;
             lock(&st.settings).custom_games.push(g.clone());
             st.save_settings();
+            activate::apply_new_games(&st);
             Ok(g)
         }
     })
@@ -784,8 +824,9 @@ async fn check_update(app: AppHandle) -> AppResult<Option<updater::UpdateInfo>> 
 
 /// Downloadt, controleert de handtekening en start de installer in updatemodus. nezty sluit daarna.
 #[tauri::command]
-async fn install_update(app: AppHandle) -> AppResult<()> {
-    blocking(move || updater::install(&app)).await
+async fn install_update(app: AppHandle, state: St<'_>) -> AppResult<()> {
+    let data_dir = state.data_dir.clone();
+    blocking(move || updater::install(&app, &data_dir)).await
 }
 
 // ---------- Controller ----------
@@ -878,9 +919,9 @@ fn restore_all_standalone() -> serde_json::Value {
     })
 }
 
-pub fn run() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
-    let args: Vec<String> = std::env::args().collect();
+/// `--selftest*`: schrijft de uitkomst als JSON naar het opgegeven pad. Geeft true als zo'n modus gevraagd is.
+#[cfg(feature = "selftest")]
+fn run_selftest(args: &[String]) -> bool {
     if let Some(i) = args.iter().position(|a| a == "--selftest-license") {
         if let Some(out) = args.get(i + 1) {
             let mut v = license::selftest_cred();
@@ -890,7 +931,7 @@ pub fn run() {
             }
             let _ = std::fs::write(out, serde_json::to_string_pretty(&v).unwrap_or_default());
         }
-        return;
+        return true;
     }
     if let Some(i) = args.iter().position(|a| a == "--selftest-wifi") {
         if let Some(out) = args.get(i + 1) {
@@ -902,7 +943,7 @@ pub fn run() {
             let v = serde_json::json!({ "adapters": before, "start": started, "activeDuring": active, "activeAfterStop": tweaks::wifi_gaming::is_active(), "hybridCpu": tweaks::laptop::cpu_is_hybrid() });
             let _ = std::fs::write(out, serde_json::to_string_pretty(&v).unwrap_or_default());
         }
-        return;
+        return true;
     }
     if let Some(i) = args.iter().position(|a| a == "--selftest-device") {
         if let Some(out) = args.get(i + 1) {
@@ -913,24 +954,35 @@ pub fn run() {
             let v = serde_json::json!({ "device": info, "battery": metrics::battery(), "displays": displays, "tweaks": tweaks, "bigwins": bigwins::all(&st) });
             let _ = std::fs::write(out, serde_json::to_string_pretty(&v).unwrap_or_default());
         }
-        return;
+        return true;
     }
     if let Some(i) = args.iter().position(|a| a == "--selftest-network") {
         if let Some(out) = args.get(i + 1) {
             selftest::run_network(out);
         }
-        return;
+        return true;
     }
     if let Some(i) = args.iter().position(|a| a == "--selftest-roundtrip") {
         if let Some(out) = args.get(i + 1) {
             selftest::run_roundtrip(out);
         }
-        return;
+        return true;
     }
     if let Some(i) = args.iter().position(|a| a == "--selftest" || a == "--selftest-apply") {
         if let Some(out) = args.get(i + 1) {
             selftest::run(out, args[i] == "--selftest-apply");
         }
+        return true;
+    }
+    false
+}
+
+pub fn run() {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    let args: Vec<String> = std::env::args().collect();
+    // Zelftests voor ontwikkelaars: alleen in een build met `--features selftest`, nooit in een gewone release.
+    #[cfg(feature = "selftest")]
+    if run_selftest(&args) {
         return;
     }
     // Stille licentiecontrole bij het inloggen in Windows (geplande taak). Geen venster, geen systeemvak.
@@ -988,7 +1040,16 @@ pub fn run() {
                 });
             }
             lock(&state.restore_point).protection_enabled = restore::protection_enabled();
-            std::thread::spawn(autostart::migrate_old);
+            {
+                let data_dir = state.data_dir.clone();
+                std::thread::spawn(move || {
+                    autostart::migrate_old();
+                    // Eén geplande taak bij het inloggen, van deze versie (met vertraging).
+                    autostart::sync_tasks();
+                    // Een gedownloade update van de vorige keer is geïnstalleerd: het bestand mag weg.
+                    updater::cleanup(&data_dir);
+                });
+            }
 
             let settings = state.settings_clone();
             if let Err(e) = tray::create(app.handle(), &ui_lang(&settings)) {
@@ -1008,6 +1069,23 @@ pub fn run() {
             }
 
             license::init(&state);
+            // Eerste start van 0.5.0: weggehaalde tweaks die nog aan staan exact terugzetten (eenmalig).
+            {
+                let st = state.clone();
+                let handle = app.handle().clone();
+                std::thread::spawn(move || {
+                    let started = std::time::Instant::now();
+                    let Some(r) = tweaks::migrate_removed(&st) else { return };
+                    log::info!("opruiming 0.5.0: {} wijziging(en) teruggezet", r.reverted);
+                    if r.reverted > 0 {
+                        // Melden zodra de interface luistert.
+                        if let Some(wait) = std::time::Duration::from_secs(5).checked_sub(started.elapsed()) {
+                            std::thread::sleep(wait);
+                        }
+                        let _ = handle.emit("notice", Notice::new("info", Msg::new("migrated_v050").with("count", r.reverted)));
+                    }
+                });
+            }
             license::start(app.handle().clone(), state.clone());
             metrics::start(app.handle().clone(), state.clone());
             // Wifi-gamestand hoort bij een open sessie van nezty: na een herstart van de app opnieuw aanzetten.
@@ -1022,9 +1100,10 @@ pub fn run() {
                 std::thread::spawn(move || {
                     let found = games::detect_all();
                     *lock(&st.games) = found;
-                    covers::fetch_missing(handle, st);
                     // GPU-indeling alvast bepalen (gebruikt door tweaks en controles).
                     let _ = bigwins::gpu_layout();
+                    activate::apply_new_games(&st);
+                    covers::fetch_missing(handle, st);
                 });
             }
             Ok(())
@@ -1062,6 +1141,10 @@ pub fn run() {
             list_tweaks,
             get_game_tweaks,
             set_tweak,
+            apply_all,
+            apply_all_status,
+            get_restart_status,
+            restart_pc,
             preview_cleanup,
             run_cleanup,
             get_big_wins,

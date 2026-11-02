@@ -220,6 +220,7 @@ pub struct FortniteOverview {
     pub checks: Vec<FortniteCheck>,
 }
 
+#[cfg(feature = "selftest")]
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct FpsDetail {
@@ -415,6 +416,14 @@ pub struct Settings {
     pub device_type: DeviceSetting,
     /// Laptop: Game Boost alleen als de lader is aangesloten.
     pub boost_requires_charger: bool,
+    /// De eenmalige opruiming van 0.5.0 is gedaan (weggehaalde tweaks teruggezet).
+    pub migrated_v050: bool,
+    /// "Alles activeren" is gebruikt: nieuwe games krijgen de instellingen per game dan ook.
+    pub all_active: bool,
+    /// Games die de instellingen van "Alles activeren" al hebben gehad.
+    pub activated_games: Vec<String>,
+    /// Licentie: sinds wanneer (ms) er wijzigingen aan staan zonder enig bewaard token. Na 24 uur gaat alles terug.
+    pub license_no_token_since: Option<i64>,
 }
 
 impl Default for Settings {
@@ -452,6 +461,10 @@ impl Default for Settings {
             online_covers: true,
             device_type: DeviceSetting::Auto,
             boost_requires_charger: false,
+            migrated_v050: false,
+            all_active: false,
+            activated_games: vec![],
+            license_no_token_since: None,
         }
     }
 }
@@ -534,9 +547,7 @@ pub struct GameProfile {
     pub auto_boost: bool,
     pub revert_on_exit: bool,
     pub global_tweaks: HashMap<String, bool>,
-    pub fullscreen_opt_off: bool,
     pub gpu_high_perf: bool,
-    pub high_priority: bool,
     pub close_apps: Vec<String>,
     pub use_global_close_list: bool,
 }
@@ -548,9 +559,7 @@ impl Default for GameProfile {
             auto_boost: false,
             revert_on_exit: true,
             global_tweaks: HashMap::new(),
-            fullscreen_opt_off: true,
             gpu_high_perf: true,
-            high_priority: true,
             close_apps: vec![],
             use_global_close_list: true,
         }
@@ -642,6 +651,85 @@ pub struct BoostReport {
 pub struct BoostState {
     pub active: bool,
     pub report: Option<BoostReport>,
+}
+
+// ---------- Alles activeren en herstart ----------
+
+#[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ApplyOutcome {
+    Applied,
+    Already,
+    Skipped,
+    Failed,
+}
+
+/// Uitkomst van één onderdeel van "Alles activeren".
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ApplyItem {
+    /// Tweak-id, controle ("refresh_rate", "power_source") of game-instelling ("fortnite_vsync", "fortnite_reflex", "game_vsync").
+    pub id: String,
+    pub game_id: Option<String>,
+    pub outcome: ApplyOutcome,
+    /// Waarom overgeslagen of mislukt.
+    pub reason: Option<Msg>,
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ApplyAllReport {
+    pub items: Vec<ApplyItem>,
+    pub applied: u32,
+    pub already: u32,
+    pub skipped: u32,
+    pub failed: u32,
+    pub restore_point: Option<RestorePointResult>,
+    pub restart: RestartStatus,
+}
+
+/// Eén onderdeel van "Alles activeren" dat nog niet aan staat.
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ApplyTarget {
+    pub id: String,
+    pub game_id: Option<String>,
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ApplyAllStatus {
+    /// Alles uit de set dat op dit apparaat kan, staat aan.
+    pub all_active: bool,
+    /// "Alles activeren" is gebruikt (nieuwe games krijgen het automatisch).
+    pub enabled: bool,
+    pub active: u32,
+    pub total: u32,
+    pub missing: Vec<ApplyTarget>,
+    /// Wat uit de set op dit apparaat kan en al aan staat en werkt.
+    pub present: Vec<ApplyTarget>,
+    /// Staat aan, maar werkt pas na een herstart van de game (samen met `missing` en `present` de hele lijst).
+    pub pending_game: Vec<ApplyTarget>,
+}
+
+/// Voortgang van "Alles activeren" (event "apply-progress"). `step` is het achterste deel van een i18n-sleutel.
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ApplyProgress {
+    pub step: String,
+    pub done: u32,
+    pub total: u32,
+}
+
+/// Moet de pc herstarten voordat alles werkt?
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct RestartStatus {
+    pub required: bool,
+    /// Tweaks die op een herstart wachten.
+    pub tweaks: Vec<String>,
+    /// Snel opstarten staat aan: dan herstart "Afsluiten" Windows niet echt, alleen "Opnieuw opstarten" telt.
+    pub fast_startup: bool,
 }
 
 // ---------- Logboek ----------

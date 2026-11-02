@@ -1,8 +1,9 @@
-import { Activity, AlertTriangle, ChevronRight, Cpu, Gamepad2, History, Laptop, MemoryStick, Monitor, Pickaxe, Play, ShieldCheck, Sparkles, Thermometer, Undo2, Zap, type LucideIcon } from "lucide-react";
+import { Activity, AlertTriangle, Cpu, Gamepad2, History, Laptop, MemoryStick, Monitor, Play, ShieldCheck, SlidersHorizontal, Sparkles, Thermometer, Undo2, Wifi, Zap, type LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { GameCover } from "@/components/GameCover";
 import { LaptopStatus } from "@/components/LaptopStatus";
 import { Sparkline } from "@/components/Sparkline";
+import { StatusCompact } from "@/components/StatusBar";
 import { Badge, Button, Card, Chip, PageHeader, SectionTitle, cn } from "@/components/ui";
 import { useT } from "@/i18n/hooks";
 import { api } from "@/lib/ipc";
@@ -54,7 +55,7 @@ function BoostCard() {
   const profile = target ? profileFor(target) : null;
   const tweakMap = profile?.globalTweaks ?? settings?.defaultProfileTweaks ?? {};
   const globalCount = tweaks.filter((tw) => tw.scope === "global" && tw.kind === "toggle" && tw.timing !== "pc_restart" && tweakMap[tw.id]).length;
-  const perGameCount = profile ? [profile.fullscreenOptOff, profile.gpuHighPerf, profile.highPriority].filter(Boolean).length : 0;
+  const perGameCount = profile ? [profile.gpuHighPerf].filter(Boolean).length : 0;
   const closeCount = profile ? (profile.useGlobalCloseList ? (settings?.closeDuringGaming.length ?? 0) : 0) + profile.closeApps.length : (settings?.closeDuringGaming.length ?? 0);
   const targetGame = games.find((g) => g.id === target) ?? null;
   const targetRunning = !!target && runningGames.includes(target);
@@ -95,7 +96,7 @@ function BoostCard() {
           </div>
         </div>
         {report.gameRunning && report.applied.some((a) => a.timing === "game_restart") && report.gameName && (
-          <p className="relative flex items-start gap-2 text-[13px] text-warn">
+          <p className="relative flex items-start gap-2 text-[13px] text-ink-2">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             {t("boost.gameRunning", { game: report.gameName })}
           </p>
@@ -139,7 +140,7 @@ function BoostCard() {
               <span className="mt-0.5 block text-[12px] text-ink-3">{t("boost.measureFpsHint")}</span>
             </span>
           </label>
-          <p className="flex items-start gap-2 text-[12px] text-warn">
+          <p className="flex items-start gap-2 text-[12px] text-ink-2">
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             {t("boost.gameRunning", { game: targetGame.name })}
           </p>
@@ -159,22 +160,22 @@ function BoostCard() {
   );
 }
 
-/** Snel naar de plekken waar je het meest mee doet, elk op het juiste tabblad van Tweaks. */
+/** Snel naar de plekken waar je het meest mee doet. */
 function QuickActions() {
   const { t } = useT();
   const setPage = useApp((s) => s.setPage);
-  const items: { id: "best" | "fortnite" | "games" | "windows"; icon: LucideIcon; tab: string }[] = [
-    { id: "best", icon: Sparkles, tab: "recommended" },
-    { id: "fortnite", icon: Pickaxe, tab: "fortnite" },
-    { id: "games", icon: Gamepad2, tab: "games" },
-    { id: "windows", icon: Monitor, tab: "windows" },
+  const items: { id: "activate" | "more" | "games" | "network"; icon: LucideIcon; go: () => void }[] = [
+    { id: "activate", icon: Sparkles, go: () => setPage("tweaks") },
+    { id: "more", icon: SlidersHorizontal, go: () => setPage("tweaks", { section: "more" }) },
+    { id: "games", icon: Gamepad2, go: () => setPage("tweaks", { section: "games" }) },
+    { id: "network", icon: Wifi, go: () => setPage("network") },
   ];
   return (
     <div>
       <div className="mb-2 text-[12px] font-medium uppercase tracking-wide text-ink-3">{t("dashboard.quickTitle")}</div>
       <div className="grid grid-cols-2 gap-2">
-        {items.map(({ id, icon: Icon, tab }) => (
-          <button key={id} onClick={() => setPage("tweaks", { tab })} className="card flex items-center gap-2.5 px-3 py-2.5 text-left text-[13px] font-medium transition-colors hover:border-line-2">
+        {items.map(({ id, icon: Icon, go }) => (
+          <button key={id} onClick={go} className="card flex items-center gap-2.5 px-3 py-2.5 text-left text-[13px] font-medium transition-colors hover:border-line-2">
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-accent-soft text-accent">
               <Icon className="h-3.5 w-3.5" />
             </span>
@@ -183,25 +184,6 @@ function QuickActions() {
         ))}
       </div>
     </div>
-  );
-}
-
-function BigWinsTeaser() {
-  const { t } = useT();
-  const bigWins = useApp((s) => s.bigWins);
-  const setPage = useApp((s) => s.setPage);
-  const issues = (bigWins ?? []).filter((b) => b.status === "issue");
-  return (
-    <button onClick={() => setPage("tweaks", { tab: "recommended" })} className="card flex w-full items-center gap-3 p-4 text-left transition-colors hover:border-line-2">
-      <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", issues.length ? "bg-accent-soft text-accent" : "bg-ok/10 text-ok")}>
-        {issues.length ? <Sparkles className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />}
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="text-sm font-semibold">{t("tweaks.bigWins")}</div>
-        <div className="text-[13px] text-ink-3">{issues.length ? t("dashboard.bigWins", { count: issues.length }) : t("dashboard.bigWinsAllGood")}</div>
-      </div>
-      <ChevronRight className="h-4 w-4 text-ink-3" />
-    </button>
   );
 }
 
@@ -269,7 +251,7 @@ function GamesStrip() {
     <div>
       <SectionTitle
         right={
-          <Button size="sm" variant="ghost" onClick={() => setPage("tweaks", { tab: "games" })}>
+          <Button size="sm" variant="ghost" onClick={() => setPage("tweaks", { section: "games" })}>
             {t("dashboard.allGames")}
           </Button>
         }
@@ -278,7 +260,7 @@ function GamesStrip() {
       </SectionTitle>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
         {shown.map((g) => (
-          <button key={g.id} onClick={() => setPage("tweaks", { tab: "games", game: g.id })} className="card group overflow-hidden text-left transition-colors hover:border-line-2">
+          <button key={g.id} onClick={() => setPage("tweaks", { section: "games", game: g.id })} className="card group overflow-hidden text-left transition-colors hover:border-line-2">
             <div className="relative aspect-[460/215] overflow-hidden">
               <GameCover game={g} className="transition-transform duration-300 group-hover:scale-[1.03]" />
               {runningGames.includes(g.id) && (
@@ -331,7 +313,8 @@ export function DashboardPage() {
   const temp = latest?.gpuTempC ?? latest?.cpuTempC ?? null;
   const tempSource = latest?.gpuTempC != null ? t("dashboard.tempGpu") : latest?.cpuTempC != null ? t("dashboard.tempCpu") : t("dashboard.tempNone");
   const ramPct = latest ? latest.ramUsedMb / Math.max(1, latest.ramTotalMb) : 0;
-  const tone = (v: number | null | undefined, warn: number, bad: number): Tone => (v == null ? "normal" : v >= bad ? "bad" : v >= warn ? "warn" : "normal");
+  // Alleen rood bij een echt probleem. Oranje is voorbehouden aan "herstart je pc".
+  const tone = (v: number | null | undefined, bad: number): Tone => (v == null ? "normal" : v >= bad ? "bad" : "normal");
 
   return (
     <div className="space-y-6">
@@ -352,7 +335,7 @@ export function DashboardPage() {
       />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-        <StatTile icon={Cpu} label={t("dashboard.cpu")} value={latest ? formatPct(lang, latest.cpuPct) : "-"} sub={appInfo?.cpuName} series={series.cpu} min={0} max={100} format={(v) => formatPct(lang, v, 1)} tone={tone(latest?.cpuPct, 85, 95)} />
+        <StatTile icon={Cpu} label={t("dashboard.cpu")} value={latest ? formatPct(lang, latest.cpuPct) : "-"} sub={appInfo?.cpuName} series={series.cpu} min={0} max={100} format={(v) => formatPct(lang, v, 1)} tone={tone(latest?.cpuPct, 95)} />
         <StatTile
           icon={Monitor}
           label={t("dashboard.gpu")}
@@ -372,9 +355,9 @@ export function DashboardPage() {
           min={0}
           max={latest?.ramTotalMb}
           format={(v) => formatMb(lang, v)}
-          tone={tone(ramPct, 0.85, 0.95)}
+          tone={tone(ramPct, 0.95)}
         />
-        <StatTile icon={Thermometer} label={t("dashboard.temp")} value={formatTemp(lang, temp)} sub={tempSource} series={series.temp} min={20} max={100} format={(v) => formatTemp(lang, v)} tone={tone(temp, 80, 90)} />
+        <StatTile icon={Thermometer} label={t("dashboard.temp")} value={formatTemp(lang, temp)} sub={tempSource} series={series.temp} min={20} max={100} format={(v) => formatTemp(lang, v)} tone={tone(temp, 90)} />
         <StatTile
           icon={Activity}
           label={t("dashboard.ping")}
@@ -383,7 +366,7 @@ export function DashboardPage() {
           series={series.ping}
           min={0}
           format={(v) => formatMs(lang, v)}
-          tone={tone(latest?.pingMs, 60, 120)}
+          tone={tone(latest?.pingMs, 120)}
         />
       </div>
 
@@ -392,8 +375,8 @@ export function DashboardPage() {
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,1fr)]">
         <BoostCard />
         <div className="space-y-4">
+          <StatusCompact />
           <QuickActions />
-          <BigWinsTeaser />
           <StatusCard />
           <div className="flex items-center gap-2 px-1 text-[12px] text-ink-3">
             <ShieldCheck className="h-3.5 w-3.5" />

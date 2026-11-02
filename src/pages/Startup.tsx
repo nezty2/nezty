@@ -95,7 +95,7 @@ export function StartupPage() {
                         <span className="truncate text-sm font-medium">{item.name}</span>
                         <Badge variant="neutral">{t(`startup.source.${item.source}`)}</Badge>
                         {locked && (
-                          <Badge variant="warn" icon={Lock} title={t("startup.adminHint")}>
+                          <Badge variant="neutral" icon={Lock} title={t("startup.adminHint")}>
                             {t("tweakCard.adminNeeded")}
                           </Badge>
                         )}

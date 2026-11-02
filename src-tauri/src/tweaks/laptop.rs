@@ -3,7 +3,7 @@
 //!   Gebalanceerd; daar is de energiemodus (de schuif in Instellingen) de knop die telt.
 //! - Batterijbesparing gaat niet vanzelf aan tijdens het gamen (drempel op de batterij naar 0 procent).
 //! - Processor op volle snelheid, snelle reactie (EPP), games op de snelle kernen.
-//! - PCI Express en USB wakker op de lader, touchpad uit als er een muis is.
+//! - USB wakker op de lader, touchpad uit als er een muis is.
 //! Alles gaat via het logboek en is exact terug te zetten.
 
 use crate::error::{AppError, AppResult};
@@ -189,7 +189,7 @@ pub fn battery_saver_disable(state: &AppState) -> AppResult<()> {
     saver_set(state, 20, None, Some("manual_off"))
 }
 
-// ---------- Processor, PCI Express en USB (energie-instellingen) ----------
+// ---------- Processor en USB (energie-instellingen) ----------
 //
 // Veel laptopmerken remmen in hun energieplan de processor af: maximaal 99 procent (dan valt turbo weg),
 // een vaste kloklimiet, een zuinige turbostand of een trage reactie (EPP). Op de lader willen we bij het
@@ -205,8 +205,6 @@ const PERFEPP: &str = "36687f9e-e3a5-4dbf-b1dc-15eb381c6863";
 const PERFEPP1: &str = "36687f9e-e3a5-4dbf-b1dc-15eb381c6864";
 const SCHEDPOLICY: &str = "93b8b6dc-0698-4d1c-9ee4-0644e900c85d";
 const SHORTSCHEDPOLICY: &str = "bae08b81-2d5e-4688-ad6a-13243356654b";
-const SUB_PCIE: &str = "501a4d13-42af-4429-9fd1-a8218c268e20";
-const ASPM: &str = "ee12f906-d277-404b-b6da-e5fa1a576df5";
 const SUB_USB: &str = "2a737441-1930-4402-8d77-b2bebba308a3";
 const USB_SELECTIVE: &str = "48e6b7a6-50f5-4782-a5d4-53bb8f07e226";
 
@@ -245,8 +243,6 @@ const PCORES: [Want; 2] = [
     want(SUB_PROCESSOR, SCHEDPOLICY, "heterogeneous thread scheduling policy", Some(2), Some(2)),
     want(SUB_PROCESSOR, SHORTSCHEDPOLICY, "heterogeneous short running thread scheduling policy", Some(2), Some(2)),
 ];
-
-const PCIE: [Want; 1] = [want(SUB_PCIE, ASPM, "PCI Express link state power management", Some(0), None)];
 
 const USB_AC: [Want; 1] = [want(SUB_USB, USB_SELECTIVE, "USB selective suspend", Some(0), None)];
 
@@ -426,21 +422,6 @@ pub fn cpu_pcores_apply(state: &AppState, session: Option<&str>) -> AppResult<()
 }
 pub fn cpu_pcores_disable(state: &AppState) -> AppResult<()> {
     disable_wants(state, "cpu_prefer_pcores", &PCORES)
-}
-
-pub fn pcie_status() -> AppResult<Status> {
-    let (scheme, _) = system::active_scheme()?;
-    match wants_state(&scheme, &PCIE)? {
-        None => missing(),
-        Some(TweakState::Off) => Ok(Status::with_detail(TweakState::Off, Msg::new("aspm_on"))),
-        Some(st) => Ok(Status::simple(st)),
-    }
-}
-pub fn pcie_apply(state: &AppState, session: Option<&str>) -> AppResult<()> {
-    apply_wants(state, "pcie_aspm_off", &PCIE, session)
-}
-pub fn pcie_disable(state: &AppState) -> AppResult<()> {
-    disable_wants(state, "pcie_aspm_off", &PCIE)
 }
 
 pub fn usb_ac_status() -> AppResult<Status> {

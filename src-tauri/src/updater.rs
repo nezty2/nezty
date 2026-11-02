@@ -3,13 +3,17 @@
 //!   1. de versie hoger is dan de huidige,
 //!   2. het adres https is (http alleen in een testbuild met allowInsecure),
 //!   3. de minisign-handtekening klopt met de ingebouwde openbare sleutel.
+//!
 //! Daarna start de installer in updatemodus (/P /UPDATE /R): passief, gegevens blijven staan
 //! en nezty start na afloop vanzelf weer.
+//! De installer komt in de eigen gegevensmap (%APPDATA%\com.nzty.desktop\updates\Nezty-Tweaks-Setup.exe), met
+//! steeds dezelfde naam, en niet in %TEMP%. Bij de volgende start ruimt `cleanup` hem op.
 
 use crate::error::{AppError, AppResult};
 use base64::Engine;
 use serde::Serialize;
 use std::io::Read;
+use std::path::Path;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 
@@ -143,9 +147,32 @@ pub fn verify(pubkey_b64: &str, signature_b64: &str, data: &[u8]) -> AppResult<(
     pk.verify(data, &sig, false).map_err(|_| AppError::msg("update signature does not match"))
 }
 
+const UPDATE_DIR: &str = "updates";
+const SETUP_NAME: &str = "Nezty-Tweaks-Setup.exe";
+
+/// Bij het starten: de installer van de vorige update weghalen, plus wat oudere versies in %TEMP% lieten staan
+/// (nezty-update-<versie>.exe). Draait de installer nog, dan lukt dat de volgende keer.
+pub fn cleanup(data_dir: &Path) {
+    let dir = data_dir.join(UPDATE_DIR);
+    if let Ok(rd) = std::fs::read_dir(&dir) {
+        for entry in rd.flatten() {
+            let _ = std::fs::remove_file(entry.path());
+        }
+        let _ = std::fs::remove_dir(&dir);
+    }
+    if let Ok(rd) = std::fs::read_dir(std::env::temp_dir()) {
+        for entry in rd.flatten() {
+            let name = entry.file_name().to_string_lossy().to_lowercase();
+            if name.starts_with("nezty-update-") && name.ends_with(".exe") {
+                let _ = std::fs::remove_file(entry.path());
+            }
+        }
+    }
+}
+
 /// Downloadt de update, controleert de handtekening en start de installer. nezty sluit daarna af;
 /// de installer start nezty na afloop weer (/R).
-pub fn install(app: &AppHandle) -> AppResult<()> {
+pub fn install(app: &AppHandle, data_dir: &Path) -> AppResult<()> {
     let src = source(app).ok_or_else(|| AppError::msg("no update source configured"))?;
     let found = find(app)?.ok_or_else(|| AppError::msg("no update available"))?;
 
@@ -181,7 +208,9 @@ pub fn install(app: &AppHandle) -> AppResult<()> {
     // Eerst de handtekening, pas daarna iets op schijf zetten en uitvoeren.
     verify(&src.pubkey, &found.signature, &data)?;
 
-    let path = std::env::temp_dir().join(format!("nezty-update-{}.exe", found.info.version));
+    let dir = data_dir.join(UPDATE_DIR);
+    std::fs::create_dir_all(&dir)?;
+    let path = dir.join(SETUP_NAME);
     std::fs::write(&path, &data)?;
     std::process::Command::new(&path)
         .args(["/P", "/UPDATE", "/R"])

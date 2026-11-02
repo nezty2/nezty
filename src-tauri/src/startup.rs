@@ -1,5 +1,7 @@
 //! Opstart-apps uit de Run-sleutels en Opstartmappen, in- en uitschakelen zoals Taakbeheer dat doet
 //! (StartupApproved-sleutels).
+//! Items van Windows-beveiliging (SecurityHealth), andere beveiligingssoftware, anti-cheat en Windows zelf worden
+//! niet getoond en nooit uitgeschakeld (`is_protected`).
 
 use crate::error::{AppError, AppResult};
 use crate::journal::{JournalEntry, RevertPayload};
@@ -77,6 +79,33 @@ fn exe_from_command(cmd: &str) -> Option<String> {
     }
 }
 
+/// Beschermd opstartitem: nooit tonen, nooit uitschakelen. Kijkt naar de naam, de opdracht en het programma.
+fn is_protected(name: &str, command: &str, exe_path: Option<&str>) -> bool {
+    let name_l = name.to_lowercase();
+    if name_l == "securityhealth" || name_l.starts_with("windows defender") || name_l.starts_with("windows security") {
+        return true;
+    }
+    let cmd_l = command.to_lowercase();
+    let exe_l = exe_path.map(|e| e.to_lowercase()).unwrap_or_default();
+    for hay in [cmd_l.as_str(), exe_l.as_str()] {
+        if hay.contains("windows defender") || hay.contains("microsoft.sechealthui") || hay.contains("securityhealth") {
+            return true;
+        }
+    }
+    // Ook de naam van het item zelf (bv. "Avast Antivirus" of "Riot Vanguard"), los van het pad.
+    if crate::processes::is_protected_program(&name_l, "") {
+        return true;
+    }
+    // Het programma: beveiliging, anti-cheat of iets uit de Windows-map. Zonder bekend programma alleen de naam.
+    if exe_path.is_some() {
+        let file = std::path::Path::new(&exe_l).file_name().map(|f| f.to_string_lossy().to_string()).unwrap_or_default();
+        if crate::processes::is_protected_program(&file, &exe_l) {
+            return true;
+        }
+    }
+    false
+}
+
 pub fn list() -> AppResult<Vec<StartupItem>> {
     let mut out = vec![];
     let reg_sources = [
@@ -88,11 +117,15 @@ pub fn list() -> AppResult<Vec<StartupItem>> {
         let (ahive, apath) = approved_key(source);
         for (name, data) in registry::values(hive, path)? {
             let command = data.as_str().map(|s| s.to_string()).unwrap_or_else(|| data.display());
+            let exe_path = exe_from_command(&command);
+            if is_protected(&name, &command, exe_path.as_deref()) {
+                continue;
+            }
             let approved = registry::read(ahive, &apath, &name).unwrap_or(RegData::Absent);
             out.push(StartupItem {
                 id: format!("{}:{}", source_slug(source), name),
                 name: name.clone(),
-                exe_path: exe_from_command(&command),
+                exe_path,
                 command,
                 source,
                 enabled: is_enabled(&approved),
@@ -109,8 +142,12 @@ pub fn list() -> AppResult<Vec<StartupItem>> {
             if fname.eq_ignore_ascii_case("desktop.ini") {
                 continue;
             }
-            let approved = registry::read(ahive, &apath, &fname).unwrap_or(RegData::Absent);
             let display = fname.rsplit_once('.').map(|(n, _)| n.to_string()).unwrap_or(fname.clone());
+            let full = entry.path().to_string_lossy().to_string();
+            if is_protected(&display, &full, None) {
+                continue;
+            }
+            let approved = registry::read(ahive, &apath, &fname).unwrap_or(RegData::Absent);
             out.push(StartupItem {
                 id: format!("{}:{}", source_slug(source), fname),
                 name: display,
@@ -137,6 +174,11 @@ pub fn set_enabled(state: &AppState, item_id: &str, enabled: bool) -> AppResult<
     let (slug, name) = item_id.split_once(':').ok_or_else(|| AppError::msg("invalid startup item"))?;
     let source = source_from_slug(slug).ok_or_else(|| AppError::msg("unknown startup source"))?;
     let (hive, path) = approved_key(source);
+    // Alleen wat de lijst toont mag uit: beschermde items (beveiliging, anti-cheat, Windows) staan er niet in.
+    // Weer aanzetten mag altijd, bijvoorbeeld als een oudere versie zo'n item had uitgezet.
+    if !enabled && !list()?.iter().any(|i| i.id == item_id) {
+        return Err(AppError::NotFound(format!("startup item {name}")));
+    }
     if hive.needs_admin() && !state.elevated {
         return Err(AppError::NeedsAdmin(format!("startup item {name}")));
     }

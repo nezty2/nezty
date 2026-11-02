@@ -221,6 +221,14 @@ export interface Settings {
   onlineCovers: boolean;
   deviceType: DeviceSetting;
   boostRequiresCharger: boolean;
+  /** Alleen door de backend bijgehouden: de opruiming van 0.5.0 is gedaan. */
+  migratedV050: boolean;
+  /** Alleen door de backend bijgehouden: "Alles activeren" is gebruikt. */
+  allActive: boolean;
+  /** Alleen door de backend bijgehouden: games die "Alles activeren" al hebben gehad. */
+  activatedGames: string[];
+  /** Alleen door de backend bijgehouden: licentie, sinds wanneer er geen bewaard token is (ms). */
+  licenseNoTokenSince: number | null;
 }
 
 export interface MetricsSample {
@@ -270,9 +278,7 @@ export interface GameProfile {
   autoBoost: boolean;
   revertOnExit: boolean;
   globalTweaks: Record<string, boolean>;
-  fullscreenOptOff: boolean;
   gpuHighPerf: boolean;
-  highPriority: boolean;
   closeApps: string[];
   useGlobalCloseList: boolean;
 }
@@ -385,6 +391,8 @@ export interface JournalEntry {
   gameId: string | null;
   note: string | null;
   detail: Msg | null;
+  /** Er staat een markering die na een echte herstart van de pc verdwijnt. */
+  restartMarker?: boolean;
 }
 
 export interface RevertResult {
@@ -514,7 +522,7 @@ export type CheckStatus = "ok" | "issue" | "info" | "unavailable";
 export type CheckAction = "none" | "fix" | "open_page" | "link";
 
 export interface BigWin {
-  id: "refresh_rate" | "gpu_choice" | "power_source" | "ram_speed" | "gpu_driver" | "heavy_apps" | "laptop_heat" | "laptop_gpu_mode" | "laptop_wifi" | "laptop_display" | "vendor_apps" | "gpu_battery_limit";
+  id: "refresh_rate" | "gpu_choice" | "power_source" | "ram_speed" | "gpu_driver" | "heavy_apps" | "laptop_heat" | "laptop_gpu_mode" | "laptop_wifi" | "gpu_battery_limit";
   status: CheckStatus;
   gain: Gain;
   variant: string;
@@ -597,4 +605,80 @@ export const EVENTS = {
   crosshairState: "crosshair-state",
   restorePoint: "restore-point",
   licenseState: "license-state",
+  applyProgress: "apply-progress",
 } as const;
+
+// ---------- Alles activeren en herstart ----------
+
+export type ApplyOutcome = "applied" | "already" | "skipped" | "failed";
+
+/** Eén onderdeel van "Alles activeren". `id` is een tweak-id, een controle ("refresh_rate", "power_source")
+ *  of een game-instelling ("fortnite_vsync", "fortnite_reflex", "game_vsync"). */
+export interface ApplyItem {
+  id: string;
+  gameId: string | null;
+  outcome: ApplyOutcome;
+  /** Waarom overgeslagen of mislukt (vertaalbare melding). */
+  reason: Msg | null;
+}
+
+export interface RestartStatus {
+  /** Een tweak wacht op een herstart van de pc: de enige reden voor oranje. */
+  required: boolean;
+  tweaks: string[];
+  /** Snel opstarten staat aan: alleen "Opnieuw opstarten" telt, niet "Afsluiten". */
+  fastStartup: boolean;
+}
+
+export interface ApplyAllReport {
+  items: ApplyItem[];
+  applied: number;
+  already: number;
+  skipped: number;
+  failed: number;
+  restorePoint: RestorePointResult | null;
+  restart: RestartStatus;
+}
+
+export interface ApplyTarget {
+  id: string;
+  gameId: string | null;
+}
+
+export interface ApplyAllStatus {
+  /** Alles uit de set dat op dit apparaat kan, staat aan. */
+  allActive: boolean;
+  /** "Alles activeren" is gebruikt (nieuwe games krijgen het dan automatisch). */
+  enabled: boolean;
+  active: number;
+  total: number;
+  missing: ApplyTarget[];
+  /** Wat uit de set op dit apparaat kan en al aan staat en werkt. */
+  present: ApplyTarget[];
+  /** Staat aan, maar werkt pas na een herstart van de game. Samen met `missing` en `present` de hele lijst. */
+  pendingGame: ApplyTarget[];
+}
+
+/** Stap-id's van het event "apply-progress", in volgorde. "done" komt als laatste. */
+export type ApplyStep =
+  | "restore_point"
+  | "power_source"
+  | "refresh_rate"
+  | "game_mode"
+  | "windowed_opt"
+  | "mouse_precision_off"
+  | "accessibility_hotkeys_off"
+  | "power_mode_best"
+  | "cpu_full_speed"
+  | "wifi_power_max"
+  | "wifi_gaming_mode"
+  | "gpu_high_perf"
+  | "fortnite"
+  | "game_config"
+  | "done";
+
+export interface ApplyProgress {
+  step: ApplyStep;
+  done: number;
+  total: number;
+}

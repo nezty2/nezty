@@ -1,13 +1,10 @@
-//! Netwerktweaks die echt effect hebben: wifi-energiebesparing uit en geen updates meer uploaden naar
-//! andere pc's (Delivery Optimization). Windows Update zelf blijft gewoon werken.
+//! Wifi-energiebesparing uit (de netwerktweak met echt effect, vooral op de accu).
 
 use crate::error::{AppError, AppResult};
 use crate::journal::{JournalEntry, RevertPayload};
 use crate::models::{JournalKind, Msg, TweakState};
-use crate::registry::Hive;
 use crate::state::{lock, AppState};
 use crate::tweaks::input::{read_power_setting, write_power_setting};
-use crate::tweaks::regtweak::{self, RegSpec};
 use crate::tweaks::{get, revert_via_journal, system, Status};
 
 // ---------- Wifi-energiebesparing ----------
@@ -54,24 +51,6 @@ pub fn wifi_disable(state: &AppState) -> AppResult<()> {
     // Geen logboekregel: terug naar de standaard van Windows (op netstroom maximale prestaties, op accu gemiddeld).
     let (scheme, _) = system::active_scheme()?;
     write_power_setting(&scheme, WIFI_SUB, WIFI_SETTING, 0, 2)
-}
-
-// ---------- Delivery Optimization (uploaden naar andere pc's) ----------
-
-/// Dezelfde schakelaar als Instellingen > Windows Update > Geavanceerde opties > Delivery Optimization >
-/// "Downloads van andere pc's toestaan". 0 = uit: Windows haalt updates alleen nog bij Microsoft en
-/// deelt niets meer met andere pc's.
-fn delivery_specs() -> Vec<RegSpec> {
-    vec![RegSpec::dword(Hive::Hku, r"S-1-5-20\Software\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Settings", "DownloadMode", 0, 1).off_absent()]
-}
-pub fn delivery_status() -> AppResult<Status> {
-    Ok(Status::simple(regtweak::state_of(&delivery_specs())?))
-}
-pub fn delivery_apply(state: &AppState, session: Option<&str>) -> AppResult<()> {
-    regtweak::apply(state, get("delivery_optimization_off")?, &delivery_specs(), session, None, None)
-}
-pub fn delivery_disable(state: &AppState) -> AppResult<()> {
-    regtweak::disable(state, get("delivery_optimization_off")?, &delivery_specs(), None, None)
 }
 
 /// Is er een wifi-adapter? (WLAN AutoConfig houdt per wifi-adapter een sleutel bij.)
