@@ -1,19 +1,17 @@
-import { Activity, AlertTriangle, Cpu, Gamepad2, History, Laptop, MemoryStick, Monitor, Play, ShieldCheck, SlidersHorizontal, Sparkles, Thermometer, Undo2, Wifi, Zap, type LucideIcon } from "lucide-react";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Activity, AlertTriangle, Cpu, Gamepad2, History, Laptop, MemoryStick, Monitor, Play, ShieldCheck, SlidersHorizontal, Sparkles, Thermometer, Undo2, Wifi, type LucideIcon } from "lucide-react";
+import { useMemo, useState, type ReactNode } from "react";
+import { ActivateHero } from "@/components/ActivateAll";
 import { GameCover } from "@/components/GameCover";
 import { LaptopStatus } from "@/components/LaptopStatus";
 import { Sparkline } from "@/components/Sparkline";
 import { StatusCompact } from "@/components/StatusBar";
-import { Badge, Button, Card, Chip, PageHeader, SectionTitle, cn } from "@/components/ui";
+import { Badge, Button, Card, PageHeader, SectionTitle, cn } from "@/components/ui";
 import { useT } from "@/i18n/hooks";
 import { api } from "@/lib/ipc";
 import { formatMb, formatMs, formatPct, formatTemp, timeAgo } from "@/lib/format";
 import { useApp } from "@/store/app";
 
 type Tone = "normal" | "warn" | "bad";
-
-/** Tweaks die Game Boost op een laptop tijdelijk meeneemt (zelfde lijst als tweaks::LAPTOP_BOOST_DEFAULTS). */
-const LAPTOP_BOOST_DEFAULTS = ["power_mode_best", "battery_saver_off", "cpu_full_speed", "cpu_epp_performance", "cpu_prefer_pcores", "usb_suspend_ac_off", "wifi_gaming_mode"];
 
 export function StatTile({ icon: Icon, label, value, sub, series, min, max, format, tone = "normal" }: { icon: LucideIcon; label: string; value: string; sub?: ReactNode; series: (number | null)[]; min?: number; max?: number; format?: (v: number) => string; tone?: Tone }) {
   return (
@@ -33,36 +31,13 @@ export function StatTile({ icon: Icon, label, value, sub, series, min, max, form
   );
 }
 
+/** Boost bezig (bv. automatisch bij het starten van een game): stand en stoppen. Anders Alles activeren. */
 function BoostCard() {
   const { t, lang } = useT();
-  const games = useApp((s) => s.games);
   const boost = useApp((s) => s.boost);
   const boosting = useApp((s) => s.boosting);
-  const stage = useApp((s) => s.boostStage);
-  const runBoost = useApp((s) => s.runBoost);
   const runUnboost = useApp((s) => s.runUnboost);
   const setShowResult = useApp((s) => s.setShowResult);
-  const settings = useApp((s) => s.settings);
-  const runningGames = useApp((s) => s.runningGames);
-  const profileFor = useApp((s) => s.profileFor);
-  const tweaks = useApp((s) => s.tweaks);
-  const isLaptop = useApp((s) => s.device)?.effective === "laptop";
-  const [target, setTarget] = useState<string | null>(null);
-  const [measure, setMeasure] = useState(true);
-
-  // Draait er een game? Dan die vooraf kiezen.
-  useEffect(() => {
-    if (target == null && runningGames.length > 0) setTarget(runningGames[0]);
-  }, [runningGames, target]);
-
-  const sortedGames = useMemo(() => [...games].sort((a, b) => Number(runningGames.includes(b.id)) - Number(runningGames.includes(a.id))).slice(0, 9), [games, runningGames]);
-  const profile = target ? profileFor(target) : null;
-  // Systeemtweaks zitten in Alles activeren. De boost neemt alleen op een laptop de vaste laptoplijst mee.
-  const globalCount = isLaptop ? tweaks.filter((tw) => LAPTOP_BOOST_DEFAULTS.includes(tw.id) && !tw.platformLocked).length : 0;
-  const perGameCount = profile ? [profile.gpuHighPerf].filter(Boolean).length : 0;
-  const closeCount = profile ? (profile.useGlobalCloseList ? (settings?.closeDuringGaming.length ?? 0) : 0) + profile.closeApps.length : (settings?.closeDuringGaming.length ?? 0);
-  const targetGame = games.find((g) => g.id === target) ?? null;
-  const targetRunning = !!target && runningGames.includes(target);
   const report = boost.report;
 
   if (boost.active && report) {
@@ -109,59 +84,8 @@ function BoostCard() {
     );
   }
 
-  return (
-    <Card className="relative flex flex-col gap-5 overflow-hidden">
-      <div className="pointer-events-none absolute -left-16 -top-16 h-48 w-48 rounded-full bg-accent opacity-15 blur-3xl" />
-      <div className="relative">
-        <h2 className="flex items-center gap-2 text-lg font-semibold">
-          <Zap className="h-5 w-5 text-accent" fill="currentColor" />
-          {t("boost.title")}
-        </h2>
-        <p className="mt-1 text-[13px] text-ink-2">{t("boost.desc")}</p>
-      </div>
-
-      <div className="relative">
-        <div className="mb-2 text-[13px] font-medium text-ink-3">{t("boost.forWhich")}</div>
-        <div className="flex flex-wrap gap-2">
-          <Chip active={target === null} onClick={() => setTarget(null)} icon={Monitor}>
-            {t("boost.systemOnly")}
-          </Chip>
-          {sortedGames.map((g) => (
-            <Chip key={g.id} active={target === g.id} onClick={() => setTarget(g.id)}>
-              {runningGames.includes(g.id) && <span className="h-1.5 w-1.5 rounded-full bg-ok" />}
-              {g.name}
-            </Chip>
-          ))}
-        </div>
-      </div>
-
-      {targetRunning && targetGame && (
-        <div className="relative space-y-2 rounded-lg border border-line bg-panel-2 p-3.5">
-          <label className="flex cursor-pointer items-start gap-2.5">
-            <input type="checkbox" className="mt-0.5 h-4 w-4" checked={measure} onChange={(e) => setMeasure(e.target.checked)} />
-            <span>
-              <span className="text-sm font-medium">{t("boost.measureFps")}</span>
-              <span className="mt-0.5 block text-[12px] text-ink-3">{t("boost.measureFpsHint")}</span>
-            </span>
-          </label>
-          <p className="flex items-start gap-2 text-[12px] text-ink-2">
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            {t("boost.gameRunning", { game: targetGame.name })}
-          </p>
-        </div>
-      )}
-
-      <div className="relative flex flex-wrap items-center gap-4">
-        <Button variant="primary" size="lg" icon={Zap} loading={boosting} onClick={() => void runBoost(target, targetRunning && measure)} className="min-w-[180px]">
-          {boosting ? (stage ? t(`boost.stage.${stage}` as never) : t("common.loading")) : t("boost.start")}
-        </Button>
-        <div className="text-[13px] text-ink-3">
-          {t("boost.summaryTweaks", { count: globalCount + perGameCount })} · {t("boost.summaryApps", { count: closeCount })}
-          {profile?.autoBoost && targetGame && <div className="text-accent">{t("boost.autoStarts", { game: targetGame.name })}</div>}
-        </div>
-      </div>
-    </Card>
-  );
+  // Geen boost bezig: de systeemtweaks staan via Alles activeren permanent aan. Laat daarvan de stand zien.
+  return <ActivateHero />;
 }
 
 /** Snel naar de plekken waar je het meest mee doet. */
