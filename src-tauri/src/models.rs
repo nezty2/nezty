@@ -422,6 +422,10 @@ pub struct Settings {
     pub activated_games: Vec<String>,
     /// Licentie: sinds wanneer (ms) er wijzigingen aan staan zonder enig bewaard token. Na 24 uur gaat alles terug.
     pub license_no_token_since: Option<i64>,
+    /// Geheugenbewaker: tijdens het gamen de standby-cache legen als het vrije geheugen opraakt.
+    pub mem_guard: bool,
+    /// Multi-Internet: automatisch naar een andere verbinding als de huidige geen internet meer geeft.
+    pub multinet_auto: bool,
 }
 
 impl Default for Settings {
@@ -462,6 +466,8 @@ impl Default for Settings {
             all_active: false,
             activated_games: vec![],
             license_no_token_since: None,
+            mem_guard: false,
+            multinet_auto: false,
         }
     }
 }
@@ -1031,4 +1037,202 @@ pub struct WatcherStatus {
 
 pub fn now_ms() -> i64 {
     chrono::Utc::now().timestamp_millis()
+}
+
+// ---------- Game-netwerk ----------
+
+/// Een datacenter om naartoe te meten: een AWS-regio (TCP-handshake) of een Valve-relay (ICMP).
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct NetRegion {
+    /// Bv. "aws-eu-central-1" of "valve-ams".
+    pub id: String,
+    /// "aws" | "valve"
+    pub provider: String,
+    /// Zelfde groepen als GameRegion.region ("eu", "na_east", ...).
+    pub group: String,
+    pub city: String,
+    /// Landcode (ISO), als bekend.
+    pub country: Option<String>,
+    /// Wat er gemeten wordt: "1.2.3.4" (ICMP) of "host:443" (TCP).
+    pub host: String,
+}
+
+/// Waar een server staat, volgens de officiële IP-lijsten van AWS, Google Cloud en Valve.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerLocation {
+    /// "aws" | "gcp" | "valve"
+    pub provider: String,
+    /// Regiocode van de aanbieder (bv. "eu-central-1", "europe-west4", "ams").
+    pub region: String,
+    pub city: Option<String>,
+    pub country: Option<String>,
+}
+
+/// De server waar de game nu echt mee praat (gezien via ETW), of waarom die er (nog) niet is.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GameServer {
+    /// "found" | "listening" | "idle" | "not_running" | "needs_admin" | "error"
+    pub status: String,
+    pub game_id: String,
+    pub ip: Option<String>,
+    pub port: Option<u16>,
+    pub packets_per_sec: Option<f32>,
+    pub location: Option<ServerLocation>,
+    pub detail: Option<Msg>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct RouteHop {
+    pub ttl: u8,
+    pub ip: Option<String>,
+    pub host_name: Option<String>,
+    /// Thuisnetwerk of providernetwerk (privé-adres).
+    pub private: bool,
+    pub sent: u32,
+    pub received: u32,
+    pub avg_ms: Option<f32>,
+    pub min_ms: Option<f32>,
+    pub max_ms: Option<f32>,
+    pub jitter_ms: Option<f32>,
+    pub loss_pct: f32,
+    /// "ok" | "silent" (antwoordt nooit op ping) | "icmp_limited" (alleen hier traag of verlies) | "loss" (verlies dat tot de server blijft)
+    pub verdict: String,
+    /// Dit is de server zelf.
+    pub is_target: bool,
+}
+
+/// Waar de vertraging of het verlies begint.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct RouteSummary {
+    /// "clean" | "home" | "provider" | "remote" | "unknown"
+    pub kind: String,
+    /// Stap waar het probleem begint.
+    pub hop: Option<u8>,
+    /// De grootste stap in ping (vaak de afstand naar een ander land).
+    pub step_from: Option<u8>,
+    pub step_to: Option<u8>,
+    pub step_ms: Option<f32>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct RouteReport {
+    pub target: String,
+    pub ip: Option<String>,
+    /// De server zelf antwoordde op ping.
+    pub reached: bool,
+    pub hops: Vec<RouteHop>,
+    pub summary: RouteSummary,
+    /// Beste adres om live te meten: de server, of de laatste stap ervoor als de server geen ping beantwoordt.
+    pub measure_host: Option<String>,
+    pub duration_ms: u32,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct LiveStats {
+    pub samples: u32,
+    pub avg_ms: Option<f32>,
+    pub min_ms: Option<f32>,
+    pub max_ms: Option<f32>,
+    pub jitter_ms: Option<f32>,
+    pub loss_pct: f32,
+}
+
+/// Eén live meting (elke halve seconde), met de statistiek van de laatste 30 seconden.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct LiveSample {
+    pub host: String,
+    pub ts: i64,
+    pub ms: Option<f32>,
+    pub stats: LiveStats,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct WarpInfo {
+    pub installed: bool,
+    /// "connected" | "disconnected" | "connecting" | "unregistered" | "needs_tos" | "not_installed" | "unknown"
+    pub status: String,
+    pub connected_by_nezty: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct WarpTest {
+    pub host: String,
+    pub direct: PingResult,
+    pub warp: Option<PingResult>,
+    /// "warp" (sneller, blijft aan) | "direct" (WARP niet sneller, weer uit) | "error"
+    pub decision: String,
+    pub detail: Option<Msg>,
+}
+
+/// Eén internetverbinding voor Multi-Internet.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct NetConnection {
+    pub name: String,
+    pub description: String,
+    pub kind: AdapterKind,
+    /// Als tekst: een u64 past niet precies in een JavaScript-getal.
+    pub luid: String,
+    pub ipv4: Option<String>,
+    pub gateway: Option<String>,
+    pub link_speed_mbps: Option<f64>,
+    /// Interfacemetric (lager = Windows kiest deze eerst).
+    pub metric: u32,
+    pub automatic_metric: bool,
+    /// Windows stuurt het internetverkeer nu via deze verbinding.
+    pub active: bool,
+    /// nezty heeft deze verbinding als voorkeur ingesteld.
+    pub preferred_by_nezty: bool,
+    pub ping_ms: Option<f32>,
+    pub loss_pct: Option<f32>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct MultiNetStatus {
+    pub connections: Vec<NetConnection>,
+    pub auto: bool,
+    pub elevated: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct MemStats {
+    pub total_mb: u64,
+    pub available_mb: u64,
+    /// Echt vrij (vrij en gewist): wat Windows meteen kan uitdelen zonder iets uit de cache te halen.
+    pub free_mb: u64,
+    /// Standby-cache: bestanden die Windows bewaart voor het geval je ze weer nodig hebt.
+    pub standby_mb: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct MemGuardStatus {
+    pub enabled: bool,
+    pub stats: Option<MemStats>,
+    pub purges: u32,
+    pub last_purge_ts: Option<i64>,
+    pub last_freed_mb: Option<u64>,
+    pub game_running: bool,
+    /// Zou de bewaker nu legen (vrij geheugen onder de grens en genoeg standby)?
+    pub needed: bool,
+    pub elevated: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct PurgeResult {
+    pub before: MemStats,
+    pub after: MemStats,
 }

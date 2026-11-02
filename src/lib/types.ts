@@ -228,6 +228,8 @@ export interface Settings {
   activatedGames: string[];
   /** Alleen door de backend bijgehouden: licentie, sinds wanneer er geen bewaard token is (ms). */
   licenseNoTokenSince: number | null;
+  memGuard: boolean;
+  multinetAuto: boolean;
 }
 
 export interface MetricsSample {
@@ -445,7 +447,136 @@ export interface StartupItem {
   requiresAdmin: boolean;
 }
 
-export type RegionId = "eu" | "na_east" | "na_central" | "na_west" | "brazil" | "middle_east" | "asia" | "oceania";
+export type RegionId = "eu" | "na_east" | "na_central" | "na_west" | "brazil" | "middle_east" | "asia" | "oceania" | "africa";
+
+/* ---------- Game-netwerk ---------- */
+
+export interface NetRegion {
+  id: string;
+  provider: "aws" | "valve";
+  group: RegionId;
+  city: string;
+  country: string | null;
+  host: string;
+}
+
+export interface ServerLocation {
+  provider: "aws" | "gcp" | "valve";
+  region: string;
+  city: string | null;
+  country: string | null;
+}
+
+export interface GameServer {
+  status: "found" | "listening" | "idle" | "not_running" | "needs_admin" | "error";
+  gameId: string;
+  ip: string | null;
+  port: number | null;
+  packetsPerSec: number | null;
+  location: ServerLocation | null;
+  detail: Msg | null;
+}
+
+export interface RouteHop {
+  ttl: number;
+  ip: string | null;
+  hostName: string | null;
+  private: boolean;
+  sent: number;
+  received: number;
+  avgMs: number | null;
+  minMs: number | null;
+  maxMs: number | null;
+  jitterMs: number | null;
+  lossPct: number;
+  verdict: "ok" | "silent" | "icmp_limited" | "loss";
+  isTarget: boolean;
+}
+
+export interface RouteReport {
+  target: string;
+  ip: string | null;
+  reached: boolean;
+  hops: RouteHop[];
+  summary: { kind: "clean" | "home" | "provider" | "remote" | "unknown"; hop: number | null; stepFrom: number | null; stepTo: number | null; stepMs: number | null };
+  measureHost: string | null;
+  durationMs: number;
+}
+
+export interface LiveStats {
+  samples: number;
+  avgMs: number | null;
+  minMs: number | null;
+  maxMs: number | null;
+  jitterMs: number | null;
+  lossPct: number;
+}
+
+export interface LiveSample {
+  host: string;
+  ts: number;
+  ms: number | null;
+  stats: LiveStats;
+}
+
+export interface WarpInfo {
+  installed: boolean;
+  status: "connected" | "disconnected" | "connecting" | "unregistered" | "needs_tos" | "not_installed" | "unknown";
+  connectedByNezty: boolean;
+}
+
+export interface WarpTest {
+  host: string;
+  direct: PingResult;
+  warp: PingResult | null;
+  decision: "warp" | "direct" | "error";
+  detail: Msg | null;
+}
+
+export interface NetConnection {
+  name: string;
+  description: string;
+  kind: "wifi" | "ethernet" | "other";
+  luid: string;
+  ipv4: string | null;
+  gateway: string | null;
+  linkSpeedMbps: number | null;
+  metric: number;
+  automaticMetric: boolean;
+  active: boolean;
+  preferredByNezty: boolean;
+  pingMs: number | null;
+  lossPct: number | null;
+}
+
+export interface MultiNetStatus {
+  connections: NetConnection[];
+  auto: boolean;
+  elevated: boolean;
+}
+
+export interface MemStats {
+  totalMb: number;
+  availableMb: number;
+  freeMb: number;
+  standbyMb: number;
+}
+
+export interface MemGuardStatus {
+  enabled: boolean;
+  stats: MemStats | null;
+  purges: number;
+  lastPurgeTs: number | null;
+  lastFreedMb: number | null;
+  gameRunning: boolean;
+  needed: boolean;
+  elevated: boolean;
+}
+
+export interface PurgeResult {
+  before: MemStats;
+  after: MemStats;
+}
 
 export interface GameRegion {
   id: string;

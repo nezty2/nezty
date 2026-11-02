@@ -37,7 +37,14 @@ export const useUpdate = create<UpdateStore>()((set, get) => ({
   },
 
   async install() {
-    if (!get().info) return;
+    const info = get().info;
+    if (!info) return;
+    // Na de herstart toont WhatsNew deze tekst nog één keer, rustig te lezen.
+    try {
+      if (info.notes) window.localStorage.setItem("nezty.whatsNew", JSON.stringify({ version: info.version, notes: info.notes, shown: false }));
+    } catch {
+      /* geen opslag: dan alleen het updatescherm zelf */
+    }
     set({ status: "installing", progress: null });
     try {
       await installUpdate((pct) => set({ progress: pct }));

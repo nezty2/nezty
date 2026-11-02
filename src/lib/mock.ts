@@ -93,6 +93,8 @@ let settings: T.Settings = {
   allActive: false,
   activatedGames: [],
   licenseNoTokenSince: null,
+  memGuard: false,
+  multinetAuto: false,
 };
 
 function tw(p: Partial<T.TweakInfo> & { id: string; category: T.TweakCategory }): T.TweakInfo {
@@ -123,6 +125,8 @@ let tweaks: T.TweakInfo[] = [
   tw({ id: "usb_suspend_ac_off", category: "laptop", platform: "laptop_only", detail: { key: "usb_ac_on", params: {} } }),
   tw({ id: "touchpad_off_with_mouse", category: "laptop", platform: "laptop_only" }),
   tw({ id: "gpu_high_perf", category: "game", scope: "per_game", gain: "big", timing: "game_restart", state: "unknown", detail: msg("per_game_hint") }),
+  tw({ id: "qos_all_networks", category: "network", gain: "negligible", timing: "pc_restart", requiresAdmin: true }),
+  tw({ id: "game_qos", category: "network", scope: "per_game", timing: "game_restart", requiresAdmin: true, state: "unknown", detail: msg("per_game_hint") }),
   tw({ id: "cleanup_temp", category: "cleanup", kind: "action", gain: "negligible", state: "unknown" }),
 ];
 
@@ -283,7 +287,8 @@ export const mockApi: Api = {
     const game = games.find((x) => x.id === gameId);
     return tweaks.filter((t) => t.scope === "per_game").map((t) => ({
       ...t,
-      state: !game?.exePath ? "unavailable" : "off",
+      state: !game?.exePath ? "unavailable" : perGame[`${gameId}:${t.id}`] ? "on" : "off",
+      appliedByApp: !!perGame[`${gameId}:${t.id}`],
       detail: !game?.exePath ? msg("no_exe", { game: game?.name ?? "" }) : null,
     }));
   },
@@ -291,7 +296,10 @@ export const mockApi: Api = {
     await delay(350);
     if (id === "usb_suspend_off" && enabled && Math.random() < 0.15) throw { code: "coded", key: "verify_failed", params: {}, message: "verify_failed" };
     const t = tweaks.find((x) => x.id === id)!;
-    if (gameId) return { ...t, state: enabled ? "on" : "off", appliedByApp: enabled };
+    if (gameId) {
+      perGame[`${gameId}:${id}`] = enabled;
+      return { ...t, state: enabled ? "on" : "off", appliedByApp: enabled };
+    }
     tweaks = tweaks.map((x) => (x.id === id ? { ...x, state: enabled ? "on" : "off", appliedByApp: enabled, currentOption: option ?? x.currentOption } : x));
     journal = [{ id: `j${now()}`, ts: now(), tweakId: id, tweakName: id, kind: "registry", target: `HKCU\\...\\${id}`, oldValue: enabled ? "0" : "1", newValue: enabled ? "1" : "0", reverted: false, revertable: true, sessionId: null, gameId: null, note: enabled ? null : "manual_off", detail: null }, ...journal];
     return tweaks.find((x) => x.id === id)!;
@@ -559,4 +567,112 @@ export const mockApi: Api = {
   },
   async listControllers() { await delay(); return [{ id: "xinput:0", kind: "xbox", model: "xbox", slot: 0, wired: false, battery: "medium", batteryPercent: null, charging: null }, { id: "hid:mock-dualsense", kind: "playstation", model: "dualsense", slot: null, wired: true, battery: null, batteryPercent: 80, charging: true }]; },
   async measureControllerRate(id, seconds) { await delay((seconds ?? 4) * 1000); const ps = id.startsWith("hid:"); return { id, hz: ps ? 250 : 125, changes: ps ? 1000 : 480, seconds: seconds ?? 4, connected: true }; },
+  async gamenetRegions() { await delay(); return netRegions; },
+  async gamenetServer(gameId) {
+    await delay(300);
+    const base = { gameId, ip: null, port: null, packetsPerSec: null, location: null, detail: null };
+    if (!running.includes(gameId)) return { ...base, status: "not_running" };
+    return { ...base, status: "found", ip: "3.120.181.40", port: 7779, packetsPerSec: 61.4, location: { provider: "aws", region: "eu-central-1", city: "Frankfurt", country: "Germany" } };
+  },
+  async gamenetRoute(host) { await delay(2500); return mockRoute(host); },
+  async gamenetMonitorStart(host) {
+    if (monitorTimer) window.clearInterval(monitorTimer);
+    const base = baseMs(host);
+    const win: (number | null)[] = [];
+    monitorTimer = window.setInterval(() => {
+      const ms = Math.random() < 0.01 ? null : Math.round((base + Math.random() * 1.6) * 10) / 10;
+      win.push(ms);
+      if (win.length > 60) win.shift();
+      const ok = win.filter((x): x is number => x != null);
+      const avg = ok.length ? ok.reduce((a, b) => a + b, 0) / ok.length : null;
+      const jit = ok.length > 1 ? ok.slice(1).reduce((a, v, i) => a + Math.abs(v - ok[i]), 0) / (ok.length - 1) : 0;
+      emit("netmon-sample", { host, ts: now(), ms, stats: { samples: win.length, avgMs: avg == null ? null : Math.round(avg * 10) / 10, minMs: ok.length ? Math.min(...ok) : null, maxMs: ok.length ? Math.max(...ok) : null, jitterMs: Math.round(jit * 10) / 10, lossPct: ((win.length - ok.length) / win.length) * 100 } });
+    }, 500);
+  },
+  async gamenetMonitorStop() { if (monitorTimer) window.clearInterval(monitorTimer); monitorTimer = null; },
+  async warpInfo() { await delay(); return warp; },
+  async warpTest(host) {
+    await delay(4000);
+    const base = baseMs(host);
+    const direct = await mockApi.pingHost(host, 12);
+    const viaWarp = { ...direct, avgMs: Math.round((base + 3.4) * 10) / 10, minMs: base + 2.8, maxMs: base + 5.1, jitterMs: 1.4 };
+    return { host, direct, warp: viaWarp, decision: "direct", detail: null };
+  },
+  async warpStop() { await delay(); warp = { ...warp, status: "disconnected", connectedByNezty: false }; return warp; },
+  async multinetStatus(measure) { await delay(measure ? 900 : 200); return multinet(measure); },
+  async multinetPrefer(luid) { await delay(500); preferredLuid = luid; return multinet(false); },
+  async multinetClear() { await delay(400); preferredLuid = null; return multinet(false); },
+  async memguardStatus() { await delay(); return { enabled: settings.memGuard, stats: mem, purges: memPurges, lastPurgeTs: memPurges ? now() - 60_000 : null, lastFreedMb: memPurges ? 9800 : null, gameRunning: running.length > 0, needed: mem.freeMb < 1024 && mem.standbyMb > 1024, elevated: true }; },
+  async memguardPurge() {
+    await delay(700);
+    const before = mem;
+    mem = { ...mem, freeMb: mem.freeMb + 9800, standbyMb: mem.standbyMb - 9800 };
+    memPurges += 1;
+    return { before, after: mem };
+  },
 };
+
+/* ---------- Game-netwerk: gebaseerd op een echte meting (kabel, KPN, naar Valve Frankfurt) ---------- */
+
+const netRegions: T.NetRegion[] = [
+  ...regions.map((r): T.NetRegion => ({ id: `aws-${r.id}`, provider: "aws", group: r.region, city: r.city, country: null, host: r.host })),
+  { id: "valve-ams", provider: "valve", group: "eu", city: "Amsterdam", country: "Netherlands", host: "155.133.248.36" },
+  { id: "valve-fra", provider: "valve", group: "eu", city: "Frankfurt", country: "Germany", host: "155.133.226.68" },
+  { id: "valve-lhr", provider: "valve", group: "eu", city: "London", country: "England", host: "162.254.196.66" },
+  { id: "valve-par", provider: "valve", group: "eu", city: "Paris", country: "France", host: "185.25.182.18" },
+  { id: "valve-waw", provider: "valve", group: "eu", city: "Warsaw", country: "Poland", host: "155.133.230.116" },
+];
+
+let monitorTimer: number | null = null;
+/** Tweaks per game die in de preview aan staan ("gameId:tweakId"). */
+const perGame: Record<string, boolean> = {};
+let warp: T.WarpInfo = new URLSearchParams(window.location.search).get("warp") === "1" ? { installed: true, status: "disconnected", connectedByNezty: false } : { installed: false, status: "not_installed", connectedByNezty: false };
+let preferredLuid: string | null = null;
+let mem: T.MemStats = { totalMb: 31862, availableMb: 15251, freeMb: 2332, standbyMb: 12918 };
+let memPurges = 0;
+
+function baseMs(host: string): number {
+  if (host.startsWith("155.133.248")) return 7;
+  if (host.startsWith("155.133.226") || host.startsWith("3.120") || host.includes("eu-central")) return 11.2;
+  if (host.startsWith("162.254") || host.includes("eu-west-2")) return 14.6;
+  if (host.startsWith("185.25")) return 15.3;
+  return 21;
+}
+
+function mockRoute(host: string): T.RouteReport {
+  const ms = baseMs(host);
+  const hop = (ttl: number, ip: string | null, hostName: string | null, avg: number | null, extra: Partial<T.RouteHop> = {}): T.RouteHop => ({
+    ttl, ip, hostName, private: ip?.startsWith("192.168.") ?? false, sent: avg == null ? 2 : 8, received: avg == null ? 0 : 8,
+    avgMs: avg, minMs: avg == null ? null : Math.round((avg - 0.4) * 10) / 10, maxMs: avg == null ? null : Math.round((avg + 1.1) * 10) / 10,
+    jitterMs: avg == null ? null : 0.4, lossPct: avg == null ? 100 : 0, verdict: avg == null ? "silent" : "ok", isTarget: false, ...extra,
+  });
+  const ip = host.split(":")[0];
+  const reached = !host.includes(":");
+  return {
+    target: host,
+    ip: reached ? ip : "3.120.181.40",
+    reached,
+    hops: [
+      hop(1, "192.168.2.254", null, 1.0),
+      hop(2, "195.190.228.197", "195-190-228-197.fixed.kpn.net", 3.0),
+      hop(3, null, null, null),
+      hop(4, null, null, null),
+      hop(5, "62.115.172.48", "ffm-b4-link.ip.twelve99.net", 9.8, { verdict: "icmp_limited", lossPct: 37.5, received: 5 }),
+      hop(6, null, null, null),
+      hop(7, reached ? ip.replace(/\.\d+$/, ".65") : "52.93.25.6", null, ms),
+      reached ? hop(8, ip, null, ms, { isTarget: true }) : hop(8, "3.120.181.40", null, null, { isTarget: true }),
+    ],
+    summary: { kind: "clean", hop: null, stepFrom: 2, stepTo: 7, stepMs: Math.round((ms - 2.8) * 10) / 10 },
+    measureHost: reached ? ip : "52.93.25.6",
+    durationMs: 4100,
+  };
+}
+
+function multinet(measure: boolean): T.MultiNetStatus {
+  const two = new URLSearchParams(window.location.search).get("net") === "2";
+  const eth: T.NetConnection = { name: "Ethernet", description: "Realtek Gaming 2.5GbE Family Controller", kind: "ethernet", luid: "1689399632855040", ipv4: "192.168.2.4", gateway: "192.168.2.254", linkSpeedMbps: 1000, metric: 25, automaticMetric: true, active: true, preferredByNezty: false, pingMs: measure ? 6.3 : null, lossPct: measure ? 0 : null };
+  const wifi: T.NetConnection = { name: "Wi-Fi", description: "Intel(R) Wi-Fi 6E AX211 160MHz", kind: "wifi", luid: "19985273102270464", ipv4: "192.168.2.17", gateway: "192.168.2.254", linkSpeedMbps: 1201, metric: 35, automaticMetric: true, active: false, preferredByNezty: false, pingMs: measure ? 9.8 : null, lossPct: measure ? 0 : null };
+  const list = (two ? [eth, wifi] : [eth]).map((c) => (preferredLuid === c.luid ? { ...c, metric: 5, automaticMetric: false, preferredByNezty: true } : c));
+  const best = list.reduce((a, b) => (b.metric < a.metric ? b : a));
+  return { connections: list.map((c) => ({ ...c, active: c.luid === best.luid })), auto: settings.multinetAuto, elevated: true };
+}

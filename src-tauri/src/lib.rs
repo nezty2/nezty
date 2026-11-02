@@ -16,6 +16,7 @@ mod error;
 mod fortnite;
 mod fps;
 mod gameconfig;
+mod gamenet;
 mod games;
 mod hwaccel;
 mod ini;
@@ -343,6 +344,14 @@ async fn revert_all(app: AppHandle, state: St<'_>) -> AppResult<RevertResult> {
         let r = lock(&st.journal).revert_all();
         *lock(&st.boost) = None;
         activate::forget(&st);
+        // Alles terug naar standaard: ook de geheugenbewaker en het automatisch wisselen van verbinding uit,
+        // anders zouden die later weer iets veranderen.
+        {
+            let mut s = lock(&st.settings);
+            s.mem_guard = false;
+            s.multinet_auto = false;
+        }
+        st.save_settings();
         boost::emit_state(&app, &st);
         Ok(r)
     })
@@ -604,6 +613,103 @@ fn get_game_regions() -> Vec<GameRegion> {
 #[tauri::command]
 async fn ping_host(host: String, count: u32) -> AppResult<PingResult> {
     blocking(move || Ok(ping::ping_series(&host, count.clamp(1, 20), 1500, 150))).await
+}
+
+// ---------- Game-netwerk ----------
+
+#[tauri::command]
+async fn gamenet_regions(state: St<'_>) -> AppResult<Vec<NetRegion>> {
+    let st = state.inner().clone();
+    blocking(move || Ok(gamenet::geo::regions(&st))).await
+}
+
+#[tauri::command]
+async fn gamenet_server(state: St<'_>, game_id: String) -> AppResult<GameServer> {
+    let st = state.inner().clone();
+    blocking(move || {
+        let game = find_game(&st, &game_id)?;
+        Ok(gamenet::detect_server(&st, &game))
+    })
+    .await
+}
+
+#[tauri::command]
+async fn gamenet_route(host: String) -> AppResult<RouteReport> {
+    blocking(move || Ok(gamenet::trace::route(&host, 8))).await
+}
+
+#[tauri::command]
+async fn gamenet_monitor_start(app: AppHandle, host: String) -> AppResult<()> {
+    blocking(move || gamenet::monitor::start(app, host)).await
+}
+
+#[tauri::command]
+fn gamenet_monitor_stop(host: String) {
+    gamenet::monitor::stop_host(&host);
+}
+
+#[tauri::command]
+async fn warp_info(state: St<'_>) -> AppResult<WarpInfo> {
+    let st = state.inner().clone();
+    blocking(move || Ok(gamenet::warp::info(&st))).await
+}
+
+#[tauri::command]
+async fn warp_test(state: St<'_>, host: String) -> AppResult<WarpTest> {
+    license::require(&state)?;
+    let st = state.inner().clone();
+    blocking(move || gamenet::warp::test(&st, &host)).await
+}
+
+#[tauri::command]
+async fn warp_stop(state: St<'_>) -> AppResult<WarpInfo> {
+    let st = state.inner().clone();
+    blocking(move || {
+        gamenet::warp::stop_ours(&st)?;
+        Ok(gamenet::warp::info(&st))
+    })
+    .await
+}
+
+#[tauri::command]
+async fn multinet_status(state: St<'_>, measure: bool) -> AppResult<MultiNetStatus> {
+    let st = state.inner().clone();
+    blocking(move || Ok(gamenet::multinet::status(&st, measure))).await
+}
+
+#[tauri::command]
+async fn multinet_prefer(app: AppHandle, state: St<'_>, luid: String) -> AppResult<MultiNetStatus> {
+    license::require(&state)?;
+    let luid: u64 = luid.parse().map_err(|_| AppError::coded("connection_gone"))?;
+    let st = state.inner().clone();
+    blocking(move || {
+        restore_point_first(&app, &st);
+        gamenet::multinet::set_preferred(&st, luid)?;
+        Ok(gamenet::multinet::status(&st, false))
+    })
+    .await
+}
+
+#[tauri::command]
+async fn multinet_clear(state: St<'_>) -> AppResult<MultiNetStatus> {
+    let st = state.inner().clone();
+    blocking(move || {
+        gamenet::multinet::clear_preferred(&st)?;
+        Ok(gamenet::multinet::status(&st, false))
+    })
+    .await
+}
+
+#[tauri::command]
+async fn memguard_status(state: St<'_>) -> AppResult<MemGuardStatus> {
+    let st = state.inner().clone();
+    blocking(move || Ok(gamenet::memguard::status(&st))).await
+}
+
+#[tauri::command]
+async fn memguard_purge(state: St<'_>) -> AppResult<PurgeResult> {
+    license::require(&state)?;
+    blocking(gamenet::memguard::purge).await
 }
 
 #[tauri::command]
@@ -964,6 +1070,33 @@ fn run_selftest(args: &[String]) -> bool {
         }
         return true;
     }
+    if let Some(i) = args.iter().position(|a| a == "--selftest-gamenet") {
+        // --selftest-gamenet <out.json> [host voor de route]
+        if let Some(out) = args.get(i + 1) {
+            let st = AppState::new(std::env::temp_dir().join("nezty-selftest-gamenet"), false);
+            let host = args.get(i + 2).cloned().unwrap_or_else(|| "1.1.1.1".into());
+            let regions = gamenet::geo::regions(&st);
+            let located: Vec<serde_json::Value> = ["155.133.248.36", "3.120.181.40", "34.90.0.1", "8.8.8.8"]
+                .iter()
+                .map(|ip| serde_json::json!({ "ip": ip, "location": ip.parse().ok().and_then(|a| gamenet::geo::locate(&st, a)) }))
+                .collect();
+            let v = serde_json::json!({
+                "regions": regions.len(),
+                "valveEu": regions.iter().filter(|r| r.provider == "valve" && r.group == "eu").map(|r| format!("{} {}", r.city, r.host)).collect::<Vec<_>>(),
+                "located": located,
+                "route": gamenet::trace::route(&host, 5),
+                "multinet": gamenet::multinet::status(&st, true),
+                "memory": gamenet::memguard::stats(),
+                "memguard": gamenet::memguard::status(&st),
+                "warp": gamenet::warp::info(&st),
+                "qosAllNetworks": gamenet::qos::nla_status().map(|s| serde_json::to_value(s.state).unwrap_or_default()).map_err(|e| e.to_string()),
+                "etw": gamenet::etw::ensure_running().map_err(|e| e.to_string()),
+            });
+            gamenet::shutdown();
+            let _ = std::fs::write(out, serde_json::to_string_pretty(&v).unwrap_or_default());
+        }
+        return true;
+    }
     if let Some(i) = args.iter().position(|a| a == "--selftest-network") {
         if let Some(out) = args.get(i + 1) {
             selftest::run_network(out);
@@ -1096,6 +1229,12 @@ pub fn run() {
             }
             license::start(app.handle().clone(), state.clone());
             metrics::start(app.handle().clone(), state.clone());
+            gamenet::memguard::start(app.handle().clone(), state.clone());
+            gamenet::multinet::start(app.handle().clone(), state.clone());
+            // Een ETW-sessie die na een crash is blijven staan, opruimen.
+            if state.elevated {
+                gamenet::etw::stop_by_name();
+            }
             // Wifi-gamestand hoort bij een open sessie van nezty: na een herstart van de app opnieuw aanzetten.
             {
                 let st = state.clone();
@@ -1210,7 +1349,27 @@ pub fn run() {
             check_update,
             install_update,
             measure_controller_rate,
+            gamenet_regions,
+            gamenet_server,
+            gamenet_route,
+            gamenet_monitor_start,
+            gamenet_monitor_stop,
+            warp_info,
+            warp_test,
+            warp_stop,
+            multinet_status,
+            multinet_prefer,
+            multinet_clear,
+            memguard_status,
+            memguard_purge,
         ])
-        .run(tauri::generate_context!())
-        .expect("nezty could not start");
+        .build(tauri::generate_context!())
+        .expect("nezty could not start")
+        .run(|_, event| {
+            // Altijd opruimen bij afsluiten, ook via het systeemvak of na een update: anders blijft de ETW-sessie
+            // tot de volgende herstart van Windows bestaan.
+            if let tauri::RunEvent::Exit = event {
+                gamenet::shutdown();
+            }
+        });
 }

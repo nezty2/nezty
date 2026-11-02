@@ -59,8 +59,19 @@ fn ipv4(a: &windows_sys::Win32::Networking::WinSock::SOCKET_ADDRESS) -> Option<S
 }
 
 /// Fysieke netwerkadapters (zoals Get-NetAdapter -Physical) met snelheid, IPv4, gateway en DNS.
-/// Rechtstreeks via GetAdaptersAddresses en GetIfEntry2, zonder PowerShell.
 pub fn adapters() -> Vec<NetworkAdapter> {
+    scan().into_iter().map(|s| s.adapter).collect()
+}
+
+/// Een adapter plus de nummers waarmee Windows hem aanwijst (voor Multi-Internet).
+pub struct ScannedAdapter {
+    pub adapter: NetworkAdapter,
+    pub luid: u64,
+    pub if_index: u32,
+}
+
+/// Rechtstreeks via GetAdaptersAddresses en GetIfEntry2, zonder PowerShell.
+pub fn scan() -> Vec<ScannedAdapter> {
     use windows_sys::Win32::Foundation::ERROR_BUFFER_OVERFLOW;
     use windows_sys::Win32::NetworkManagement::IpHelper::{
         GetAdaptersAddresses, GetIfEntry2, GAA_FLAG_INCLUDE_GATEWAYS, GAA_FLAG_SKIP_ANYCAST, GAA_FLAG_SKIP_MULTICAST, IF_TYPE_ETHERNET_CSMACD, IF_TYPE_IEEE80211, IP_ADAPTER_ADDRESSES_LH, MIB_IF_ROW2,
@@ -136,16 +147,20 @@ pub fn adapters() -> Vec<NetworkAdapter> {
         }
         let mac_len = (a.PhysicalAddressLength as usize).min(a.PhysicalAddress.len());
         let mac = (mac_len > 0).then(|| a.PhysicalAddress[..mac_len].iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join("-"));
-        out.push(NetworkAdapter {
-            name: pwstr(a.FriendlyName),
-            description: pwstr(a.Description),
-            kind,
-            status: if up { "Up".into() } else { "Disconnected".into() },
-            link_speed_mbps,
-            ipv4: ip,
-            gateway,
-            dns,
-            mac,
+        out.push(ScannedAdapter {
+            adapter: NetworkAdapter {
+                name: pwstr(a.FriendlyName),
+                description: pwstr(a.Description),
+                kind,
+                status: if up { "Up".into() } else { "Disconnected".into() },
+                link_speed_mbps,
+                ipv4: ip,
+                gateway,
+                dns,
+                mac,
+            },
+            luid: unsafe { a.Luid.Value },
+            if_index: unsafe { a.Anonymous1.Anonymous.IfIndex },
         });
     }
     out
