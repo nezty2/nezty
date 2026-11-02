@@ -9,6 +9,8 @@ import { Button, Card, IconButton, SectionTitle, cn } from "./ui";
 
 /** Zelfde lijst en volgorde als tweaks::ACTIVATE_ALL in de backend. */
 export const ACTIVATE_ALL_TWEAKS = [
+  "power_plan",
+  "power_mode_best",
   "game_mode",
   "game_bar_dvr_off",
   "windowed_opt",
@@ -16,8 +18,6 @@ export const ACTIVATE_ALL_TWEAKS = [
   "accessibility_hotkeys_off",
   "usb_suspend_off",
   "lang_hotkey_off",
-  "power_plan",
-  "power_mode_best",
   "cpu_full_speed",
   "wifi_power_max",
   "wifi_gaming_mode",

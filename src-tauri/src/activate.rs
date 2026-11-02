@@ -181,6 +181,39 @@ pub fn run(app: &AppHandle, state: &AppState) -> ApplyAllReport {
     fortnite_checks(state, &mut items);
     step("game_config");
     items.extend(gameconfig::game_ids().into_iter().filter_map(|gid| game_config(state, gid)));
+
+    // Controle achteraf, met dezelfde meting als de ring. Heeft een latere stap een eerdere ongedaan gemaakt,
+    // dan die nu nog een keer aanzetten. Staat iets daarna nog steeds uit, dan zegt het rapport eerlijk dat het
+    // mislukt is, in plaats van "aangezet".
+    for t in status(state).missing {
+        let game = t.game_id.as_deref().and_then(|gid| games.iter().find(|g| g.id == gid));
+        let retry = if BIG_WINS.contains(&t.id.as_str()) {
+            big_win(state, &t.id)
+        } else if tweaks::ACTIVATE_ALL.contains(&t.id.as_str()) || t.id == "gpu_high_perf" {
+            tweak(state, &t.id, game)
+        } else {
+            continue;
+        };
+        log::warn!("alles activeren: {} stond na de ronde weer uit, opnieuw aangezet", t.id);
+        if let Some(it) = items.iter_mut().find(|i| i.id == t.id && i.game_id == t.game_id) {
+            match retry.outcome {
+                ApplyOutcome::Applied | ApplyOutcome::Already => {
+                    it.outcome = ApplyOutcome::Applied;
+                    it.reason = None;
+                }
+                _ => {
+                    it.outcome = retry.outcome;
+                    it.reason = retry.reason;
+                }
+            }
+        }
+    }
+    for t in status(state).missing {
+        if let Some(it) = items.iter_mut().find(|i| i.id == t.id && i.game_id == t.game_id && i.outcome != ApplyOutcome::Failed) {
+            it.outcome = ApplyOutcome::Failed;
+            it.reason = Some(Msg::new("verify_failed"));
+        }
+    }
     progress(app, "done", total, total);
 
     {

@@ -108,10 +108,13 @@ pub const REMOVED: &[&str] = &[
     "high_priority",
 ];
 
-/// De algemene tweaks van "Alles activeren", in deze volgorde. Energieplan en energiemodus vóór de
-/// processorinstellingen, zodat die in het juiste energieplan terechtkomen. Wat niet bij het apparaat past,
-/// slaat nezty over. Meldingen uit zit er bewust niet in: dat blijft een losse keuze onder Meer opties.
+/// De algemene tweaks van "Alles activeren", in deze volgorde. Energieplan en energiemodus als eerste: alles wat
+/// in een energieplan staat (USB, processor, wifi) komt dan in het nieuwe plan terecht, niet in het oude. Wat niet
+/// bij het apparaat past, slaat nezty over. Meldingen uit zit er bewust niet in: dat blijft een losse keuze onder
+/// Meer opties.
 pub const ACTIVATE_ALL: &[&str] = &[
+    "power_plan",
+    "power_mode_best",
     "game_mode",
     "game_bar_dvr_off",
     "windowed_opt",
@@ -119,8 +122,6 @@ pub const ACTIVATE_ALL: &[&str] = &[
     "accessibility_hotkeys_off",
     "usb_suspend_off",
     "lang_hotkey_off",
-    "power_plan",
-    "power_mode_best",
     "cpu_full_speed",
     "wifi_power_max",
     "wifi_gaming_mode",
