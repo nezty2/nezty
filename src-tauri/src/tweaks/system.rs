@@ -94,6 +94,23 @@ pub fn notifications_disable(state: &AppState) -> AppResult<()> {
     regtweak::disable(state, get("notifications_off")?, &notifications_specs(), None, None)
 }
 
+// ---------- Timerresolutie ----------
+
+/// Laat het timerverzoek van nezty (0,5 ms, alleen tijdens het gamen, zie timer.rs) voor alle programma's gelden.
+fn timer_specs() -> Vec<RegSpec> {
+    vec![RegSpec::dword(Hive::Hklm, r"SYSTEM\CurrentControlSet\Control\Session Manager\kernel", "GlobalTimerResolutionRequests", 1, 0).off_absent()]
+}
+pub fn timer_status() -> AppResult<Status> {
+    Ok(Status::simple(regtweak::state_of(&timer_specs())?))
+}
+pub fn timer_apply(state: &AppState, session: Option<&str>) -> AppResult<()> {
+    regtweak::apply(state, get("timer_resolution")?, &timer_specs(), session, None, None)
+}
+pub fn timer_disable(state: &AppState) -> AppResult<()> {
+    crate::timer::hold(false);
+    regtweak::disable(state, get("timer_resolution")?, &timer_specs(), None, None)
+}
+
 // ---------- HAGS ----------
 
 const HAGS_PATH: &str = "SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers";

@@ -37,6 +37,9 @@ pub fn start(app: AppHandle, state: Arc<AppState>) {
                 .map(|g| g.id.clone())
                 .collect();
             *lock(&state.running_games) = now.clone();
+            // Fijnere timer (0,5 ms) alleen zolang er een game draait en de tweak aan staat.
+            let timer_on = crate::tweaks::status(&state, "timer_resolution", None).state == crate::models::TweakState::On;
+            crate::timer::hold(timer_on && !now.is_empty());
 
             for id in now.difference(&prev) {
                 let Some(game) = games.iter().find(|g| &g.id == id) else { continue };

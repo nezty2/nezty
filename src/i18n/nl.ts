@@ -139,7 +139,12 @@ export const nl = {
         "Geluiden van apps zelf (bijvoorbeeld Discord) zet je uit in die app.",
       ],
     },
-    timer_resolution: { name: "Hogere timerresolutie tijdens het gamen" },
+    timer_resolution: {
+      name: "Fijnere timer tijdens het gamen",
+      what: "Zolang er een game draait, zet nezty de timer van Windows op 0,5 ms in plaats van 1 ms of 15,6 ms.",
+      effect: "Beelden komen gelijkmatiger binnen, vooral met een fps-limiet, en de game reageert directer. Je fps-getal gaat er niet van omhoog, het voelt wel vloeiender.",
+      tech: ["NtSetTimerResolution(0,5 ms) zolang een game draait en nezty open is.", "GlobalTimerResolutionRequests = 1 (HKLM\\...\\Session Manager\\kernel): zonder dit geldt de timer sinds Windows 11 alleen voor nezty zelf. Werkt na een herstart."],
+    },
     interrupt_moderation_off: { name: "Interrupt moderation uit" },
     game_config: { name: "Game-instellingen", what: "", effect: "", tech: [] },
     wifi_power_max: {
@@ -549,6 +554,7 @@ export const nl = {
       refresh_rate: "Scherm op de hoogste Hz zetten…",
       game_mode: "Spelmodus controleren…",
       windowed_opt: "Games in een venster versnellen…",
+      timer_resolution: "Fijnere timer instellen…",
       mouse_precision_off: "Muisversnelling uitzetten…",
       accessibility_hotkeys_off: "Pop-ups van plaktoetsen uitzetten…",
       power_mode_best: "Energiemodus op beste prestaties…",

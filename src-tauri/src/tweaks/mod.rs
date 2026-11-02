@@ -68,6 +68,8 @@ pub const CATALOG: &[TweakDef] = &[
     TweakDef { options: &["high", "ultimate"], ..def("power_plan", "High performance power plan", C::System, S::Global, Small, Instant, false) },
     TweakDef { risk: Risk::Medium, ..def("hags", "Hardware-accelerated GPU scheduling", C::System, S::Global, Small, PcRestart, true) },
     def("windowed_opt", "Optimizations for windowed games", C::System, S::Global, Small, GameRestart, false),
+    // Terug sinds 0.6.1: 0,5 ms timer zolang er een game draait (zoals in 0.3.16).
+    def("timer_resolution", "Higher timer resolution while gaming", C::System, S::Global, Measurable, PcRestart, true),
     def("notifications_off", "Notification banners off", C::System, S::Global, Negligible, Instant, false),
     // Muis en toetsenbord
     def("mouse_precision_off", "Enhance pointer precision off", C::Input, S::Global, Small, Instant, false),
@@ -95,9 +97,8 @@ pub const CATALOG: &[TweakDef] = &[
 ];
 
 /// Tweaks die in 0.5.0 uit de app zijn gehaald (geen meetbaar effect, of meer risico dan winst).
-/// Oude wijzigingen ervan blijven via het logboek exact terug te zetten.
+/// Oude wijzigingen ervan blijven via het logboek exact terug te zetten. timer_resolution is in 0.6.1 teruggekomen.
 pub const REMOVED: &[&str] = &[
-    "timer_resolution",
     "visual_effects",
     "keyboard_fast_repeat",
     "input_device_power_off",
@@ -121,6 +122,7 @@ pub const ACTIVATE_ALL: &[&str] = &[
     "game_mode",
     "game_bar_dvr_off",
     "windowed_opt",
+    "timer_resolution",
     "mouse_precision_off",
     "accessibility_hotkeys_off",
     "usb_suspend_off",
@@ -159,6 +161,7 @@ pub fn status(state: &AppState, id: &str, game: Option<&Game>) -> Status {
         "power_plan" => system::power_plan_status(state),
         "hags" => system::hags_status(),
         "windowed_opt" => system::windowed_opt_status(),
+        "timer_resolution" => system::timer_status(),
         "notifications_off" => system::notifications_status(state),
         "wifi_power_max" => network_extra::wifi_status(network_extra::has_wifi()),
         "mouse_precision_off" => input::mouse_status(),
@@ -333,6 +336,7 @@ fn apply_inner(state: &AppState, id: &str, option: Option<&str>, session: Option
         "power_plan" => system::power_plan_apply(state, option.unwrap_or("high"), session),
         "hags" => system::hags_apply(state, session),
         "windowed_opt" => system::windowed_opt_apply(state, session),
+        "timer_resolution" => system::timer_apply(state, session),
         "notifications_off" => system::notifications_apply(state, session),
         "wifi_power_max" => network_extra::wifi_apply(state, session),
         "mouse_precision_off" => input::mouse_apply(state, session),
@@ -372,6 +376,7 @@ fn disable_inner(state: &AppState, id: &str, game: Option<&Game>) -> AppResult<(
         "power_plan" => system::power_plan_disable(state),
         "hags" => system::hags_disable(state),
         "windowed_opt" => system::windowed_opt_disable(state),
+        "timer_resolution" => system::timer_disable(state),
         "notifications_off" => system::notifications_disable(state),
         "wifi_power_max" => network_extra::wifi_disable(state),
         "mouse_precision_off" => input::mouse_disable(state),

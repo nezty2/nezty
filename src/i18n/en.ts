@@ -141,7 +141,12 @@ export const en: Dict = {
         "Sounds from apps themselves (for example Discord) are turned off in that app.",
       ],
     },
-    timer_resolution: { name: "Higher timer resolution while gaming" },
+    timer_resolution: {
+      name: "Finer timer while gaming",
+      what: "While a game runs, nezty sets the Windows timer to 0.5 ms instead of 1 ms or 15.6 ms.",
+      effect: "Frames arrive more evenly, especially with an fps cap, and the game responds more directly. Your fps number does not go up, but it feels smoother.",
+      tech: ["NtSetTimerResolution(0.5 ms) while a game runs and nezty is open.", "GlobalTimerResolutionRequests = 1 (HKLM\\...\\Session Manager\\kernel): without it, since Windows 11 the timer only applies to nezty itself. Works after a restart."],
+    },
     interrupt_moderation_off: { name: "Interrupt moderation off" },
     game_config: { name: "Game settings", what: "", effect: "", tech: [] },
     wifi_power_max: {
@@ -551,6 +556,7 @@ export const en: Dict = {
       refresh_rate: "Setting your display to the highest Hz…",
       game_mode: "Checking Game Mode…",
       windowed_opt: "Speeding up games in a window…",
+      timer_resolution: "Setting a finer timer…",
       mouse_precision_off: "Turning off mouse acceleration…",
       accessibility_hotkeys_off: "Turning off Sticky Keys pop-ups…",
       power_mode_best: "Power mode to best performance…",

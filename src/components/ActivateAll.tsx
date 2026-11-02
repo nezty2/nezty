@@ -14,6 +14,7 @@ export const ACTIVATE_ALL_TWEAKS = [
   "game_mode",
   "game_bar_dvr_off",
   "windowed_opt",
+  "timer_resolution",
   "mouse_precision_off",
   "accessibility_hotkeys_off",
   "usb_suspend_off",
