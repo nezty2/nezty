@@ -28,7 +28,8 @@ $dir = Join-Path (Get-Location) "release\update"
 $setup = "Nezty-Tweaks-Setup-${version}.exe"
 $files = @("$dir\$setup", "$dir\$setup.sig", "$dir\latest.json")
 foreach ($f in $files) { if (-not (Test-Path $f)) { throw "Ontbreekt: $f. Bouw eerst versie $version met .\scripts\build.ps1." } }
-$latest = Get-Content "$dir\latest.json" -Raw | ConvertFrom-Json
+# Expliciet UTF-8: Windows PowerShell leest een bestand zonder BOM anders als ANSI (dan wordt "één" onleesbaar).
+$latest = Get-Content "$dir\latest.json" -Raw -Encoding UTF8 | ConvertFrom-Json
 if ($latest.version -ne $version) { throw "latest.json is voor versie $($latest.version), maar de app is $version. Bouw opnieuw." }
 if (-not $Notes) { $Notes = [string]$latest.notes }
 if (-not $Notes) { $Notes = "Nieuwe versie van nezty." }
