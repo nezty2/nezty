@@ -1,4 +1,5 @@
-# Zet de gebouwde update online (Supabase Storage, bucket "updates") en kondigt hem aan in Discord.
+# Zet de gebouwde update online: Supabase Storage (bucket "updates", waar de app zoekt) en ook als release
+# "Latest" op GitHub. Daarna de tekst voor Discord.
 # Gebruik:  .\scripts\publish.ps1 [-Notes "Wat er nieuw is"] [-SkipDiscord]
 #
 # Nodig (eenmalig):
@@ -50,6 +51,42 @@ for ($i = 0; $i -lt 10 -and -not $check; $i++) {
 }
 if (-not $check) { throw "De bestanden zijn geüpload, maar $baseUrl/latest.json geeft nog niet versie $version. Is de bucket 'updates' openbaar?" }
 Write-Host "Online en bereikbaar: $baseUrl/latest.json (versie $version)"
+
+# Ook op GitHub: dezelfde ondertekende installer als release "Latest". Daar zoeken versies 0.3.x nog naar updates
+# (zo springen die meteen naar de nieuwste), en de releasepagina blijft kloppen. Mislukt dit, dan staat de update
+# al wel in Supabase: alleen een waarschuwing.
+$repo = if ($publish.repo) { [string]$publish.repo } else { "nezty2/nezty" }
+$gh = (Get-Command gh -ErrorAction SilentlyContinue).Source
+if (-not $gh) { $gh = Join-Path $env:LOCALAPPDATA "Microsoft\WinGet\Packages\GitHub.cli_Microsoft.Winget.Source_8wekyb3d8bbwe\bin\gh.exe" }
+if (-not (Test-Path $gh)) {
+    Write-Warning "gh (GitHub CLI) niet gevonden: de release staat alleen in Supabase, niet op GitHub."
+} else {
+    $tag = "v$version"
+    $commit = (git rev-parse HEAD).Trim()
+    $ghDir = Join-Path $env:TEMP "nezty-gh-$version"
+    Remove-Item $ghDir -Recurse -Force -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory $ghDir | Out-Null
+    Copy-Item "$dir\$setup", "$dir\$setup.sig" $ghDir
+    # latest.json voor GitHub: zelfde handtekening, maar de download wijst naar de GitHub-release.
+    $ghLatest = [ordered]@{
+        version   = $version
+        notes     = $Notes
+        pub_date  = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+        platforms = [ordered]@{ "windows-x86_64" = [ordered]@{ signature = (Get-Content "$dir\$setup.sig" -Raw).Trim(); url = "https://github.com/$repo/releases/download/$tag/$setup" } }
+    }
+    [IO.File]::WriteAllText("$ghDir\latest.json", ($ghLatest | ConvertTo-Json -Depth 6), (New-Object Text.UTF8Encoding $false))
+    $ErrorActionPreference = "Continue"
+    & $gh release view $tag --repo $repo 2>&1 | Out-Null
+    $exists = $LASTEXITCODE -eq 0
+    if ($exists) {
+        Write-Warning "GitHub-release $tag bestaat al; niet overschreven."
+    } else {
+        & $gh release create $tag "$ghDir\$setup" "$ghDir\$setup.sig" "$ghDir\latest.json" --repo $repo --target $commit --title "nezty $version" --notes $Notes --latest 2>&1 | ForEach-Object { "$_" }
+        if ($LASTEXITCODE -eq 0) { Write-Host "Ook op GitHub: https://github.com/$repo/releases/tag/$tag" } else { Write-Warning "GitHub-release maken mislukt (exitcode $LASTEXITCODE). De update staat wel in Supabase." }
+    }
+    $ErrorActionPreference = "Stop"
+    Remove-Item $ghDir -Recurse -Force -ErrorAction SilentlyContinue
+}
 
 # Aankondiging voor Discord: automatisch via een webhook als die is ingesteld, anders als tekst om zelf te plakken.
 $download = "$baseUrl/$setup"
