@@ -194,6 +194,7 @@ export function BackgroundAppsPage() {
         )}
       </Card>
 
+      <p className="text-[12px] text-ink-3">{t("background.closeOnStartHint")}</p>
       <p className="flex items-center gap-2 text-[12px] text-ink-3">
         <ShieldCheck className="h-4 w-4 text-ok" />
         {t("background.protectedNote")}
