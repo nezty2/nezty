@@ -52,7 +52,8 @@ if ($Selftest) {
     # Een testbuild zoekt nooit naar updates en krijgt geen updatebestanden: zo kan hij niet als update online komen.
     Write-Warning "Testbuild: geen updatebron en geen updatebestanden."
 } elseif ($baseUrl) {
-    $updater = @{ endpoints = @("$baseUrl/latest.json") }
+    # GitHub als reserve: lukt Supabase niet, dan zoekt de app daar (publish.ps1 zet elke versie ook op GitHub).
+    $updater = @{ endpoints = @("$baseUrl/latest.json", "https://github.com/nezty2/nezty/releases/latest/download/latest.json") }
     # Alleen voor een lokale test: http toestaan. Echte updates gaan altijd via https.
     if ($update.allowInsecure -eq $true) { $updater.allowInsecure = $true }
     $override.plugins = @{ "nezty-update" = $updater }

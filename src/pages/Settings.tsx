@@ -1,4 +1,4 @@
-import { AlertTriangle, ExternalLink, FolderOpen, Image, Laptop, RefreshCw } from "lucide-react";
+import { AlertTriangle, ExternalLink, FolderOpen, Image, RefreshCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button, Card, Kv, PageHeader, Row, SectionTitle, SegmentedControl, TextInput, Toggle } from "@/components/ui";
 import { useT } from "@/i18n/hooks";
@@ -120,20 +120,12 @@ export function SettingsPage() {
                   </div>
                 </div>
               )}
-              {device?.effective === "laptop" && (
-                <Row title={<span className="flex items-center gap-2"><Laptop className="h-4 w-4 text-ink-3" />{t("settings.boostCharger")}</span>} desc={t("settings.boostChargerDesc")}>
-                  <Toggle checked={settings.boostRequiresCharger} onChange={(v) => void updateSettings({ boostRequiresCharger: v })} label={t("settings.boostCharger")} />
-                </Row>
-              )}
             </Card>
           </section>
 
           <section>
             <SectionTitle>{t("settings.behavior")}</SectionTitle>
             <Card className="divide-y divide-line !py-1">
-              <Row title={t("settings.autoBoost")} desc={t("settings.autoBoostDesc")}>
-                <Toggle checked={settings.autoBoostEnabled} onChange={(v) => void updateSettings({ autoBoostEnabled: v })} label={t("settings.autoBoost")} />
-              </Row>
               <Row title={t("settings.startWithWindows")} desc={t("settings.startWithWindowsDesc")}>
                 <Toggle
                   checked={startWithWindows ?? false}

@@ -956,6 +956,14 @@ fn run_selftest(args: &[String]) -> bool {
         }
         return true;
     }
+    if let Some(i) = args.iter().position(|a| a == "--selftest-update") {
+        // --selftest-update <out.json> <pubkey> <endpoint>...
+        if let (Some(out), Some(pubkey)) = (args.get(i + 1), args.get(i + 2)) {
+            let v = updater::selftest(&args[i + 3..], pubkey);
+            let _ = std::fs::write(out, serde_json::to_string_pretty(&v).unwrap_or_default());
+        }
+        return true;
+    }
     if let Some(i) = args.iter().position(|a| a == "--selftest-network") {
         if let Some(out) = args.get(i + 1) {
             selftest::run_network(out);

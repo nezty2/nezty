@@ -2,7 +2,7 @@ import { Laptop, Lock, Settings, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { LaptopStatus } from "@/components/LaptopStatus";
 import { TweakCard } from "@/components/TweakCard";
-import { Button, Card, PageHeader, Row, SectionTitle, Skeleton, Toggle } from "@/components/ui";
+import { Button, Card, PageHeader, SectionTitle, Skeleton } from "@/components/ui";
 import { useT } from "@/i18n/hooks";
 import type { TweakInfo } from "@/lib/types";
 import { useApp } from "@/store/app";
@@ -16,17 +16,15 @@ const GROUPS: { key: "power" | "input" | "network" | "windows"; ids: string[] }[
   { key: "windows", ids: ["hags", "windowed_opt", "game_bar_dvr_off", "game_mode"] },
 ];
 
-/** Alles voor laptops op één plek: status, tweaks, controles en de lader-instelling. */
+/** Alles voor laptops op één plek: status, tweaks en controles. */
 export function LaptopPage() {
   const { t, td } = useT();
   const device = useApp((s) => s.device);
   const tweaks = useApp((s) => s.tweaks);
   const loading = useApp((s) => s.tweaksLoading);
   const bigWins = useApp((s) => s.bigWins);
-  const settings = useApp((s) => s.settings);
   const appInfo = useApp((s) => s.appInfo);
   const setTweak = useApp((s) => s.setTweak);
-  const updateSettings = useApp((s) => s.updateSettings);
   const setPage = useApp((s) => s.setPage);
   const toast = useApp((s) => s.toast);
   const [busy, setBusy] = useState<string | null>(null);
@@ -124,17 +122,6 @@ export function LaptopPage() {
               ))}
             </div>
           )}
-        </section>
-      )}
-
-      {isLaptop && settings && (
-        <section>
-          <SectionTitle>{t("laptop.settingsTitle")}</SectionTitle>
-          <Card className="!py-1">
-            <Row title={t("settings.boostCharger")} desc={t("settings.boostChargerDesc")}>
-              <Toggle checked={settings.boostRequiresCharger} onChange={(v) => void updateSettings({ boostRequiresCharger: v })} label={t("settings.boostCharger")} />
-            </Row>
-          </Card>
         </section>
       )}
 

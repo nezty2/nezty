@@ -1,37 +1,27 @@
-import { Gamepad2, Play, Plus, RefreshCw, Trash2, Zap } from "lucide-react";
+import { Gamepad2, Play, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useT } from "@/i18n/hooks";
 import { api, pickExe } from "@/lib/ipc";
-import type { GameProfile } from "@/lib/types";
 import { useApp } from "@/store/app";
 import { GameCover } from "./GameCover";
-import { NowTab, ProfileTab } from "./GameTabs";
+import { NowTab } from "./GameTabs";
 import { Loader } from "./Loader";
 import { Badge, Button, Card, EmptyState, SearchInput, cn } from "./ui";
 
-type Tab = "profile" | "now";
-
-/** Per game: kies een game, stel het boost-profiel in en zet tweaks voor die game direct aan of uit. */
+/** Per game: kies een game en zet tweaks voor die game direct aan of uit. */
 export function PerGame() {
   const { t } = useT();
   const games = useApp((s) => s.games);
   const loading = useApp((s) => s.gamesLoading);
   const refreshGames = useApp((s) => s.refreshGames);
   const runningGames = useApp((s) => s.runningGames);
-  const profiles = useApp((s) => s.profiles);
-  const profileFor = useApp((s) => s.profileFor);
-  const saveProfile = useApp((s) => s.saveProfile);
-  const boost = useApp((s) => s.boost);
-  const runBoost = useApp((s) => s.runBoost);
   const handleError = useApp((s) => s.handleError);
   const toast = useApp((s) => s.toast);
   const pageParams = useApp((s) => s.pageParams);
 
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<string | null>(pageParams.game ?? null);
-  const [tab, setTab] = useState<Tab>("profile");
   const [adding, setAdding] = useState(false);
-  const [profile, setProfile] = useState<GameProfile | null>(null);
   const detailRef = useRef<HTMLDivElement>(null);
   const reduceMotion = useApp((s) => s.settings?.reduceMotion ?? false);
 
@@ -39,24 +29,19 @@ export function PerGame() {
   useEffect(() => {
     if (pageParams.game) setSelected(pageParams.game);
   }, [pageParams.game]);
-  useEffect(() => {
-    setProfile(selected ? profileFor(selected) : null);
-    // Het profiel alleen opnieuw laden als je een andere game kiest, niet bij elke wijziging.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected]);
-
-  // Na het kiezen van een game rustig naar de instellingen van die game scrollen.
-  useEffect(() => {
-    if (!selected || !profile) return;
-    const id = window.setTimeout(() => detailRef.current?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" }), 60);
-    return () => window.clearTimeout(id);
-    // Alleen bij een andere game of zodra het profiel er is, niet bij elke wijziging in het profiel.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, profile !== null]);
 
   const filtered = useMemo(() => games.filter((g) => g.name.toLowerCase().includes(search.toLowerCase())), [games, search]);
   const game = games.find((g) => g.id === selected) ?? null;
   const running = !!game && runningGames.includes(game.id);
+
+  // Na het kiezen van een game rustig naar de instellingen van die game scrollen.
+  useEffect(() => {
+    if (!game) return;
+    const id = window.setTimeout(() => detailRef.current?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" }), 60);
+    return () => window.clearTimeout(id);
+    // Alleen bij een andere game, niet bij elke wijziging in de lijst.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [game?.id]);
 
   const addGame = async () => {
     const path = await pickExe(t("games.add"));
@@ -96,7 +81,6 @@ export function PerGame() {
       ) : (
         <div className="grid grid-cols-3 gap-3 md:grid-cols-4 2xl:grid-cols-6">
           {filtered.map((g) => {
-            const p = profiles.find((x) => x.gameId === g.id);
             const isRunning = runningGames.includes(g.id);
             const active = selected === g.id;
             return (
@@ -109,7 +93,6 @@ export function PerGame() {
                   <GameCover game={g} className="transition-transform duration-300 group-hover:scale-[1.03]" />
                   <div className="absolute left-1.5 top-1.5 flex gap-1">
                     {isRunning && <Badge variant="ok" className="!bg-[#0f1115]/90">{t("games.playing")}</Badge>}
-                    {p?.autoBoost && <Badge variant="accent" className="!bg-[#0f1115]/90">{t("games.autoBoost")}</Badge>}
                   </div>
                 </div>
                 <div className="px-2.5 py-2">
@@ -125,7 +108,7 @@ export function PerGame() {
         </div>
       )}
 
-      {game && profile && (
+      {game && (
         <div ref={detailRef} className="scroll-mt-24">
         <Card>
           <div className="flex flex-wrap items-center gap-3">
@@ -162,30 +145,12 @@ export function PerGame() {
               <Button size="sm" icon={Play} onClick={() => api.launchGame(game.id).catch(handleError)}>
                 {t("games.launch")}
               </Button>
-              <Button size="sm" variant="primary" icon={Zap} disabled={boost.active} onClick={() => void runBoost(game.id, running)}>
-                {t("games.boostNow")}
-              </Button>
             </div>
           </div>
 
-          <div className="mb-5 mt-4 flex gap-1 border-b border-line">
-            {(["profile", "now"] as Tab[]).map((id) => (
-              <button key={id} onClick={() => setTab(id)} className={cn("-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors", tab === id ? "border-accent text-ink" : "border-transparent text-ink-3 hover:text-ink-2")}>
-                {t(`games.tabs.${id}`)}
-              </button>
-            ))}
+          <div className="mt-5">
+            <NowTab game={game} />
           </div>
-          {tab === "profile" && (
-            <ProfileTab
-              game={game}
-              profile={profile}
-              onChange={(p) => {
-                setProfile(p);
-                void saveProfile(p);
-              }}
-            />
-          )}
-          {tab === "now" && <NowTab game={game} />}
         </Card>
         </div>
       )}
