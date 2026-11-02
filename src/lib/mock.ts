@@ -47,10 +47,10 @@ let gameConfig: T.GameConfigCheck[] = [
   { gameId: "steam:cs2", id: "vsync", file: "C:\\Program Files (x86)\\Steam\\userdata\\123\\730\\local\\cfg\\cs2_video.txt", current: "1", recommended: "0", ok: false },
 ];
 let overlays: T.OverlayInfo[] = [
-  { id: "game_bar", active: true, fix: "tweak" },
-  { id: "discord", active: true, fix: "manual" },
-  { id: "nvidia", active: true, fix: "manual" },
-  { id: "medal", active: true, fix: "close" },
+  { id: "game_bar", active: true, fix: "tweak", open: null },
+  { id: "discord", active: true, fix: "open", open: "discord://-/settings/overlay" },
+  { id: "nvidia", active: true, fix: "manual", open: null },
+  { id: "medal", active: true, fix: "close", open: null },
 ];
 let hwAccel: T.HwAccelInfo[] = [
   { id: "discord", name: "Discord", enabled: true, running: true },

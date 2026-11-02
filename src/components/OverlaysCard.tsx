@@ -45,6 +45,11 @@ export function OverlaysCard() {
                   }}
                 />
               )}
+              {o.fix === "open" && o.active && o.open && (
+                <Button size="sm" onClick={() => api.openUrl(o.open!).catch(handleError)}>
+                  {t("fn.openIn", { app: t(`fn.overlay.${o.id}.app` as TKey) })}
+                </Button>
+              )}
               {o.fix === "close" && o.active && (
                 <Button
                   size="sm"

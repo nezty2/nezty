@@ -302,8 +302,10 @@ pub struct LiveCheck {
 pub struct OverlayInfo {
     pub id: String,
     pub active: bool,
-    /// tweak | close | manual
+    /// tweak | close | open | manual
     pub fix: String,
+    /// Bij "open": de link die de app zelf op de juiste instelling opent (bv. discord://-/settings/overlay).
+    pub open: Option<String>,
 }
 
 #[derive(Serialize, Clone, Debug)]
