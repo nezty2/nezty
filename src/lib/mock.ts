@@ -240,6 +240,8 @@ let bigWins: T.BigWin[] = [
   { id: "gpu_choice", status: "issue", gain: "big", variant: "missing", params: { gpu: "NVIDIA GeForce RTX 5070 Ti", count: "5", names: "Apex Legends, Call of Duty, Counter-Strike 2" }, action: "fix", link: null },
   { id: "power_source", status: "ok", gain: "big", variant: "desktop", params: { plan: "High performance" }, action: "none", link: null },
   { id: "ram_speed", status: "ok", gain: "big", variant: "ok", params: { configured: "6000", rated: "6000", type: "DDR5" }, action: "none", link: null },
+  { id: "rebar", status: "info", gain: "measurable", variant: "off", params: { gpu: "NVIDIA GeForce RTX 4060 Laptop GPU", bar: "256", vram: "8188" }, action: "none", link: null },
+  { id: "memory_integrity", status: "info", gain: "measurable", variant: "on", params: {}, action: "link", link: "windowsdefender://coreisolation" },
   { id: "gpu_driver", status: "ok", gain: "measurable", variant: "ok", params: { gpu: "NVIDIA GeForce RTX 5070 Ti", version: "621.01", date: "2026-10-19", days: "9", vendor: "nvidia" }, action: "link", link: "https://www.nvidia.com/en-us/drivers/" },
   { id: "heavy_apps", status: "info", gain: "measurable", variant: "plenty_ram", params: { names: "Google Chrome, Discord", mb: "4025", count: "2" }, action: "open_page", link: null },
 ];
@@ -570,6 +572,7 @@ export const mockApi: Api = {
   },
   async listControllers() { await delay(); return [{ id: "xinput:0", kind: "xbox", model: "xbox", slot: 0, wired: false, battery: "medium", batteryPercent: null, charging: null }, { id: "hid:mock-dualsense", kind: "playstation", model: "dualsense", slot: null, wired: true, battery: null, batteryPercent: 80, charging: true }]; },
   async measureControllerRate(id, seconds) { await delay((seconds ?? 4) * 1000); const ps = id.startsWith("hid:"); return { id, hz: ps ? 250 : 125, changes: ps ? 1000 : 480, seconds: seconds ?? 4, connected: true }; },
+  async measureMouseRate(seconds) { await delay((seconds ?? 3) * 1000); return { hz: 7940, moves: 21000, seconds: seconds ?? 3 }; },
   async gamenetRegions() { await delay(); return netRegions; },
   async gamenetServer(gameId) {
     await delay(300);

@@ -451,6 +451,12 @@ export interface StartupItem {
 
 export type RegionId = "eu" | "na_east" | "na_central" | "na_west" | "brazil" | "middle_east" | "asia" | "oceania" | "africa";
 
+export interface MouseRate {
+  hz: number | null;
+  moves: number;
+  seconds: number;
+}
+
 /* ---------- Game-netwerk ---------- */
 
 export interface NetRegion {
@@ -654,7 +660,7 @@ export type CheckStatus = "ok" | "issue" | "info" | "unavailable";
 export type CheckAction = "none" | "fix" | "open_page" | "link";
 
 export interface BigWin {
-  id: "refresh_rate" | "gpu_choice" | "power_source" | "ram_speed" | "gpu_driver" | "heavy_apps" | "laptop_heat" | "laptop_gpu_mode" | "laptop_wifi" | "gpu_battery_limit";
+  id: "refresh_rate" | "gpu_choice" | "power_source" | "ram_speed" | "rebar" | "memory_integrity" | "gpu_driver" | "heavy_apps" | "laptop_heat" | "laptop_gpu_mode" | "laptop_wifi" | "gpu_battery_limit";
   status: CheckStatus;
   gain: Gain;
   variant: string;
