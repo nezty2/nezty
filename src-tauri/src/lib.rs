@@ -172,8 +172,10 @@ fn open_path(app: AppHandle, path: String) -> AppResult<()> {
 
 #[tauri::command]
 fn open_url(app: AppHandle, url: String) -> AppResult<()> {
-    if !(url.starts_with("https://") || url.starts_with("ms-settings:")) {
-        return Err(AppError::msg("only https and ms-settings links are opened"));
+    // Alleen https, Windows-instellingen en de instellingenpagina's van Discord en Steam (zie overlays.rs).
+    let allowed = ["https://", "ms-settings:", "discord://-/settings/", "steam://settings/"];
+    if !allowed.iter().any(|p| url.starts_with(p)) {
+        return Err(AppError::msg("link not allowed"));
     }
     app.opener().open_url(url, None::<&str>).map_err(|e| AppError::msg(e.to_string()))
 }

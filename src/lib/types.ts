@@ -177,7 +177,9 @@ export interface LiveCheck {
 export interface OverlayInfo {
   id: string;
   active: boolean;
-  fix: "tweak" | "close" | "manual";
+  fix: "tweak" | "close" | "open" | "manual";
+  /** Bij "open": de link die de app zelf op de juiste instelling opent. */
+  open: string | null;
 }
 
 export interface HwAccelInfo {
