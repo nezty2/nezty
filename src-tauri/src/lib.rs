@@ -1206,6 +1206,7 @@ pub fn run() {
             if let Err(e) = crosshair::register_hotkey(app.handle(), &settings.crosshair_hotkey) {
                 log::warn!("sneltoets crosshair: {e}");
             }
+            crosshair::start_keeper(app.handle().clone(), state.clone());
             if settings.crosshair_enabled {
                 let _ = crosshair::set_enabled(app.handle(), &state, true);
             }
