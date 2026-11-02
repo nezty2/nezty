@@ -131,12 +131,11 @@ pub fn run_boost(app: &AppHandle, state: &Arc<AppState>, game_id: Option<&str>, 
             .flatten()
     });
 
-    // 2. Systeemtweaks uit het profiel. Tweaks die pas na een pc-herstart werken horen niet in een
-    //    boost (ze worden aan het eind weer teruggezet en zouden dus nooit effect hebben).
-    let tweak_map = profile.as_ref().map(|p| p.global_tweaks.clone()).unwrap_or_else(|| settings.default_profile_tweaks.clone());
+    // 2. Systeemtweaks horen bij Tweaks (Alles activeren) en blijven daar permanent aan. Game Boost zet ze
+    //    niet meer zelf aan of terug. Alleen op een laptop neemt de boost de vaste laptoplijst tijdelijk mee,
+    //    zodat de laptop na het gamen weer koel en zuinig is.
     for d in tweaks::CATALOG.iter().filter(|d| d.scope == TweakScope::Global && d.kind == TweakKind::Toggle) {
-        let laptop_default = laptop && tweaks::LAPTOP_BOOST_DEFAULTS.contains(&d.id);
-        if !tweak_map.get(d.id).copied().unwrap_or(laptop_default) {
+        if !(laptop && tweaks::LAPTOP_BOOST_DEFAULTS.contains(&d.id)) {
             continue;
         }
         // Past niet bij dit apparaat (pc of laptop): overslaan, niet toepassen.

@@ -12,6 +12,9 @@ import { useApp } from "@/store/app";
 
 type Tone = "normal" | "warn" | "bad";
 
+/** Tweaks die Game Boost op een laptop tijdelijk meeneemt (zelfde lijst als tweaks::LAPTOP_BOOST_DEFAULTS). */
+const LAPTOP_BOOST_DEFAULTS = ["power_mode_best", "battery_saver_off", "cpu_full_speed", "cpu_epp_performance", "cpu_prefer_pcores", "usb_suspend_ac_off", "wifi_gaming_mode"];
+
 export function StatTile({ icon: Icon, label, value, sub, series, min, max, format, tone = "normal" }: { icon: LucideIcon; label: string; value: string; sub?: ReactNode; series: (number | null)[]; min?: number; max?: number; format?: (v: number) => string; tone?: Tone }) {
   return (
     <div className="card relative flex min-w-0 flex-col overflow-hidden p-4">
@@ -43,6 +46,7 @@ function BoostCard() {
   const runningGames = useApp((s) => s.runningGames);
   const profileFor = useApp((s) => s.profileFor);
   const tweaks = useApp((s) => s.tweaks);
+  const isLaptop = useApp((s) => s.device)?.effective === "laptop";
   const [target, setTarget] = useState<string | null>(null);
   const [measure, setMeasure] = useState(true);
 
@@ -53,8 +57,8 @@ function BoostCard() {
 
   const sortedGames = useMemo(() => [...games].sort((a, b) => Number(runningGames.includes(b.id)) - Number(runningGames.includes(a.id))).slice(0, 9), [games, runningGames]);
   const profile = target ? profileFor(target) : null;
-  const tweakMap = profile?.globalTweaks ?? settings?.defaultProfileTweaks ?? {};
-  const globalCount = tweaks.filter((tw) => tw.scope === "global" && tw.kind === "toggle" && tw.timing !== "pc_restart" && tweakMap[tw.id]).length;
+  // Systeemtweaks zitten in Alles activeren. De boost neemt alleen op een laptop de vaste laptoplijst mee.
+  const globalCount = isLaptop ? tweaks.filter((tw) => LAPTOP_BOOST_DEFAULTS.includes(tw.id) && !tw.platformLocked).length : 0;
   const perGameCount = profile ? [profile.gpuHighPerf].filter(Boolean).length : 0;
   const closeCount = profile ? (profile.useGlobalCloseList ? (settings?.closeDuringGaming.length ?? 0) : 0) + profile.closeApps.length : (settings?.closeDuringGaming.length ?? 0);
   const targetGame = games.find((g) => g.id === target) ?? null;

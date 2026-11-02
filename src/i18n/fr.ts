@@ -497,8 +497,6 @@ export const fr: Dict = {
     revertOnExit: "Annuler après avoir joué",
     revertOnExitDesc: "Quand le jeu se ferme, tout revient comme avant.",
     perGame: "Spécialement pour ce jeu",
-    systemTweaks: "Réglages système dans ce boost",
-    pcRestartNote: "Les tweaks qui ne fonctionnent qu'après un redémarrage du PC n'ont pas leur place dans un boost. Activez-les durablement dans Tweaks, sous Plus d'options.",
     closeApps: "Apps qui seront fermées",
     useGlobal: "Aussi la liste générale ({count})",
     placeholder: "Programme, par exemple Spotify.exe",

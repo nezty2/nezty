@@ -495,8 +495,6 @@ export const nl = {
     revertOnExit: "Terugzetten na het spelen",
     revertOnExitDesc: "Als de game sluit, gaat alles weer terug.",
     perGame: "Speciaal voor deze game",
-    systemTweaks: "Systeemtweaks in deze boost",
-    pcRestartNote: "Tweaks die pas na een herstart van de pc werken, horen niet in een boost. Zet die vast aan bij Tweaks, onder Meer opties.",
     closeApps: "Apps die dicht gaan",
     useGlobal: "Ook de algemene lijst ({count})",
     placeholder: "Programma, bijvoorbeeld Spotify.exe",

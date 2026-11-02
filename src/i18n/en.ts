@@ -497,8 +497,6 @@ export const en: Dict = {
     revertOnExit: "Revert after playing",
     revertOnExitDesc: "When the game closes, everything goes back.",
     perGame: "Just for this game",
-    systemTweaks: "System tweaks in this boost",
-    pcRestartNote: "Tweaks that only work after a PC restart do not belong in a boost. Turn those on permanently in Tweaks, under More options.",
     closeApps: "Apps that get closed",
     useGlobal: "Also the general list ({count})",
     placeholder: "Program, for example Spotify.exe",

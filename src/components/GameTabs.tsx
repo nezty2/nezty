@@ -12,22 +12,14 @@ import { formatMb } from "@/lib/format";
 import type { FortniteSettings, Game, GameProfile, ProcessInfo, TweakInfo } from "@/lib/types";
 import { useApp } from "@/store/app";
 
-/** Tweaks die Game Boost op een laptop standaard meeneemt (zelfde lijst als in de backend). */
-const LAPTOP_BOOST_DEFAULTS = ["power_mode_best", "battery_saver_off", "cpu_full_speed", "cpu_epp_performance", "cpu_prefer_pcores", "usb_suspend_ac_off", "wifi_gaming_mode"];
-
 /* ---------- Boost-instellingen per game ---------- */
 
+// Systeemtweaks staan hier bewust niet meer: die zet je permanent aan op Tweaks (Alles activeren).
 export function ProfileTab({ game, profile, onChange }: { game: Game; profile: GameProfile; onChange: (p: GameProfile) => void }) {
   const { t, td, lang } = useT();
-  const tweaks = useApp((s) => s.tweaks);
   const settings = useApp((s) => s.settings);
   const [procs, setProcs] = useState<ProcessInfo[] | null>(null);
   const [newApp, setNewApp] = useState("");
-  const device = useApp((s) => s.device);
-  const isLaptop = device?.effective === "laptop";
-  // Tweaks die niet bij dit apparaat passen slaat Game Boost toch over: dan ook niet tonen.
-  const boostable = tweaks.filter((tw) => tw.scope === "global" && tw.kind === "toggle" && tw.timing !== "pc_restart" && !tw.platformLocked);
-  const boostOn = (id: string) => profile.globalTweaks[id] ?? (isLaptop && LAPTOP_BOOST_DEFAULTS.includes(id));
   const icons = useAppIcons((procs ?? []).map((p) => p.exePath));
 
   useEffect(() => {
@@ -68,27 +60,6 @@ export function ProfileTab({ game, profile, onChange }: { game: Game; profile: G
           ).map(([key, id]) => (
             <Row key={id} title={td(`tweak.${id}.name`)} desc={td(`tweak.${id}.what`)}>
               <Toggle checked={profile[key]} onChange={(v) => set({ [key]: v } as Partial<GameProfile>)} label={td(`tweak.${id}.name`)} />
-            </Row>
-          ))}
-        </div>
-      </section>
-
-      <section>
-        <h3 className="mb-1 text-sm font-semibold">{t("profile.systemTweaks")}</h3>
-        <p className="mb-2 text-[12px] text-ink-3">{t("profile.pcRestartNote")}</p>
-        <div className="card-inset divide-y divide-line px-4">
-          {boostable.map((tw) => (
-            <Row
-              key={tw.id}
-              title={
-                <span className="flex flex-wrap items-center gap-2">
-                  {td(`tweak.${tw.id}.name`)}
-                  <TimingBadge timing={tw.timing} />
-                </span>
-              }
-              desc={td(`tweak.${tw.id}.what`)}
-            >
-              <Toggle checked={boostOn(tw.id)} onChange={(v) => set({ globalTweaks: { ...profile.globalTweaks, [tw.id]: v } })} label={td(`tweak.${tw.id}.name`)} />
             </Row>
           ))}
         </div>
