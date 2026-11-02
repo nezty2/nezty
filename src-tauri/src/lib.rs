@@ -590,8 +590,9 @@ async fn set_store_background(app: AppHandle, state: St<'_>, allowed: bool) -> A
 // ---------- Opstarten ----------
 
 #[tauri::command]
-async fn list_startup_items() -> AppResult<Vec<StartupItem>> {
-    blocking(startup::list).await
+async fn list_startup_items(state: St<'_>) -> AppResult<Vec<StartupItem>> {
+    let st = state.inner().clone();
+    blocking(move || startup::list_for(&st)).await
 }
 
 #[tauri::command]
@@ -1258,6 +1259,7 @@ pub fn run() {
                 std::thread::spawn(move || tweaks::wifi_gaming::resume_if_active(&st));
             }
             watcher::start(app.handle().clone(), state.clone());
+            startup::start_keeper(app.handle().clone(), state.clone());
             {
                 let st = state.clone();
                 let handle = app.handle().clone();

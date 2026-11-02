@@ -232,6 +232,8 @@ export interface Settings {
   licenseNoTokenSince: number | null;
   memGuard: boolean;
   multinetAuto: boolean;
+  startupKeepOff: string[];
+  startupCameBack: string[];
 }
 
 export interface MetricsSample {
@@ -440,6 +442,8 @@ export interface CloseResult {
 export type StartupSource = "hkcu_run" | "hklm_run" | "hklm_run32" | "user_folder" | "common_folder";
 
 export interface StartupItem {
+  keptOff: boolean;
+  cameBack: boolean;
   id: string;
   name: string;
   command: string;

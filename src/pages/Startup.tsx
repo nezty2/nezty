@@ -1,4 +1,4 @@
-import { AppWindow, Lock, Power, RefreshCw } from "lucide-react";
+import { AppWindow, Lock, Power, RefreshCw, ShieldAlert } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAppIcons } from "@/components/useAppIcons";
 import { Badge, Button, Card, EmptyState, PageHeader, SearchInput, Skeleton, Toggle, cn } from "@/components/ui";
@@ -99,6 +99,11 @@ export function StartupPage() {
                             {t("tweakCard.adminNeeded")}
                           </Badge>
                         )}
+                        {item.cameBack && (
+                          <Badge variant="warn" icon={ShieldAlert} title={t("startup.cameBackTip")}>
+                            {t("startup.cameBack")}
+                          </Badge>
+                        )}
                       </div>
                       <div className="selectable mt-0.5 truncate font-mono text-[11px] text-ink-3" title={item.command}>
                         {item.command}
@@ -112,6 +117,8 @@ export function StartupPage() {
           </ul>
         )}
       </Card>
+      <p className="text-[12px] text-ink-3">{t("startup.keeperNote")}</p>
+      {(items ?? []).some((i) => i.cameBack) && <p className="text-[12px] text-warn">{t("startup.cameBackTip")}</p>}
     </div>
   );
 }

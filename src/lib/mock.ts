@@ -96,6 +96,8 @@ let settings: T.Settings = {
   licenseNoTokenSince: null,
   memGuard: false,
   multinetAuto: false,
+  startupKeepOff: [],
+  startupCameBack: [],
 };
 
 function tw(p: Partial<T.TweakInfo> & { id: string; category: T.TweakCategory }): T.TweakInfo {
@@ -216,10 +218,10 @@ const processes: T.ProcessInfo[] = [
 let storeBg = true;
 
 let startup: T.StartupItem[] = [
-  { id: "hkcu_run:Discord", name: "Discord", command: "C:\\Users\\you\\AppData\\Local\\Discord\\Update.exe --processStart Discord.exe", exePath: null, source: "hkcu_run", enabled: true, requiresAdmin: false },
-  { id: "hkcu_run:OneDrive", name: "OneDrive", command: "\"C:\\Users\\you\\AppData\\Local\\Microsoft\\OneDrive\\OneDrive.exe\" /background", exePath: null, source: "hkcu_run", enabled: true, requiresAdmin: false },
-  { id: "hklm_run:SecurityHealth", name: "Windows Security notification icon", command: "%windir%\\system32\\SecurityHealthSystray.exe", exePath: null, source: "hklm_run", enabled: true, requiresAdmin: true },
-  { id: "hkcu_run:Steam", name: "Steam", command: "\"C:\\Program Files (x86)\\Steam\\steam.exe\" -silent", exePath: null, source: "hkcu_run", enabled: false, requiresAdmin: false },
+  { id: "hkcu_run:Discord", name: "Discord", command: "C:\\Users\\you\\AppData\\Local\\Discord\\Update.exe --processStart Discord.exe", exePath: null, source: "hkcu_run", enabled: true, requiresAdmin: false, keptOff: false, cameBack: false },
+  { id: "hkcu_run:OneDrive", name: "OneDrive", command: "\"C:\\Users\\you\\AppData\\Local\\Microsoft\\OneDrive\\OneDrive.exe\" /background", exePath: null, source: "hkcu_run", enabled: true, requiresAdmin: false, keptOff: false, cameBack: false },
+  { id: "hklm_run:SecurityHealth", name: "Windows Security notification icon", command: "%windir%\\system32\\SecurityHealthSystray.exe", exePath: null, source: "hklm_run", enabled: true, requiresAdmin: true, keptOff: false, cameBack: false },
+  { id: "hkcu_run:Steam", name: "Steam", command: "\"C:\\Program Files (x86)\\Steam\\steam.exe\" -silent", exePath: null, source: "hkcu_run", enabled: false, requiresAdmin: false, keptOff: false, cameBack: false },
 ];
 
 const regions: T.GameRegion[] = [

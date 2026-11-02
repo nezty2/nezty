@@ -44,6 +44,16 @@ pub fn start(app: AppHandle, state: Arc<AppState>) {
             for id in now.difference(&prev) {
                 let Some(game) = games.iter().find(|g| &g.id == id) else { continue };
                 let _ = app.emit("game-started", GameEvent { game_id: id.clone(), name: game.name.clone() });
+                // Apps die bij een spelstart dicht moeten (Achtergrond-apps, vinkje "Sluiten bij spelstart").
+                let settings = state.settings_clone();
+                if !settings.close_during_gaming.is_empty() && crate::license::require(&state).is_ok() {
+                    let own: Vec<String> = game.process_names.iter().map(|n| n.to_lowercase()).collect();
+                    let names: Vec<String> = settings.close_during_gaming.iter().filter(|n| !own.contains(&n.to_lowercase())).cloned().collect();
+                    let r = crate::processes::close_many(&state, &names, None, Some(id));
+                    if !r.closed.is_empty() {
+                        boost::notify(&app, "info", Msg::new("apps_closed_for_game").with("game", &game.name).with("count", r.closed.len()));
+                    }
+                }
             }
 
             for id in prev.difference(&now) {

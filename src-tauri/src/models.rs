@@ -428,6 +428,10 @@ pub struct Settings {
     pub mem_guard: bool,
     /// Multi-Internet: automatisch naar een andere verbinding als de huidige geen internet meer geeft.
     pub multinet_auto: bool,
+    /// Opstart-apps die de gebruiker heeft uitgezet: zet zo'n app zichzelf weer aan, dan zet nezty hem weer uit.
+    pub startup_keep_off: Vec<String>,
+    /// Opstart-apps die zichzelf weer aanzetten (gezien door nezty), voor de uitleg op de pagina.
+    pub startup_came_back: Vec<String>,
 }
 
 impl Default for Settings {
@@ -470,6 +474,8 @@ impl Default for Settings {
             license_no_token_since: None,
             mem_guard: false,
             multinet_auto: false,
+            startup_keep_off: vec![],
+            startup_came_back: vec![],
         }
     }
 }
@@ -839,6 +845,10 @@ pub struct StartupItem {
     pub source: StartupSource,
     pub enabled: bool,
     pub requires_admin: bool,
+    /// Door de gebruiker uitgezet: nezty houdt hem uit als de app zichzelf weer aanzet.
+    pub kept_off: bool,
+    /// Deze app heeft zichzelf al eens weer aangezet.
+    pub came_back: bool,
 }
 
 // ---------- Netwerk ----------

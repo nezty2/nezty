@@ -130,6 +130,8 @@ pub fn list() -> AppResult<Vec<StartupItem>> {
                 source,
                 enabled: is_enabled(&approved),
                 requires_admin: hive.needs_admin(),
+                kept_off: false,
+                came_back: false,
             });
         }
     }
@@ -156,6 +158,8 @@ pub fn list() -> AppResult<Vec<StartupItem>> {
                 source,
                 enabled: is_enabled(&approved),
                 requires_admin: ahive.needs_admin(),
+                kept_off: false,
+                came_back: false,
             });
         }
     }
@@ -199,8 +203,79 @@ pub fn set_enabled(state: &AppState, item_id: &str, enabled: bool) -> AppResult<
         e.payload = RevertPayload::Registry { hive, path: path.clone(), name: name.to_string(), old, post: None };
         lock(&state.journal).record(e)?;
     }
+    // Onthouden wat de gebruiker uit wil hebben, zodat de bewaker het uit houdt.
+    {
+        let mut s = lock(&state.settings);
+        s.startup_keep_off.retain(|i| i != item_id);
+        if enabled {
+            s.startup_came_back.retain(|i| i != item_id);
+        } else {
+            s.startup_keep_off.push(item_id.to_string());
+        }
+    }
+    state.save_settings();
     list()?
         .into_iter()
         .find(|i| i.id == item_id)
+        .map(|i| annotate_one(state, i))
         .ok_or_else(|| AppError::NotFound(format!("startup item {name}")))
+}
+
+/// Vult in wat nezty over een item onthoudt (uit houden, zichzelf weer aangezet).
+pub fn annotate_one(state: &AppState, mut item: StartupItem) -> StartupItem {
+    let s = lock(&state.settings);
+    item.kept_off = s.startup_keep_off.contains(&item.id);
+    item.came_back = s.startup_came_back.contains(&item.id);
+    item
+}
+
+pub fn list_for(state: &AppState) -> AppResult<Vec<StartupItem>> {
+    Ok(list()?.into_iter().map(|i| annotate_one(state, i)).collect())
+}
+
+/// Apps die zichzelf weer hebben aangezet terwijl de gebruiker ze uit wilde: weer uitzetten. Geeft hun namen.
+pub fn enforce(state: &AppState) -> Vec<String> {
+    let keep = state.settings_clone().startup_keep_off;
+    if keep.is_empty() {
+        return vec![];
+    }
+    let Ok(items) = list() else { return vec![] };
+    let mut back = vec![];
+    for it in items.iter().filter(|i| keep.contains(&i.id) && i.enabled) {
+        if it.requires_admin && !state.elevated {
+            continue;
+        }
+        match set_enabled(state, &it.id, false) {
+            Ok(_) => {
+                log::warn!("opstarten: {} zette zichzelf weer aan, weer uitgezet", it.name);
+                let mut s = lock(&state.settings);
+                if !s.startup_came_back.contains(&it.id) {
+                    s.startup_came_back.push(it.id.clone());
+                }
+                back.push(it.name.clone());
+            }
+            Err(e) => log::warn!("opstarten: {} weer uitzetten mislukt: {e}", it.name),
+        }
+    }
+    if !back.is_empty() {
+        state.save_settings();
+    }
+    back
+}
+
+/// Bewaker: kort na het opstarten en daarna elke minuut kijken of een uitgezette app zichzelf weer aanzet.
+/// Sommige apps (bv. SteelSeries GG) doen dat bij elke eigen start. Een melding per keer, zodat je weet waarom.
+pub fn start_keeper(app: tauri::AppHandle, state: std::sync::Arc<AppState>) {
+    use tauri::Emitter;
+    let _ = std::thread::Builder::new().name("startup-keeper".into()).spawn(move || {
+        std::thread::sleep(std::time::Duration::from_secs(20));
+        loop {
+            if crate::license::require(&state).is_ok() {
+                for name in enforce(&state) {
+                    let _ = app.emit("notice", crate::models::Notice::new("warning", crate::models::Msg::new("startup_came_back").with("app", &name)));
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_secs(60));
+        }
+    });
 }
