@@ -29,6 +29,7 @@ mod journal;
 mod measure;
 mod metrics;
 mod models;
+mod mouse;
 mod netinfo;
 mod overlays;
 mod ping;
@@ -173,7 +174,7 @@ fn open_path(app: AppHandle, path: String) -> AppResult<()> {
 #[tauri::command]
 fn open_url(app: AppHandle, url: String) -> AppResult<()> {
     // Alleen https, Windows-instellingen en de instellingenpagina's van Discord en Steam (zie overlays.rs).
-    let allowed = ["https://", "ms-settings:", "discord://-/settings/", "steam://settings/"];
+    let allowed = ["https://", "ms-settings:", "windowsdefender://", "discord://-/settings/", "steam://settings/"];
     if !allowed.iter().any(|p| url.starts_with(p)) {
         return Err(AppError::msg("link not allowed"));
     }
@@ -953,6 +954,11 @@ async fn measure_controller_rate(state: St<'_>, id: String, seconds: Option<f32>
 }
 
 #[tauri::command]
+async fn measure_mouse_rate(seconds: Option<f32>) -> AppResult<MouseRate> {
+    blocking(move || Ok(mouse::measure(seconds.unwrap_or(3.0)))).await
+}
+
+#[tauri::command]
 fn get_crosshair_config(state: St<'_>) -> CrosshairConfig {
     lock(&state.settings).crosshair.clone()
 }
@@ -1070,6 +1076,13 @@ fn run_selftest(args: &[String]) -> bool {
         if let (Some(out), Some(pubkey)) = (args.get(i + 1), args.get(i + 2)) {
             let v = updater::selftest(&args[i + 3..], pubkey);
             let _ = std::fs::write(out, serde_json::to_string_pretty(&v).unwrap_or_default());
+        }
+        return true;
+    }
+    if let Some(i) = args.iter().position(|a| a == "--selftest-mouse") {
+        // --selftest-mouse <out.json>: 3 seconden meten, beweeg de muis.
+        if let Some(out) = args.get(i + 1) {
+            let _ = std::fs::write(out, serde_json::to_string_pretty(&mouse::measure(3.0)).unwrap_or_default());
         }
         return true;
     }
@@ -1353,6 +1366,7 @@ pub fn run() {
             check_update,
             install_update,
             measure_controller_rate,
+            measure_mouse_rate,
             gamenet_regions,
             gamenet_server,
             gamenet_route,

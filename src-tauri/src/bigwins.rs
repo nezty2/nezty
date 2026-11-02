@@ -305,6 +305,60 @@ fn ram_check() -> BigWin {
     base(check("ram_speed", CheckStatus::Ok, Gain::Big, "ok"))
 }
 
+// ---------- Geheugenintegriteit (Core isolation) ----------
+
+/// Geheugenintegriteit (HVCI) beschermt de kernel, maar kost in games die op de processor leunen 3 tot 8 procent
+/// fps. Het is een beveiligingsinstelling van Windows: nezty laat alleen de stand zien en de weg naar de knop.
+fn memory_integrity_check() -> BigWin {
+    let running: Option<Vec<u64>> = std::thread::spawn(|| {
+        WMIConnection::with_namespace_path("root\\Microsoft\\Windows\\DeviceGuard")
+            .ok()
+            .and_then(|c| c.raw_query::<HashMap<String, Variant>>("SELECT SecurityServicesRunning FROM Win32_DeviceGuard").ok())
+            .and_then(|rows| rows.into_iter().next())
+            .and_then(|r| match r.get("SecurityServicesRunning") {
+                Some(Variant::Array(a)) => Some(a.iter().filter_map(|v| match v {
+                    Variant::UI4(x) => Some(*x as u64),
+                    Variant::I4(x) => Some(*x as u64),
+                    Variant::UI2(x) => Some(*x as u64),
+                    _ => None,
+                }).collect()),
+                _ => None,
+            })
+    })
+    .join()
+    .unwrap_or(None);
+    let Some(services) = running else {
+        return check("memory_integrity", CheckStatus::Unavailable, Gain::Measurable, "unknown");
+    };
+    // 2 = Hypervisor-enforced Code Integrity (de schakelaar "Geheugenintegriteit" in Windows-beveiliging).
+    let on = services.contains(&2);
+    let mut w = check("memory_integrity", if on { CheckStatus::Info } else { CheckStatus::Ok }, Gain::Measurable, if on { "on" } else { "off" });
+    w.action = CheckAction::Link;
+    w.link = Some("windowsdefender://coreisolation".into());
+    w
+}
+
+// ---------- Resizable BAR ----------
+
+/// Resizable BAR laat de processor het hele videogeheugen in één keer aanspreken. Staat het uit, dan is de BAR
+/// 256 MB. Aanzetten gebeurt in de BIOS (Above 4G Decoding en Resizable BAR). Alleen NVIDIA, via NVML.
+fn rebar_check() -> BigWin {
+    let layout = gpu_layout();
+    if !layout.gpus.iter().any(|g| g.vendor == "nvidia" && g.discrete) {
+        return check("rebar", CheckStatus::Unavailable, Gain::Measurable, "no_nvidia");
+    }
+    let info = nvml_wrapper::Nvml::init().ok().and_then(|n| {
+        let d = n.device_by_index(0).ok()?;
+        Some((d.bar1_memory_info().ok()?.total, d.memory_info().ok()?.total, d.name().unwrap_or_default()))
+    });
+    let Some((bar1, vram, name)) = info else {
+        return check("rebar", CheckStatus::Unavailable, Gain::Measurable, "unknown");
+    };
+    let on = bar1 >= vram.saturating_sub(vram / 8);
+    let w = check("rebar", if on { CheckStatus::Ok } else { CheckStatus::Info }, Gain::Measurable, if on { "on" } else { "off" });
+    p(p(p(w, "gpu", name), "bar", bar1 / (1024 * 1024)), "vram", vram / (1024 * 1024))
+}
+
 // ---------- 5. Videokaartdriver ----------
 
 fn driver_check() -> BigWin {
@@ -451,7 +505,7 @@ fn gpu_battery_limit_check() -> Option<BigWin> {
 }
 
 pub fn all(state: &AppState) -> Vec<BigWin> {
-    let mut out = vec![refresh_check(), gpu_choice_check(state), power_check(), ram_check(), driver_check(), heavy_check(state)];
+    let mut out = vec![refresh_check(), gpu_choice_check(state), power_check(), ram_check(), rebar_check(), memory_integrity_check(), driver_check(), heavy_check(state)];
     if crate::device::is_laptop(state) {
         out.push(laptop_heat_check(state));
         out.push(laptop_gpu_mode_check());

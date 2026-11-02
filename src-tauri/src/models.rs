@@ -1041,6 +1041,15 @@ pub fn now_ms() -> i64 {
     chrono::Utc::now().timestamp_millis()
 }
 
+/// Gemeten pollingrate van de muis (zie mouse.rs).
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct MouseRate {
+    pub hz: Option<u32>,
+    pub moves: u32,
+    pub seconds: f32,
+}
+
 // ---------- Game-netwerk ----------
 
 /// Een datacenter om naartoe te meten: een AWS-regio (TCP-handshake) of een Valve-relay (ICMP).

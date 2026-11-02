@@ -91,6 +91,7 @@ export interface Api {
   getCrosshairConfig(): Promise<T.CrosshairConfig>;
   listControllers(): Promise<T.ControllerInfo[]>;
   measureControllerRate(id: string, seconds?: number): Promise<T.ControllerRate>;
+  measureMouseRate(seconds?: number): Promise<T.MouseRate>;
   gamenetRegions(): Promise<T.NetRegion[]>;
   gamenetServer(gameId: string): Promise<T.GameServer>;
   gamenetRoute(host: string): Promise<T.RouteReport>;
@@ -184,6 +185,7 @@ const tauriApi: Api = {
   getCrosshairConfig: () => call("get_crosshair_config"),
   listControllers: () => call("list_controllers"),
   measureControllerRate: (id, seconds) => call("measure_controller_rate", { id, seconds: seconds ?? null }),
+  measureMouseRate: (seconds) => call("measure_mouse_rate", { seconds: seconds ?? null }),
   gamenetRegions: () => call("gamenet_regions"),
   gamenetServer: (gameId) => call("gamenet_server", { gameId }),
   gamenetRoute: (host) => call("gamenet_route", { host }),
