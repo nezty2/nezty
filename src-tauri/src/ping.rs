@@ -84,28 +84,58 @@ fn split_port(host: &str) -> (String, Option<u16>) {
     (host.to_string(), None)
 }
 
-/// Meerdere metingen met statistiek (min, gemiddelde, max, jitter, verlies).
-pub fn ping_series(host: &str, count: u32, timeout_ms: u32, gap_ms: u64) -> PingResult {
-    let (hostname, port) = split_port(host.trim());
-    let ip = resolve_v4(&hostname);
-    let mut samples: Vec<Option<f32>> = Vec::new();
-    if let Some(ip) = ip {
-        for i in 0..count.max(1) {
-            let sample = match port {
-                Some(p) => tcp_ping_once(SocketAddr::new(IpAddr::V4(ip), p), Duration::from_millis(timeout_ms as u64)),
-                None => ping_once(ip, timeout_ms),
-            };
-            samples.push(sample);
-            if i + 1 < count {
-                std::thread::sleep(Duration::from_millis(gap_ms));
-            }
-        }
-    } else {
-        samples.push(None);
+/// Een meetdoel: ICMP naar een IP-adres, of een TCP-handshake naar IP:poort.
+#[derive(Clone, Copy, Debug)]
+pub enum Target {
+    Icmp(Ipv4Addr),
+    Tcp(SocketAddr),
+}
+
+impl Target {
+    /// "1.2.3.4", "host.nl" (ICMP) of "host.nl:443" (TCP). DNS wordt hier één keer opgezocht.
+    pub fn resolve(host: &str) -> Option<Target> {
+        let (hostname, port) = split_port(host.trim());
+        let ip = resolve_v4(&hostname)?;
+        Some(match port {
+            Some(p) => Target::Tcp(SocketAddr::new(IpAddr::V4(ip), p)),
+            None => Target::Icmp(ip),
+        })
     }
-    let ok: Vec<f32> = samples.iter().filter_map(|s| *s).collect();
-    let sent = samples.len() as u32;
+
+    pub fn ip(&self) -> Ipv4Addr {
+        match self {
+            Target::Icmp(ip) => *ip,
+            Target::Tcp(SocketAddr::V4(a)) => *a.ip(),
+            Target::Tcp(_) => Ipv4Addr::UNSPECIFIED,
+        }
+    }
+
+    /// Eén meting in ms, of None bij time-out.
+    pub fn once(&self, timeout_ms: u32) -> Option<f32> {
+        match self {
+            Target::Icmp(ip) => ping_once(*ip, timeout_ms),
+            Target::Tcp(addr) => tcp_ping_once(*addr, Duration::from_millis(timeout_ms as u64)),
+        }
+    }
+}
+
+/// Statistiek van een reeks metingen. Jitter: het gemiddelde verschil tussen opeenvolgende antwoorden.
+pub struct Summary {
+    pub sent: u32,
+    pub received: u32,
+    pub min_ms: Option<f32>,
+    pub avg_ms: Option<f32>,
+    pub max_ms: Option<f32>,
+    pub jitter_ms: Option<f32>,
+    pub loss_pct: f32,
+}
+
+pub fn summarize<'a>(samples: impl IntoIterator<Item = &'a Option<f32>>) -> Summary {
+    let all: Vec<Option<f32>> = samples.into_iter().copied().collect();
+    let ok: Vec<f32> = all.iter().filter_map(|s| *s).collect();
+    let sent = all.len() as u32;
     let received = ok.len() as u32;
+    let round = |v: f32| (v * 10.0).round() / 10.0;
     let (min_ms, max_ms, avg_ms, jitter_ms) = if ok.is_empty() {
         (None, None, None, None)
     } else {
@@ -117,11 +147,9 @@ pub fn ping_series(host: &str, count: u32, timeout_ms: u32, gap_ms: u64) -> Ping
         } else {
             0.0
         };
-        (Some(min), Some(max), Some((avg * 10.0).round() / 10.0), Some((jitter * 10.0).round() / 10.0))
+        (Some(round(min)), Some(round(max)), Some(round(avg)), Some(round(jitter)))
     };
-    PingResult {
-        host: host.to_string(),
-        ip: ip.map(|i| i.to_string()),
+    Summary {
         sent,
         received,
         min_ms,
@@ -129,16 +157,39 @@ pub fn ping_series(host: &str, count: u32, timeout_ms: u32, gap_ms: u64) -> Ping
         max_ms,
         jitter_ms,
         loss_pct: if sent == 0 { 100.0 } else { ((sent - received) as f32 / sent as f32) * 100.0 },
+    }
+}
+
+/// Meerdere metingen met statistiek (min, gemiddelde, max, jitter, verlies).
+pub fn ping_series(host: &str, count: u32, timeout_ms: u32, gap_ms: u64) -> PingResult {
+    let target = Target::resolve(host);
+    let mut samples: Vec<Option<f32>> = Vec::new();
+    if let Some(t) = target {
+        for i in 0..count.max(1) {
+            samples.push(t.once(timeout_ms));
+            if i + 1 < count {
+                std::thread::sleep(Duration::from_millis(gap_ms));
+            }
+        }
+    } else {
+        samples.push(None);
+    }
+    let s = summarize(&samples);
+    PingResult {
+        host: host.to_string(),
+        ip: target.map(|t| t.ip().to_string()),
+        sent: s.sent,
+        received: s.received,
+        min_ms: s.min_ms,
+        avg_ms: s.avg_ms,
+        max_ms: s.max_ms,
+        jitter_ms: s.jitter_ms,
+        loss_pct: s.loss_pct,
         samples,
     }
 }
 
 /// Eén snelle meting voor het dashboard.
 pub fn quick(host: &str, timeout_ms: u32) -> Option<f32> {
-    let (hostname, port) = split_port(host.trim());
-    let ip = resolve_v4(&hostname)?;
-    match port {
-        Some(p) => tcp_ping_once(SocketAddr::new(IpAddr::V4(ip), p), Duration::from_millis(timeout_ms as u64)),
-        None => ping_once(ip, timeout_ms),
-    }
+    Target::resolve(host)?.once(timeout_ms)
 }

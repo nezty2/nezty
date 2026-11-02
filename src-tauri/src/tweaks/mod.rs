@@ -77,6 +77,8 @@ pub const CATALOG: &[TweakDef] = &[
     // Netwerk
     def("wifi_power_max", "Wi-Fi power saving off", C::Network, S::Global, Small, Instant, false),
     def("wifi_gaming_mode", "Wi-Fi background scan off while nezty runs", C::Network, S::Global, Measurable, Instant, false),
+    // Windows past QoS-regels op een pc zonder domein pas toe met deze instelling (nodig voor game_qos).
+    def("qos_all_networks", "QoS policies on every network", C::Network, S::Global, Negligible, PcRestart, true),
     // Alleen laptop
     TweakDef { platform: Platform::LaptopOnly, ..def("power_mode_best", "Power mode best performance", C::Laptop, S::Global, Measurable, Instant, true) },
     TweakDef { platform: Platform::LaptopOnly, ..def("battery_saver_off", "Battery saver off while gaming", C::Laptop, S::Global, Measurable, Instant, false) },
@@ -87,6 +89,7 @@ pub const CATALOG: &[TweakDef] = &[
     TweakDef { platform: Platform::LaptopOnly, ..def("touchpad_off_with_mouse", "Touchpad off while a mouse is connected", C::Laptop, S::Global, Small, Instant, false) },
     // Per game
     def("gpu_high_perf", "GPU preference high performance", C::Game, S::PerGame, Small, GameRestart, false),
+    def("game_qos", "Game traffic priority (DSCP 46)", C::Network, S::PerGame, Small, GameRestart, true),
     // Opruimen
     TweakDef { kind: TweakKind::Action, ..def("cleanup_temp", "Clean temp files and shader cache", C::Cleanup, S::Global, Negligible, Instant, false) },
 ];
@@ -171,6 +174,8 @@ pub fn status(state: &AppState, id: &str, game: Option<&Game>) -> Status {
         "touchpad_off_with_mouse" => laptop::touchpad_status(),
         "wifi_gaming_mode" => wifi_gaming::status(),
         "gpu_high_perf" => per_game::gpu_pref_status(game),
+        "qos_all_networks" => crate::gamenet::qos::nla_status(),
+        "game_qos" => crate::gamenet::qos::game_status(state, game),
         _ => Ok(Status::simple(TweakState::Unknown)),
     };
     match r {
@@ -343,6 +348,8 @@ fn apply_inner(state: &AppState, id: &str, option: Option<&str>, session: Option
         "touchpad_off_with_mouse" => laptop::touchpad_apply(state, session),
         "wifi_gaming_mode" => wifi_gaming::apply(state, session),
         "gpu_high_perf" => per_game::gpu_pref_apply(state, game, session),
+        "qos_all_networks" => crate::gamenet::qos::nla_apply(state, session),
+        "game_qos" => crate::gamenet::qos::game_apply(state, game, session),
         _ => Err(AppError::NotFound(format!("tweak {id}"))),
     }
 }
@@ -380,6 +387,8 @@ fn disable_inner(state: &AppState, id: &str, game: Option<&Game>) -> AppResult<(
         "touchpad_off_with_mouse" => laptop::touchpad_disable(state),
         "wifi_gaming_mode" => wifi_gaming::disable(state),
         "gpu_high_perf" => per_game::gpu_pref_disable(state, game),
+        "qos_all_networks" => crate::gamenet::qos::nla_disable(state),
+        "game_qos" => crate::gamenet::qos::game_disable(state, game),
         _ => Err(AppError::NotFound(format!("tweak {id}"))),
     }
 }

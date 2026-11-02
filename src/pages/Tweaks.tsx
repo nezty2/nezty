@@ -100,9 +100,10 @@ export function TweaksPage() {
   };
 
   // Losse tweaks: alles wat niet al in "Alles activeren" zit. Wat niet bij dit apparaat past, staat er niet tussen,
-  // behalve als nezty het eerder zelf heeft aangezet (dan moet het wel uit kunnen).
+  // behalve als nezty het eerder zelf heeft aangezet (dan moet het wel uit kunnen). Netwerktweaks staan op de
+  // netwerkpagina, bij de functies waar ze bij horen.
   const shown = (tw: TweakInfo) => !tw.platformLocked || (tw.state === "on" && tw.appliedByApp);
-  const optional = tweaks.filter((tw) => tw.scope === "global" && tw.kind === "toggle" && !ACTIVATE_ALL_TWEAKS.includes(tw.id) && shown(tw));
+  const optional = tweaks.filter((tw) => tw.scope === "global" && tw.kind === "toggle" && tw.category !== "network" && !ACTIVATE_ALL_TWEAKS.includes(tw.id) && shown(tw));
   const windows = optional.filter((tw) => tw.category !== "laptop");
   const laptop = optional.filter((tw) => tw.category === "laptop");
   const cleanup = tweaks.filter((tw) => tw.kind === "action");

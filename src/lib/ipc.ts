@@ -91,6 +91,19 @@ export interface Api {
   getCrosshairConfig(): Promise<T.CrosshairConfig>;
   listControllers(): Promise<T.ControllerInfo[]>;
   measureControllerRate(id: string, seconds?: number): Promise<T.ControllerRate>;
+  gamenetRegions(): Promise<T.NetRegion[]>;
+  gamenetServer(gameId: string): Promise<T.GameServer>;
+  gamenetRoute(host: string): Promise<T.RouteReport>;
+  gamenetMonitorStart(host: string): Promise<void>;
+  gamenetMonitorStop(host: string): Promise<void>;
+  warpInfo(): Promise<T.WarpInfo>;
+  warpTest(host: string): Promise<T.WarpTest>;
+  warpStop(): Promise<T.WarpInfo>;
+  multinetStatus(measure: boolean): Promise<T.MultiNetStatus>;
+  multinetPrefer(luid: string): Promise<T.MultiNetStatus>;
+  multinetClear(): Promise<T.MultiNetStatus>;
+  memguardStatus(): Promise<T.MemGuardStatus>;
+  memguardPurge(): Promise<T.PurgeResult>;
 }
 
 const tauriApi: Api = {
@@ -171,6 +184,19 @@ const tauriApi: Api = {
   getCrosshairConfig: () => call("get_crosshair_config"),
   listControllers: () => call("list_controllers"),
   measureControllerRate: (id, seconds) => call("measure_controller_rate", { id, seconds: seconds ?? null }),
+  gamenetRegions: () => call("gamenet_regions"),
+  gamenetServer: (gameId) => call("gamenet_server", { gameId }),
+  gamenetRoute: (host) => call("gamenet_route", { host }),
+  gamenetMonitorStart: (host) => call("gamenet_monitor_start", { host }),
+  gamenetMonitorStop: (host) => call("gamenet_monitor_stop", { host }),
+  warpInfo: () => call("warp_info"),
+  warpTest: (host) => call("warp_test", { host }),
+  warpStop: () => call("warp_stop"),
+  multinetStatus: (measure) => call("multinet_status", { measure }),
+  multinetPrefer: (luid) => call("multinet_prefer", { luid }),
+  multinetClear: () => call("multinet_clear"),
+  memguardStatus: () => call("memguard_status"),
+  memguardPurge: () => call("memguard_purge"),
 };
 
 export const api: Api = isTauri ? tauriApi : mockApi;

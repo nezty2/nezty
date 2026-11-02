@@ -1,43 +1,48 @@
-import { Award, Cable, Eye, EyeOff, Globe, Info, RefreshCw, ShieldQuestion, Wifi } from "lucide-react";
+import { Cable, Eye, EyeOff, Globe, RefreshCw, ShieldQuestion, Wifi } from "lucide-react";
 import { BandwidthCard } from "@/components/BandwidthCard";
 import { BufferbloatCard } from "@/components/BufferbloatCard";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { AnalyzeTab } from "@/components/netopt/AnalyzeTab";
+import { MultiTab } from "@/components/netopt/MultiTab";
+import { OptimizeTab } from "@/components/netopt/OptimizeTab";
+import { quality, qualityColor } from "@/components/netopt/route";
+import { useCallback, useEffect, useState } from "react";
 import { TweakCard } from "@/components/TweakCard";
 import { Badge, Button, Card, Kv, PageHeader, SectionTitle, Skeleton, cn } from "@/components/ui";
 import { useT } from "@/i18n/hooks";
 import { api } from "@/lib/ipc";
 import { formatMs } from "@/lib/format";
-import type { ConnectionOverview, GameRegion, PingResult, RegionId, TweakInfo } from "@/lib/types";
+import type { ConnectionOverview, PingResult, TweakInfo } from "@/lib/types";
 import { useApp } from "@/store/app";
-
-type Quality = "excellent" | "good" | "ok" | "bad";
-function quality(ms: number | null | undefined): Quality | null {
-  if (ms == null) return null;
-  return ms < 20 ? "excellent" : ms < 45 ? "good" : ms < 90 ? "ok" : "bad";
-}
-const qualityColor: Record<Quality, string> = { excellent: "text-ok", good: "text-ok", ok: "text-warn", bad: "text-bad" };
 
 const INTERNET = [
   { id: "cloudflare", label: "Cloudflare", host: "1.1.1.1" },
   { id: "google", label: "Google", host: "8.8.8.8" },
 ];
 
+type Tab = "optimize" | "analyze" | "multi" | "overview";
+const TABS: Tab[] = ["optimize", "analyze", "multi", "overview"];
+
+function savedTab(): Tab {
+  try {
+    const v = window.localStorage.getItem("nezty.network.tab") as Tab | null;
+    return v && TABS.includes(v) ? v : "optimize";
+  } catch {
+    return "optimize";
+  }
+}
+
 /** Klikbare meetkaart: klik om (opnieuw) te meten. */
-function PingTile({ title, sub, result, loading, recommended, onTest }: { title: string; sub?: string; result?: PingResult; loading: boolean; recommended?: boolean; onTest: () => void }) {
+function PingTile({ title, sub, result, loading, onTest }: { title: string; sub?: string; result?: PingResult; loading: boolean; onTest: () => void }) {
   const { t, lang } = useT();
   const q = quality(result?.avgMs);
   return (
-    <button
-      onClick={onTest}
-      disabled={loading}
-      className={cn("card flex w-full flex-col p-4 text-left transition-colors hover:border-line-2 disabled:cursor-wait", recommended && "border-accent ring-1 ring-accent/40")}
-    >
+    <button onClick={onTest} disabled={loading} className="card flex w-full flex-col p-4 text-left transition-colors hover:border-line-2 disabled:cursor-wait">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="truncate text-sm font-semibold">{title}</div>
           {sub && <div className="truncate text-[12px] text-ink-3">{sub}</div>}
         </div>
-        {recommended ? <Badge variant="accent" icon={Award}>{t("common.recommended")}</Badge> : <RefreshCw className={cn("h-4 w-4 text-ink-3", loading && "animate-spin")} />}
+        <RefreshCw className={cn("h-4 w-4 text-ink-3", loading && "animate-spin")} />
       </div>
       <div className="mt-3 flex items-end justify-between gap-2">
         <div className={cn("text-[24px] font-semibold leading-none tnum", q ? qualityColor[q] : "text-ink-3")}>
@@ -56,13 +61,46 @@ function PingTile({ title, sub, result, loading, recommended, onTest }: { title:
 }
 
 export function NetworkPage() {
-  const { t, td, lang } = useT();
+  const { t } = useT();
+  const [tab, setTab] = useState<Tab>(savedTab);
+  const choose = (id: Tab) => {
+    setTab(id);
+    try {
+      window.localStorage.setItem("nezty.network.tab", id);
+    } catch {
+      /* zonder opslag onthoudt de pagina het tabblad niet */
+    }
+  };
+  return (
+    <div className="space-y-6">
+      <PageHeader title={t("network.title")} subtitle={t("netopt.subtitle")} />
+      <div className="flex gap-1 overflow-x-auto border-b border-line">
+        {TABS.map((id) => (
+          <button
+            key={id}
+            onClick={() => choose(id)}
+            className={cn("-mb-px shrink-0 border-b-2 px-3 py-2 text-sm font-medium transition-colors", tab === id ? "border-accent text-ink" : "border-transparent text-ink-3 hover:text-ink-2")}
+          >
+            {t(`netopt.tabs.${id}`)}
+          </button>
+        ))}
+      </div>
+      {tab === "optimize" && <OptimizeTab />}
+      {tab === "analyze" && <AnalyzeTab />}
+      {tab === "multi" && <MultiTab />}
+      {tab === "overview" && <OverviewTab />}
+    </div>
+  );
+}
+
+/** Je internet, je verbinding, wie je internet gebruikt, bufferbloat en de netwerktweaks. */
+function OverviewTab() {
+  const { t } = useT();
   const handleError = useApp((s) => s.handleError);
   const toast = useApp((s) => s.toast);
   const tweaks = useApp((s) => s.tweaks);
   const setTweak = useApp((s) => s.setTweak);
   const appInfo = useApp((s) => s.appInfo);
-  const [regions, setRegions] = useState<GameRegion[]>([]);
   const [results, setResults] = useState<Record<string, PingResult>>({});
   const [loading, setLoading] = useState<Set<string>>(new Set());
   const [overview, setOverview] = useState<ConnectionOverview | null>(null);
@@ -90,46 +128,14 @@ export function NetworkPage() {
     },
     [handleError],
   );
-
-  const testAll = useCallback(
-    async (list: GameRegion[]) => {
-      // Een paar tegelijk, zodat het snel gaat zonder de verbinding te belasten.
-      const jobs = [...INTERNET.map((i) => ({ id: i.id, host: i.host })), ...list.map((r) => ({ id: r.id, host: r.host }))];
-      for (let i = 0; i < jobs.length; i += 4) {
-        await Promise.all(jobs.slice(i, i + 4).map((j) => test(j.id, j.host)));
-      }
-    },
-    [test],
-  );
+  const testAll = useCallback(() => Promise.all(INTERNET.map((i) => test(i.id, i.host))), [test]);
 
   useEffect(() => {
-    api
-      .getGameRegions()
-      .then((r) => {
-        setRegions(r);
-        void testAll(r);
-      })
-      .catch(handleError);
+    void testAll();
     api.getConnectionOverview().then(setOverview).catch(handleError);
   }, [handleError, testAll]);
 
-  // Beste regio: laagste gemiddelde ping. Per spelregio de snelste stad.
-  const best = useMemo(() => {
-    let b: { region: GameRegion; ms: number } | null = null;
-    for (const r of regions) {
-      const ms = results[r.id]?.avgMs;
-      if (ms != null && (!b || ms < b.ms)) b = { region: r, ms };
-    }
-    return b;
-  }, [regions, results]);
-
-  const byRegion = useMemo(() => {
-    const m = new Map<RegionId, GameRegion[]>();
-    for (const r of regions) m.set(r.region, [...(m.get(r.region) ?? []), r]);
-    return Array.from(m.entries());
-  }, [regions]);
-
-  const netTweaks = tweaks.filter((tw) => tw.category === "network" && !tw.experimental);
+  const netTweaks = tweaks.filter((tw) => tw.category === "network" && tw.scope === "global" && !tw.experimental);
   const onToggle = async (tw: TweakInfo, enabled: boolean, option: string | null) => {
     setBusy(tw.id);
     await setTweak(tw.id, enabled, option);
@@ -139,34 +145,28 @@ export function NetworkPage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader
-        title={t("network.title")}
-        subtitle={t("network.subtitle")}
-        actions={
-          <>
-            <Button icon={RefreshCw} loading={loading.size > 0} onClick={() => void testAll(regions)}>
-              {loading.size > 0 ? t("network.testing") : t("network.testAll")}
-            </Button>
-            <Button
-              icon={Globe}
-              loading={flushing}
-              onClick={async () => {
-                setFlushing(true);
-                try {
-                  await api.flushDns();
-                  toast({ level: "success", title: t("notice.success"), message: t("network.flushed") });
-                } catch (e) {
-                  handleError(e);
-                } finally {
-                  setFlushing(false);
-                }
-              }}
-            >
-              {t("network.flushDns")}
-            </Button>
-          </>
-        }
-      />
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button icon={RefreshCw} loading={loading.size > 0} onClick={() => void testAll()}>
+          {loading.size > 0 ? t("network.testing") : t("network.testAll")}
+        </Button>
+        <Button
+          icon={Globe}
+          loading={flushing}
+          onClick={async () => {
+            setFlushing(true);
+            try {
+              await api.flushDns();
+              toast({ level: "success", title: t("notice.success"), message: t("network.flushed") });
+            } catch (e) {
+              handleError(e);
+            } finally {
+              setFlushing(false);
+            }
+          }}
+        >
+          {t("network.flushDns")}
+        </Button>
+      </div>
 
       {overview && (
         <Card className={cn("flex items-start gap-3", onWifi ? "border-warn/50" : "border-ok/40")}>
@@ -188,18 +188,6 @@ export function NetworkPage() {
         </div>
       </Card>
 
-      {best && (
-        <Card className="flex items-start gap-4 border-accent">
-          <Award className="mt-0.5 h-6 w-6 shrink-0 text-accent" />
-          <div>
-            <div className="text-[15px] font-semibold">{t("network.bestTitle", { region: td(`region.${best.region.region}`) })}</div>
-            <p className="mt-1 text-[13px] text-ink-2">{t("network.bestAdvice", { region: td(`region.${best.region.region}`), ms: formatMs(lang, best.ms) })}</p>
-            <p className="mt-1 text-[12px] text-ink-3">{t("network.fortniteHow")}</p>
-            <p className="mt-0.5 text-[12px] text-ink-3">{t("network.otherGamesHow")}</p>
-          </div>
-        </Card>
-      )}
-
       <section>
         <SectionTitle sub={t("network.internetDesc")}>{t("network.internet")}</SectionTitle>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -207,30 +195,6 @@ export function NetworkPage() {
             <PingTile key={i.id} title={i.label} sub={i.host} result={results[i.id]} loading={loading.has(i.id)} onTest={() => void test(i.id, i.host)} />
           ))}
         </div>
-      </section>
-
-      <section>
-        <SectionTitle sub={t("network.regionsDesc")}>{t("network.regions")}</SectionTitle>
-        {regions.length === 0 ? (
-          <Skeleton className="h-32" />
-        ) : (
-          <div className="space-y-4">
-            {byRegion.map(([region, list]) => (
-              <div key={region}>
-                <div className="mb-2 text-[13px] font-medium text-ink-2">{td(`region.${region}`)}</div>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  {list.map((r) => (
-                    <PingTile key={r.id} title={r.city} result={results[r.id]} loading={loading.has(r.id)} recommended={best?.region.id === r.id} onTest={() => void test(r.id, r.host)} />
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-        <p className="mt-3 flex items-center gap-2 text-[12px] text-ink-3">
-          <Info className="h-3.5 w-3.5" />
-          {t("network.indicative")}
-        </p>
       </section>
 
       <section>

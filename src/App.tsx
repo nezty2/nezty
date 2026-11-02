@@ -7,6 +7,7 @@ import { AppBackground } from "@/components/AppBackground";
 import { Splash } from "@/components/Splash";
 import { Intro } from "@/intro/Intro";
 import { WelcomeModal } from "@/components/WelcomeModal";
+import { WhatsNew } from "@/components/WhatsNew";
 import { useT } from "@/i18n/hooks";
 import { LOCALES } from "@/i18n";
 import { isTauri } from "@/lib/ipc";
@@ -151,6 +152,7 @@ export default function App() {
         </main>
         <Toasts />
         <WelcomeModal />
+        {!intro && ready && !signedOut && <WhatsNew />}
         <BoostResultModal report={lastReport} open={showResult} onClose={() => setShowResult(false)} />
         {!intro && ready && signedOut && <LoginScreen />}
         <ForceUpdate />

@@ -108,6 +108,19 @@ pub enum RevertPayload {
         keyword: String,
         old_value: String,
     },
+    /// Een QoS-regel van Windows die nezty heeft gemaakt (voorrang voor gameverkeer): terugzetten = weghalen.
+    QosPolicy {
+        name: String,
+    },
+    /// Cloudflare WARP die nezty na de routetest aan liet: terugzetten = verbinding verbreken.
+    Warp,
+    /// Interfacemetric van een internetverbinding (Multi-Internet), met de oude waarde.
+    InterfaceMetric {
+        luid: u64,
+        family: u16,
+        automatic: bool,
+        metric: u32,
+    },
     None,
 }
 
@@ -480,6 +493,9 @@ pub fn execute_revert(payload: &RevertPayload) -> AppResult<()> {
             ))?;
             Ok(())
         }
+        RevertPayload::QosPolicy { name } => crate::gamenet::qos::remove_policy(name),
+        RevertPayload::Warp => crate::gamenet::warp::revert(),
+        RevertPayload::InterfaceMetric { luid, family, automatic, metric } => crate::gamenet::multinet::revert_metric(*luid, *family, *automatic, *metric),
         RevertPayload::None => Err(AppError::coded("not_revertable")),
     }
 }
