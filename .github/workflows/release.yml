@@ -75,7 +75,7 @@ jobs:
           NEZTY_LICENSE_PUBKEY: ${{ vars.NEZTY_LICENSE_PUBKEY }}
         run: |
           if (-not $env:NEZTY_LICENSE_PUBKEY) { throw "Variable NEZTY_LICENSE_PUBKEY ontbreekt: deze build zou zonder inlogscherm zijn." }
-          $cfg = @{ plugins = @{ "nezty-update" = @{ endpoints = @("${{ steps.versie.outputs.base }}/latest.json") } } }
+          $cfg = @{ plugins = @{ "nezty-update" = @{ endpoints = @("${{ steps.versie.outputs.base }}/latest.json", "https://github.com/nezty2/nezty/releases/latest/download/latest.json") } } }
           $path = "$env:RUNNER_TEMP\nezty-ci.conf.json"
           $cfg | ConvertTo-Json -Depth 6 | Set-Content -Path $path -Encoding utf8
           # Bewust zonder --features selftest: de zelftests (--selftest*) horen niet in een release.

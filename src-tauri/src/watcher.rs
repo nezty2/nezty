@@ -1,5 +1,5 @@
-//! Houdt in de gaten welke games draaien. Boost automatisch bij de start en zet terug bij het
-//! afsluiten, als dat in het profiel staat.
+//! Houdt in de gaten welke games draaien. Automatisch boosten bestaat niet meer; staat er nog een
+//! boost van een oudere versie aan, dan wordt die bij het afsluiten van de game teruggezet.
 
 use crate::boost;
 use crate::models::{GameEvent, Msg, WatcherStatus};
@@ -37,26 +37,10 @@ pub fn start(app: AppHandle, state: Arc<AppState>) {
                 .map(|g| g.id.clone())
                 .collect();
             *lock(&state.running_games) = now.clone();
-            let settings = state.settings_clone();
 
             for id in now.difference(&prev) {
                 let Some(game) = games.iter().find(|g| &g.id == id) else { continue };
                 let _ = app.emit("game-started", GameEvent { game_id: id.clone(), name: game.name.clone() });
-                let profile = state.profile_for(id);
-                let boost_active = lock(&state.boost).is_some();
-                if settings.auto_boost_enabled && profile.auto_boost && !boost_active {
-                    match boost::run_boost(&app, &state, Some(id), false) {
-                        Ok(r) => boost::notify(
-                            &app,
-                            "success",
-                            Msg::new("auto_boost_done")
-                                .with("game", &game.name)
-                                .with("tweaks", r.applied.len())
-                                .with("apps", r.closed_processes.len()),
-                        ),
-                        Err(e) => boost::notify(&app, "error", Msg::new("auto_boost_failed").with("detail", e.to_string())),
-                    }
-                }
             }
 
             for id in prev.difference(&now) {

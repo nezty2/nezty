@@ -62,7 +62,14 @@ pub fn configured(app: &AppHandle) -> bool {
 
 fn agent() -> ureq::Agent {
     ureq::Agent::config_builder()
-        .tls_config(ureq::tls::TlsConfig::builder().provider(ureq::tls::TlsProvider::NativeTls).build())
+        // De certificaten van Windows zelf gebruiken: zonder die controle faalt https naar Supabase
+        // ("unable to find any user-specified roots"), net als bij license.rs.
+        .tls_config(
+            ureq::tls::TlsConfig::builder()
+                .provider(ureq::tls::TlsProvider::NativeTls)
+                .root_certs(ureq::tls::RootCerts::PlatformVerifier)
+                .build(),
+        )
         .timeout_global(Some(Duration::from_secs(120)))
         .http_status_as_error(true)
         .build()
@@ -89,11 +96,15 @@ pub fn is_newer(candidate: &str, current: &str) -> bool {
 
 fn find(app: &AppHandle) -> AppResult<Option<Found>> {
     let src = source(app).ok_or_else(|| AppError::msg("no update source configured"))?;
-    let current = app.package_info().version.to_string();
+    find_in(&src.endpoints, src.allow_insecure, &app.package_info().version.to_string())
+}
+
+/// Probeert de bronnen op volgorde; lukt de verbinding met een bron niet, dan de volgende.
+fn find_in(endpoints: &[String], allow_insecure: bool, current: &str) -> AppResult<Option<Found>> {
     let agent = agent();
     let mut last_err = None;
-    for ep in &src.endpoints {
-        if !allowed_url(ep, src.allow_insecure) {
+    for ep in endpoints {
+        if !allowed_url(ep, allow_insecure) {
             last_err = Some(AppError::msg("update source must use https"));
             continue;
         }
@@ -112,7 +123,7 @@ fn find(app: &AppHandle) -> AppResult<Option<Found>> {
         };
         let v: serde_json::Value = serde_json::from_str(&text).map_err(|e| AppError::msg(format!("latest.json: {e}")))?;
         let version = v["version"].as_str().unwrap_or_default().to_string();
-        if !is_newer(&version, &current) {
+        if !is_newer(&version, current) {
             return Ok(None);
         }
         let platform = ["windows-x86_64-nsis", "windows-x86_64"].iter().map(|k| &v["platforms"][*k]).find(|p| p.is_object());
@@ -121,7 +132,7 @@ fn find(app: &AppHandle) -> AppResult<Option<Found>> {
         };
         let url = p["url"].as_str().unwrap_or_default().to_string();
         let signature = p["signature"].as_str().unwrap_or_default().to_string();
-        if url.is_empty() || signature.is_empty() || !allowed_url(&url, src.allow_insecure) {
+        if url.is_empty() || signature.is_empty() || !allowed_url(&url, allow_insecure) {
             return Err(AppError::msg("latest.json has an invalid url or signature"));
         }
         let notes = v["notes"].as_str().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
@@ -225,6 +236,33 @@ pub fn install(app: &AppHandle, data_dir: &Path) -> AppResult<()> {
         handle.exit(0);
     });
     Ok(())
+}
+
+/// `--selftest-update`: elke bron apart, zoals een oude versie (0.0.1) hem ziet: zoeken, de installer
+/// downloaden en de handtekening controleren. Schrijft niets weg en start niets.
+#[cfg(feature = "selftest")]
+pub fn selftest(endpoints: &[String], pubkey: &str) -> serde_json::Value {
+    let results: Vec<serde_json::Value> = endpoints
+        .iter()
+        .map(|ep| {
+            let found = match find_in(std::slice::from_ref(ep), false, "0.0.1") {
+                Ok(Some(f)) => f,
+                Ok(None) => return serde_json::json!({ "endpoint": ep, "error": "no newer version" }),
+                Err(e) => return serde_json::json!({ "endpoint": ep, "error": e.to_string() }),
+            };
+            let download = agent()
+                .get(&found.url)
+                .header("User-Agent", "nezty-updater")
+                .call()
+                .and_then(|mut r| r.body_mut().with_config().limit(500 * 1024 * 1024).read_to_vec());
+            let (bytes, signature) = match download {
+                Ok(data) => (data.len(), verify(pubkey, &found.signature, &data).map(|_| "ok".to_string()).unwrap_or_else(|e| e.to_string())),
+                Err(e) => (0, format!("download failed: {e}")),
+            };
+            serde_json::json!({ "endpoint": ep, "version": found.info.version, "url": found.url, "bytes": bytes, "signature": signature })
+        })
+        .collect();
+    serde_json::json!({ "results": results })
 }
 
 #[cfg(test)]

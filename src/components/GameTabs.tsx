@@ -1,120 +1,16 @@
-import { FolderOpen, Gamepad2, Plus, Save, Trash2, Undo2 } from "lucide-react";
+import { FolderOpen, Gamepad2, Save, Undo2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { GameConfigCard } from "@/components/GameConfigCard";
 import { Loader } from "@/components/Loader";
 import { GainBadge, StateBadge, TimingBadge } from "@/components/TweakCard";
-import { useAppIcons } from "@/components/useAppIcons";
-import { Badge, Button, Chip, EmptyState, Row, SegmentedControl, Spinner, TextInput, Toggle } from "@/components/ui";
+import { Badge, Button, Chip, EmptyState, Row, SegmentedControl, Toggle } from "@/components/ui";
 import { useT } from "@/i18n/hooks";
 import { api } from "@/lib/ipc";
 import { prettyPath } from "@/lib/privacy";
-import { formatMb } from "@/lib/format";
-import type { FortniteSettings, Game, GameProfile, ProcessInfo, TweakInfo } from "@/lib/types";
+import type { FortniteSettings, Game, TweakInfo } from "@/lib/types";
 import { useApp } from "@/store/app";
 
-/* ---------- Boost-instellingen per game ---------- */
-
-// Systeemtweaks staan hier bewust niet meer: die zet je permanent aan op Tweaks (Alles activeren).
-export function ProfileTab({ game, profile, onChange }: { game: Game; profile: GameProfile; onChange: (p: GameProfile) => void }) {
-  const { t, td, lang } = useT();
-  const settings = useApp((s) => s.settings);
-  const [procs, setProcs] = useState<ProcessInfo[] | null>(null);
-  const [newApp, setNewApp] = useState("");
-  const icons = useAppIcons((procs ?? []).map((p) => p.exePath));
-
-  useEffect(() => {
-    api.listProcesses().then(setProcs).catch(() => setProcs([]));
-  }, []);
-
-  const set = (patch: Partial<GameProfile>) => onChange({ ...profile, ...patch });
-  const addApp = (name: string) => {
-    const n = name.trim();
-    if (!n || profile.closeApps.some((a) => a.toLowerCase() === n.toLowerCase())) return;
-    set({ closeApps: [...profile.closeApps, n] });
-    setNewApp("");
-  };
-  const suggestions = (procs ?? [])
-    .filter((p) => p.category !== "game")
-    .filter((p) => !profile.closeApps.some((a) => a.toLowerCase() === p.name.toLowerCase()))
-    .filter((p) => !(settings?.closeDuringGaming ?? []).some((a) => a.toLowerCase() === p.name.toLowerCase()))
-    .slice(0, 24);
-
-  return (
-    <div className="space-y-6">
-      <div className="card-inset divide-y divide-line px-4">
-        <Row title={t("profile.autoBoost")} desc={t("profile.autoBoostDesc", { game: game.name })}>
-          <Toggle checked={profile.autoBoost} onChange={(v) => set({ autoBoost: v })} label={t("profile.autoBoost")} />
-        </Row>
-        <Row title={t("profile.revertOnExit")} desc={t("profile.revertOnExitDesc")}>
-          <Toggle checked={profile.revertOnExit} onChange={(v) => set({ revertOnExit: v })} label={t("profile.revertOnExit")} />
-        </Row>
-      </div>
-
-      <section>
-        <h3 className="mb-2 text-sm font-semibold">{t("profile.perGame")}</h3>
-        <div className="card-inset divide-y divide-line px-4">
-          {(
-            [
-              ["gpuHighPerf", "gpu_high_perf"],
-            ] as const
-          ).map(([key, id]) => (
-            <Row key={id} title={td(`tweak.${id}.name`)} desc={td(`tweak.${id}.what`)}>
-              <Toggle checked={profile[key]} onChange={(v) => set({ [key]: v } as Partial<GameProfile>)} label={td(`tweak.${id}.name`)} />
-            </Row>
-          ))}
-        </div>
-      </section>
-
-      <section>
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold">{t("profile.closeApps")}</h3>
-          <label className="flex items-center gap-2 text-[13px] text-ink-2">
-            {t("profile.useGlobal", { count: settings?.closeDuringGaming.length ?? 0 })}
-            <Toggle checked={profile.useGlobalCloseList} onChange={(v) => set({ useGlobalCloseList: v })} label={t("profile.useGlobal", { count: 0 })} />
-          </label>
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {profile.closeApps.map((a) => (
-            <span key={a} className="inline-flex items-center gap-1 rounded-lg border border-line bg-panel-2 py-1 pl-3 pr-1 text-[13px]">
-              {a}
-              <button onClick={() => set({ closeApps: profile.closeApps.filter((x) => x !== a) })} className="rounded p-0.5 text-ink-3 hover:text-ink" aria-label={t("common.remove")}>
-                <Trash2 className="h-3 w-3" />
-              </button>
-            </span>
-          ))}
-          {profile.closeApps.length === 0 && <span className="text-[13px] text-ink-3">{t("profile.noneYet")}</span>}
-        </div>
-        <div className="mt-3 flex gap-2">
-          <TextInput value={newApp} onChange={setNewApp} placeholder={t("profile.placeholder")} className="max-w-xs" />
-          <Button icon={Plus} onClick={() => addApp(newApp)} disabled={!newApp.trim()}>
-            {t("common.add")}
-          </Button>
-        </div>
-        {procs === null ? (
-          <div className="mt-3">
-            <Spinner className="h-4 w-4" />
-          </div>
-        ) : (
-          suggestions.length > 0 && (
-            <div className="mt-3">
-              <div className="mb-1.5 text-[12px] text-ink-3">{t("profile.openNow")}</div>
-              <div className="flex flex-wrap gap-1.5">
-                {suggestions.map((p) => (
-                  <Chip key={p.pid} onClick={() => addApp(p.name)}>
-                    {p.exePath && icons[p.exePath] && <img src={icons[p.exePath]!} alt="" className="h-4 w-4" />}
-                    {p.title} <span className="text-ink-3">{formatMb(lang, p.memoryMb)}</span>
-                  </Chip>
-                ))}
-              </div>
-            </div>
-          )
-        )}
-      </section>
-    </div>
-  );
-}
-
-/* ---------- Nu instellen (los van een boost) ---------- */
+/* ---------- Tweaks voor een game ---------- */
 
 export function NowTab({ game }: { game: Game }) {
   const { t, td } = useT();
