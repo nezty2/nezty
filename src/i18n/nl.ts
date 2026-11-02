@@ -600,6 +600,7 @@ export const nl = {
         gpu_high_perf: { name: "Games op de snelle videokaart", what: "Zet al je games in één keer op de snelle videokaart als je pc er twee heeft." },
         fortnite_vsync: { name: "Fortnite: V-Sync uit", what: "Zet VSync in Fortnite uit, zodat je minder vertraging hebt tussen je muis en het beeld." },
         fortnite_reflex: { name: "Fortnite: NVIDIA Reflex aan", what: "Zet NVIDIA Reflex aan in Fortnite, wat de vertraging tussen klikken en beeld duidelijk verlaagt." },
+        fortnite_fullscreen: { name: "Fortnite: echt volledig scherm", what: "Zet Fortnite op Volledig scherm in plaats van Volledig scherm in venster. Het beeld gaat dan langs de Windows-compositor: directer, en geen haperingen bij twee schermen met verschillende Hz." },
         game_vsync: { name: "V-Sync uit in CS2 en Minecraft", what: "Zet V-Sync uit in het instellingenbestand van Counter-Strike 2 en Minecraft Java, voor minder vertraging." },
       },
     },
@@ -1076,6 +1077,7 @@ export const nl = {
     notFound: "Fortnite niet gevonden",
     check: {
       fps_limit: { name: "Framerate-limiet", why: "Stelt de FPS-grens van Fortnite in op onbeperkt met NVIDIA, of gelijk aan je scherm. Dat houdt de vertraging laag, maar kan je pc warmer maken." },
+      fullscreen: { name: "Echt volledig scherm", why: "Volledig scherm gaat langs de Windows-compositor en reageert directer dan Volledig scherm in venster. Vooral met twee schermen op verschillende Hz scheelt dat haperingen. Alt-Tab duurt wel iets langer." },
     },
     on: "Aan",
     off: "Uit",

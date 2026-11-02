@@ -602,6 +602,7 @@ export const en: Dict = {
         gpu_high_perf: { name: "Games on the fast graphics card", what: "Puts all your games on the fast graphics card in one go if your PC has two." },
         fortnite_vsync: { name: "Fortnite: V-Sync off", what: "Turns off VSync in Fortnite, so you get less delay between your mouse and the picture." },
         fortnite_reflex: { name: "Fortnite: NVIDIA Reflex on", what: "Turns on NVIDIA Reflex in Fortnite, which clearly lowers the delay between clicking and the picture." },
+        fortnite_fullscreen: { name: "Fortnite: true fullscreen", what: "Sets Fortnite to Fullscreen instead of Windowed Fullscreen. The picture then bypasses the Windows compositor: more direct, and no stutter with two displays at different Hz." },
         game_vsync: { name: "V-Sync off in CS2 and Minecraft", what: "Turns off V-Sync in the settings file of Counter-Strike 2 and Minecraft Java, for less delay." },
       },
     },
@@ -1078,6 +1079,7 @@ export const en: Dict = {
     notFound: "Fortnite not found",
     check: {
       fps_limit: { name: "Frame rate limit", why: "Sets the Fortnite FPS limit to unlimited with NVIDIA, or equal to your display. This keeps the delay low, but can make your PC warmer." },
+      fullscreen: { name: "True fullscreen", why: "Fullscreen bypasses the Windows compositor and responds more directly than Windowed Fullscreen. Especially with two displays at different Hz it avoids stutter. Alt-Tab takes a bit longer." },
     },
     on: "On",
     off: "Off",
@@ -1123,7 +1125,7 @@ export const en: Dict = {
     title: "Settings in the game",
     sub: "Directly in the game's config file, logged and reversible.",
     check: {
-      vsync: { name: "V-Sync off", why: "Your click shows up right away instead of waiting for your display." },
+      vsync: { name: "V-Sync off", why:"Your click shows up right away instead of waiting for your display." },
     },
     apply: "Fix it",
     applied: "Changed. Start the game to use it.",

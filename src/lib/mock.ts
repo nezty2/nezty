@@ -36,6 +36,7 @@ let fortniteOverview: T.FortniteOverview = {
     { id: "fps_limit", current: "240.000000", recommended: "0", ok: false },
     { id: "reflex", current: "1", recommended: "2", ok: false },
     { id: "render_mode", current: "dx12", recommended: "performance", ok: false },
+    { id: "fullscreen", current: "1", recommended: "0", ok: false },
   ],
 };
 let liveChecks: T.LiveCheck[] = [
@@ -321,6 +322,7 @@ export const mockApi: Api = {
       ...games.filter((x) => x.exePath).map((x): T.ApplyItem => ({ id: "gpu_high_perf", gameId: x.id, outcome: "applied", reason: null })),
       { id: "fortnite_vsync", gameId: "epic:fortnite", outcome: "skipped", reason: msg("game_running") },
       { id: "fortnite_reflex", gameId: "epic:fortnite", outcome: "skipped", reason: msg("game_running") },
+      { id: "fortnite_fullscreen", gameId: "epic:fortnite", outcome: "skipped", reason: msg("game_running") },
       { id: "game_vsync", gameId: "steam:cs2", outcome: "applied", reason: null },
     ];
     tweaks = tweaks.map((x) => (ids.includes(x.id) ? { ...x, state: "on", appliedByApp: true, active: "now" } : x));
