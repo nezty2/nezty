@@ -43,14 +43,17 @@ try {
 
 & (Join-Path $PSScriptRoot "upload-supabase.ps1") -ProjectRef $ref -ServiceRoleKey $key -Files $files
 
-# Controleren dat de app de update kan vinden.
+# Controleren dat het nieuwe bestand er staat. Met een unieke ?v= in de url, anders krijg je de cache van
+# Supabase (die geeft de oude versie nog even). De app ziet de nieuwe versie zodra die cache verloopt.
 $check = $null
-for ($i = 0; $i -lt 10 -and -not $check; $i++) {
-    try { $check = Invoke-RestMethod "$baseUrl/latest.json" -Headers @{ "Cache-Control" = "no-cache" } -TimeoutSec 20 } catch { Start-Sleep -Seconds 3 }
-    if ($check -and $check.version -ne $version) { $check = $null; Start-Sleep -Seconds 3 }
+for ($i = 0; $i -lt 12 -and -not $check; $i++) {
+    $bust = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+    try { $check = Invoke-RestMethod "$baseUrl/latest.json?v=$bust" -Headers @{ "Cache-Control" = "no-cache" } -TimeoutSec 20 } catch { $check = $null }
+    if ($check -and $check.version -ne $version) { $check = $null }
+    if (-not $check) { Start-Sleep -Seconds 5 }
 }
 if (-not $check) { throw "De bestanden zijn geüpload, maar $baseUrl/latest.json geeft nog niet versie $version. Is de bucket 'updates' openbaar?" }
-Write-Host "Online en bereikbaar: $baseUrl/latest.json (versie $version)"
+Write-Host "Online: $baseUrl/latest.json (versie $version). Gebruikers zien hem binnen een paar minuten."
 
 # Ook op GitHub: dezelfde ondertekende installer als release "Latest". Daar zoeken versies 0.3.x nog naar updates
 # (zo springen die meteen naar de nieuwste), en de releasepagina blijft kloppen. Mislukt dit, dan staat de update
