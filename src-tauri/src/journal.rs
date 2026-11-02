@@ -40,6 +40,9 @@ pub enum RevertPayload {
     PowerPlan {
         old_guid: String,
         created_guid: Option<String>,
+        /// Bij een zelf gemaakte kopie: "high" of "ultimate". Zo herkent nezty de kopie later terug.
+        #[serde(default)]
+        created_option: Option<String>,
     },
     PowerSetting {
         scheme: String,
@@ -130,6 +133,9 @@ pub struct JournalEntry {
     pub detail: Option<Msg>,
     #[serde(default = "default_payload")]
     pub payload: RevertPayload,
+    /// Er staat een vluchtige registersleutel voor deze wijziging (zie restart.rs): na een echte herstart is die weg.
+    #[serde(default)]
+    pub restart_marker: bool,
 }
 
 fn default_payload() -> RevertPayload {
@@ -154,6 +160,7 @@ impl JournalEntry {
             note: None,
             detail: None,
             payload: RevertPayload::None,
+            restart_marker: false,
         }
     }
 }
@@ -244,9 +251,7 @@ impl Journal {
         for e in &self.entries {
             all.push(serde_json::to_value(e)?);
         }
-        let tmp = self.path.with_extension("json.tmp");
-        std::fs::write(&tmp, serde_json::to_string_pretty(&all)?)?;
-        std::fs::rename(&tmp, &self.path)?;
+        crate::state::write_atomic(&self.path, serde_json::to_string_pretty(&all)?.as_bytes())?;
         Ok(())
     }
 
@@ -281,8 +286,50 @@ impl Journal {
             .max()
     }
 
+    /// De laatste nog geldende wijziging voor deze tweak.
+    pub fn latest_active(&self, tweak_id: &str, game_id: Option<&str>) -> Option<&JournalEntry> {
+        self.entries
+            .iter()
+            .filter(|e| e.tweak_id == tweak_id && !e.reverted && e.revertable)
+            .filter(|e| match game_id {
+                Some(g) => e.game_id.as_deref() == Some(g),
+                None => true,
+            })
+            .max_by_key(|e| e.ts)
+    }
+
+    /// Markeert wijzigingen als teruggezet zonder iets uit te voeren (voor wat vanzelf al weg is).
+    pub fn mark_reverted(&mut self, ids: &[String]) {
+        if ids.is_empty() {
+            return;
+        }
+        for e in self.entries.iter_mut().filter(|e| ids.contains(&e.id)) {
+            e.reverted = true;
+        }
+        if let Err(e) = self.save() {
+            log::error!("logboek opslaan mislukt: {e}");
+        }
+    }
+
     pub fn has_active(&self, tweak_id: &str, game_id: Option<&str>) -> bool {
         !self.active_ids(tweak_id, game_id).is_empty()
+    }
+
+    /// Maakt de nog geldende wijzigingen van een tweak (eventueel voor één game) los van hun Game Boost-sessie,
+    /// zodat het stoppen van de boost ze niet terugzet. True als er iets losgemaakt is.
+    pub fn detach_from_session(&mut self, tweak_id: &str, game_id: Option<&str>) -> bool {
+        let ids = self.active_ids(tweak_id, game_id);
+        let mut changed = false;
+        for e in self.entries.iter_mut().filter(|e| ids.contains(&e.id) && e.session_id.is_some()) {
+            e.session_id = None;
+            changed = true;
+        }
+        if changed {
+            if let Err(e) = self.save() {
+                log::error!("logboek opslaan mislukt: {e}");
+            }
+        }
+        changed
     }
 
     pub fn session_ids(&self, session_id: &str) -> Vec<String> {
@@ -344,6 +391,9 @@ pub fn execute_revert(payload: &RevertPayload) -> AppResult<()> {
                 Some(PostAction::MouseSpi) => winapi::apply_mouse_from_registry(),
                 Some(PostAction::UiEffects) => {
                     winapi::set_ui_effects(true);
+                    // Vensteranimaties weer zoals ze nu in het register staan.
+                    let min_animate = registry::read(Hive::Hkcu, "Control Panel\\Desktop\\WindowMetrics", "MinAnimate").ok();
+                    winapi::set_min_animate(min_animate.as_ref().and_then(|d| d.as_str()).map(|v| v.trim() != "0").unwrap_or(true));
                     winapi::broadcast_setting_change("WindowMetrics");
                 }
                 Some(PostAction::KeyboardSpi) => winapi::apply_keyboard_from_registry(),
@@ -354,7 +404,7 @@ pub fn execute_revert(payload: &RevertPayload) -> AppResult<()> {
             }
             Ok(())
         }
-        RevertPayload::PowerPlan { old_guid, created_guid } => {
+        RevertPayload::PowerPlan { old_guid, created_guid, .. } => {
             let (ok, _, err) = run_cmd("powercfg", &["/setactive", old_guid])?;
             if !ok {
                 return Err(AppError::msg(format!("powercfg: {}", err.trim())));

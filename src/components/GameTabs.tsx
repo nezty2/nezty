@@ -1,10 +1,10 @@
 import { FolderOpen, Gamepad2, Plus, Save, Trash2, Undo2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { GameConfigCard } from "@/components/GameConfigCard";
-import { OverlaysCard } from "@/components/OverlaysCard";
+import { Loader } from "@/components/Loader";
 import { GainBadge, StateBadge, TimingBadge } from "@/components/TweakCard";
 import { useAppIcons } from "@/components/useAppIcons";
-import { Badge, Button, Chip, EmptyState, Row, SegmentedControl, Skeleton, Spinner, TextInput, Toggle } from "@/components/ui";
+import { Badge, Button, Chip, EmptyState, Row, SegmentedControl, Spinner, TextInput, Toggle } from "@/components/ui";
 import { useT } from "@/i18n/hooks";
 import { api } from "@/lib/ipc";
 import { prettyPath } from "@/lib/privacy";
@@ -12,22 +12,14 @@ import { formatMb } from "@/lib/format";
 import type { FortniteSettings, Game, GameProfile, ProcessInfo, TweakInfo } from "@/lib/types";
 import { useApp } from "@/store/app";
 
-/** Tweaks die Game Boost op een laptop standaard meeneemt (zelfde lijst als in de backend). */
-const LAPTOP_BOOST_DEFAULTS = ["power_mode_best", "battery_saver_off", "cpu_full_speed", "cpu_epp_performance", "cpu_prefer_pcores", "pcie_aspm_off", "usb_suspend_ac_off", "wifi_gaming_mode"];
-
 /* ---------- Boost-instellingen per game ---------- */
 
+// Systeemtweaks staan hier bewust niet meer: die zet je permanent aan op Tweaks (Alles activeren).
 export function ProfileTab({ game, profile, onChange }: { game: Game; profile: GameProfile; onChange: (p: GameProfile) => void }) {
   const { t, td, lang } = useT();
-  const tweaks = useApp((s) => s.tweaks);
   const settings = useApp((s) => s.settings);
   const [procs, setProcs] = useState<ProcessInfo[] | null>(null);
   const [newApp, setNewApp] = useState("");
-  const device = useApp((s) => s.device);
-  const isLaptop = device?.effective === "laptop";
-  // Tweaks die niet bij dit apparaat passen slaat Game Boost toch over: dan ook niet tonen.
-  const boostable = tweaks.filter((tw) => tw.scope === "global" && tw.kind === "toggle" && tw.timing !== "pc_restart" && !tw.platformLocked);
-  const boostOn = (id: string) => profile.globalTweaks[id] ?? (isLaptop && LAPTOP_BOOST_DEFAULTS.includes(id));
   const icons = useAppIcons((procs ?? []).map((p) => p.exePath));
 
   useEffect(() => {
@@ -63,34 +55,11 @@ export function ProfileTab({ game, profile, onChange }: { game: Game; profile: G
         <div className="card-inset divide-y divide-line px-4">
           {(
             [
-              ["fullscreenOptOff", "fullscreen_opt_off"],
               ["gpuHighPerf", "gpu_high_perf"],
-              ["highPriority", "high_priority"],
             ] as const
           ).map(([key, id]) => (
             <Row key={id} title={td(`tweak.${id}.name`)} desc={td(`tweak.${id}.what`)}>
               <Toggle checked={profile[key]} onChange={(v) => set({ [key]: v } as Partial<GameProfile>)} label={td(`tweak.${id}.name`)} />
-            </Row>
-          ))}
-        </div>
-      </section>
-
-      <section>
-        <h3 className="mb-1 text-sm font-semibold">{t("profile.systemTweaks")}</h3>
-        <p className="mb-2 text-[12px] text-ink-3">{t("profile.pcRestartNote")}</p>
-        <div className="card-inset divide-y divide-line px-4">
-          {boostable.map((tw) => (
-            <Row
-              key={tw.id}
-              title={
-                <span className="flex flex-wrap items-center gap-2">
-                  {td(`tweak.${tw.id}.name`)}
-                  <TimingBadge timing={tw.timing} />
-                </span>
-              }
-              desc={td(`tweak.${tw.id}.what`)}
-            >
-              <Toggle checked={boostOn(tw.id)} onChange={(v) => set({ globalTweaks: { ...profile.globalTweaks, [tw.id]: v } })} label={td(`tweak.${tw.id}.name`)} />
             </Row>
           ))}
         </div>
@@ -147,7 +116,7 @@ export function ProfileTab({ game, profile, onChange }: { game: Game; profile: G
 
 /* ---------- Nu instellen (los van een boost) ---------- */
 
-export function NowTab({ game, extras = true }: { game: Game; extras?: boolean }) {
+export function NowTab({ game }: { game: Game }) {
   const { t, td } = useT();
   const [list, setList] = useState<TweakInfo[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -160,7 +129,7 @@ export function NowTab({ game, extras = true }: { game: Game; extras?: boolean }
     load();
   }, [load]);
 
-  if (!list) return <Skeleton className="h-40" />;
+  if (!list) return <Loader />;
   return (
     <div className="space-y-3">
       <p className="text-[13px] text-ink-3">{t("games.nowHint")}</p>
@@ -192,8 +161,7 @@ export function NowTab({ game, extras = true }: { game: Game; extras?: boolean }
           </div>
         ))}
       </div>
-      {extras && <GameConfigCard gameId={game.id} />}
-      {extras && <OverlaysCard />}
+      <GameConfigCard gameId={game.id} />
     </div>
   );
 }
@@ -221,7 +189,7 @@ export function FortniteIniTab() {
       .catch(handleError);
   }, [handleError]);
 
-  if (!data || !draft) return <Skeleton className="h-40" />;
+  if (!data || !draft) return <Loader />;
   if (!data.exists) return <EmptyState icon={Gamepad2} title={t("fortnite.missingTitle")} description={t("msg.ini_missing")} />;
   const dirty = JSON.stringify(draft) !== JSON.stringify(data);
 
@@ -257,7 +225,7 @@ export function FortniteIniTab() {
       <div className="flex flex-wrap items-center gap-2 text-[12px] text-ink-3">
         <FolderOpen className="h-3.5 w-3.5" />
         <span className="selectable truncate">{prettyPath(data.iniPath)}</span>
-        {data.readOnly && <Badge variant="warn">{t("fortnite.readOnly")}</Badge>}
+        {data.readOnly && <Badge variant="neutral">{t("fortnite.readOnly")}</Badge>}
       </div>
       <div className="card-inset divide-y divide-line px-4">
         <div className="py-3.5">
@@ -316,37 +284,6 @@ export function FortniteIniTab() {
           </ul>
         </div>
       )}
-    </div>
-  );
-}
-
-const tipGroups: { group: "display" | "quality" | "advanced"; items: string[] }[] = [
-  { group: "display", items: ["window_mode", "resolution", "vsync", "fps_limit", "rendering"] },
-  { group: "quality", items: ["res3d", "view_distance", "shadows", "aa", "textures", "effects"] },
-  { group: "advanced", items: ["reflex", "multithread", "motion_blur", "shader_cache"] },
-];
-
-export function FortniteTipsTab() {
-  const { t, td } = useT();
-  return (
-    <div className="space-y-5">
-      <p className="text-[13px] text-ink-2">{t("fortniteTips.intro")}</p>
-      {tipGroups.map((g) => (
-        <section key={g.group}>
-          <h3 className="mb-2 text-sm font-semibold">{t(`fortniteTips.groups.${g.group}`)}</h3>
-          <div className="card-inset divide-y divide-line">
-            {g.items.map((id) => (
-              <div key={id} className="grid gap-1 px-4 py-3 sm:grid-cols-[220px_1fr] sm:gap-4">
-                <div>
-                  <div className="text-sm font-medium">{td(`fortniteTips.items.${id}.setting`)}</div>
-                  <div className="text-[13px] text-accent">{td(`fortniteTips.items.${id}.value`)}</div>
-                </div>
-                <div className="text-[13px] leading-relaxed text-ink-2">{td(`fortniteTips.items.${id}.why`)}</div>
-              </div>
-            ))}
-          </div>
-        </section>
-      ))}
     </div>
   );
 }

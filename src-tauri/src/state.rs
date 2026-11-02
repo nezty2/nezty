@@ -26,8 +26,6 @@ pub struct AppState {
     pub watcher_running: AtomicBool,
     pub restore_point: Mutex<RestorePointStatus>,
     pub procs: Mutex<sysinfo::System>,
-    /// Pids waarvan de prioriteit in de huidige boost-sessie al is verhoogd.
-    pub priority_applied: Mutex<HashSet<u32>>,
     /// Laatst gesloten apps (om ze opnieuw te kunnen starten).
     pub last_closed: Mutex<Vec<ClosedProcess>>,
     /// Vriendelijke namen per exe-pad.
@@ -64,7 +62,6 @@ impl AppState {
             watcher_running: AtomicBool::new(false),
             restore_point: Mutex::new(RestorePointStatus::default()),
             procs: Mutex::new(sysinfo::System::new()),
-            priority_applied: Mutex::new(HashSet::new()),
             last_closed: Mutex::new(vec![]),
             titles: Mutex::new(HashMap::new()),
             icons: Mutex::new(HashMap::new()),
@@ -155,16 +152,75 @@ impl AppState {
     }
 }
 
+/// Leest settings.json of profiles.json. Is het bestand weg of onleesbaar (bv. half geschreven toen nezty in
+/// quarantaine ging of hard werd afgesloten), dan de vorige versie uit `<naam>.bak`.
 fn load_json<T: serde::de::DeserializeOwned>(path: &Path) -> Option<T> {
-    let s = std::fs::read_to_string(path).ok()?;
-    serde_json::from_str(&s).ok()
+    let read = |p: &Path| -> Option<T> {
+        let s = std::fs::read_to_string(p).ok()?;
+        serde_json::from_str(s.trim_start_matches('\u{feff}')).ok()
+    };
+    if let Some(v) = read(path) {
+        return Some(v);
+    }
+    let bak = backup_path(path);
+    let v = read(&bak)?;
+    log::warn!("{} niet leesbaar: vorige versie uit {} gebruikt", path.display(), bak.display());
+    Some(v)
 }
 
-fn save_json<T: serde::Serialize>(path: &Path, value: &T) -> std::io::Result<()> {
+fn backup_path(path: &Path) -> PathBuf {
+    let mut name = path.file_name().map(|n| n.to_os_string()).unwrap_or_default();
+    name.push(".bak");
+    path.with_file_name(name)
+}
+
+/// Schrijft eerst naar een tijdelijk bestand in dezelfde map en zet dat daarna in één keer op zijn plek.
+/// Een onderbroken schrijfactie laat zo nooit een half bestand achter.
+pub fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let tmp = path.with_extension("json.tmp");
-    std::fs::write(&tmp, serde_json::to_string_pretty(value).map_err(std::io::Error::other)?)?;
+    let mut name = path.file_name().map(|n| n.to_os_string()).unwrap_or_default();
+    name.push(".tmp");
+    let tmp = path.with_file_name(name);
+    {
+        let mut f = std::fs::File::create(&tmp)?;
+        f.write_all(bytes)?;
+        f.sync_all()?;
+    }
     std::fs::rename(&tmp, path)
+}
+
+/// Atomisch opslaan, met de vorige (leesbare) versie als `<naam>.bak`.
+fn save_json<T: serde::Serialize>(path: &Path, value: &T) -> std::io::Result<()> {
+    let text = serde_json::to_string_pretty(value).map_err(std::io::Error::other)?;
+    // Alleen een leesbare vorige versie wordt de reserve: een kapot bestand overschrijft nooit een goede .bak.
+    if let Ok(old) = std::fs::read_to_string(path) {
+        if serde_json::from_str::<serde_json::Value>(old.trim_start_matches('\u{feff}')).is_ok() {
+            let _ = write_atomic(&backup_path(path), old.as_bytes());
+        }
+    }
+    write_atomic(path, text.as_bytes())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn falls_back_to_backup() {
+        let dir = std::env::temp_dir().join(format!("nezty-state-{}", uuid::Uuid::new_v4()));
+        let f = dir.join("settings.json");
+        save_json(&f, &vec![1, 2]).unwrap();
+        save_json(&f, &vec![3]).unwrap();
+        assert_eq!(load_json::<Vec<i32>>(&backup_path(&f)), Some(vec![1, 2]));
+        // Half geschreven hoofdbestand: de vorige versie komt terug, en een kapot bestand wordt nooit de reserve.
+        std::fs::write(&f, "{ kapot").unwrap();
+        assert_eq!(load_json::<Vec<i32>>(&f), Some(vec![1, 2]));
+        save_json(&f, &vec![4]).unwrap();
+        assert_eq!(load_json::<Vec<i32>>(&backup_path(&f)), Some(vec![1, 2]));
+        assert_eq!(load_json::<Vec<i32>>(&f), Some(vec![4]));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

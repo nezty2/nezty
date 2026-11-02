@@ -8,7 +8,8 @@
 # Staat er in scripts\update.json een "baseUrl", dan wordt die als updatebron ingebouwd en komt in
 # release\update alles wat online moet: de installer, de handtekening (.sig) en latest.json.
 #           .\scripts\build.ps1 -Version 0.2.99         (andere versie dan in tauri.conf.json, voor tests)
-param([switch]$Sign, [string]$Notes = "", [string]$UpdateConfig = "", [string]$Version = "")
+#           .\scripts\build.ps1 -Selftest               (testbuild met --selftest en de andere zelftests, nooit uitbrengen)
+param([switch]$Sign, [string]$Notes = "", [string]$UpdateConfig = "", [string]$Version = "", [switch]$Selftest)
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "env.ps1")
 Set-Location (Join-Path $PSScriptRoot "..")
@@ -47,7 +48,10 @@ if (Test-Path $licenseConfig) {
 
 $override = @{}
 if ($Version) { $override.version = $Version }
-if ($baseUrl) {
+if ($Selftest) {
+    # Een testbuild zoekt nooit naar updates en krijgt geen updatebestanden: zo kan hij niet als update online komen.
+    Write-Warning "Testbuild: geen updatebron en geen updatebestanden."
+} elseif ($baseUrl) {
     $updater = @{ endpoints = @("$baseUrl/latest.json") }
     # Alleen voor een lokale test: http toestaan. Echte updates gaan altijd via https.
     if ($update.allowInsecure -eq $true) { $updater.allowInsecure = $true }
@@ -78,6 +82,12 @@ if ($override.Count -gt 0) {
     $overridePath = Join-Path $env:TEMP "nezty-build.conf.json"
     $override | ConvertTo-Json -Depth 8 | Set-Content -Path $overridePath -Encoding UTF8
     $extra = @("--config", $overridePath)
+}
+
+# Zelftests zitten alleen in een build met de cargo-feature "selftest". Een gewone release heeft ze niet.
+if ($Selftest) {
+    $extra += @("--features", "selftest")
+    Write-Warning "Testbuild met zelftests. Breng deze build niet uit als update."
 }
 
 # npm en cargo schrijven voortgang naar stderr; dat is geen fout. Alleen de exitcode telt.
@@ -115,6 +125,17 @@ if ($Sign -and $exeCopied) {
 }
 
 # ---------- updatebestanden ----------
+$updateDir = Join-Path $release "update"
+$marker = Join-Path $release "SELFTEST"
+if ($Selftest) {
+    # Testbuild: geen .sig en geen latest.json. Oude updatebestanden weg en een markering die publish.ps1 tegenhoudt.
+    if (Test-Path $updateDir) { Remove-Item $updateDir -Recurse -Force }
+    Set-Content -Path $marker -Value "Testbuild met zelftests ($version). Niet uitbrengen als update." -Encoding UTF8
+    Write-Host ""
+    Write-Host "Klaar (testbuild). Bestanden staan in: $release"
+    return
+}
+if (Test-Path $marker) { Remove-Item $marker -Force }
 # Updatehandtekening (minisign) over de definitieve installer, dus na een eventuele Authenticode-ondertekening.
 $sigFile = "$bundle\$setupName.sig"
 if (Test-Path $sigFile) { Remove-Item $sigFile -Force }
@@ -122,7 +143,6 @@ $ErrorActionPreference = "Continue"
 npx tauri signer sign "$bundle\$setupName" 2>&1 | ForEach-Object { "$_" }
 $ErrorActionPreference = "Stop"
 if (-not (Test-Path $sigFile)) { throw "Updatehandtekening maken mislukt: $sigFile ontbreekt." }
-$updateDir = Join-Path $release "update"
 if (Test-Path $updateDir) { Remove-Item $updateDir -Recurse -Force }
 New-Item -ItemType Directory $updateDir | Out-Null
 Copy-Item "$bundle\$setupName", $sigFile $updateDir

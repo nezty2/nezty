@@ -58,7 +58,7 @@ fn progress(app: &AppHandle, stage: &str) {
     let _ = app.emit("boost-progress", params);
 }
 
-fn reason_of(e: &AppError) -> Msg {
+pub fn reason_of(e: &AppError) -> Msg {
     match e {
         AppError::NeedsAdmin(_) => Msg::new("needs_admin"),
         AppError::Coded { key, params } => Msg { key: key.clone(), params: params.clone() },
@@ -131,12 +131,11 @@ pub fn run_boost(app: &AppHandle, state: &Arc<AppState>, game_id: Option<&str>, 
             .flatten()
     });
 
-    // 2. Systeemtweaks uit het profiel. Tweaks die pas na een pc-herstart werken horen niet in een
-    //    boost (ze worden aan het eind weer teruggezet en zouden dus nooit effect hebben).
-    let tweak_map = profile.as_ref().map(|p| p.global_tweaks.clone()).unwrap_or_else(|| settings.default_profile_tweaks.clone());
+    // 2. Systeemtweaks horen bij Tweaks (Alles activeren) en blijven daar permanent aan. Game Boost zet ze
+    //    niet meer zelf aan of terug. Alleen op een laptop neemt de boost de vaste laptoplijst tijdelijk mee,
+    //    zodat de laptop na het gamen weer koel en zuinig is.
     for d in tweaks::CATALOG.iter().filter(|d| d.scope == TweakScope::Global && d.kind == TweakKind::Toggle) {
-        let laptop_default = laptop && tweaks::LAPTOP_BOOST_DEFAULTS.contains(&d.id);
-        if !tweak_map.get(d.id).copied().unwrap_or(laptop_default) {
+        if !(laptop && tweaks::LAPTOP_BOOST_DEFAULTS.contains(&d.id)) {
             continue;
         }
         // Past niet bij dit apparaat (pc of laptop): overslaan, niet toepassen.
@@ -164,27 +163,18 @@ pub fn run_boost(app: &AppHandle, state: &Arc<AppState>, game_id: Option<&str>, 
         }
     }
 
-    // 3. Per-game tweaks.
+    // 3. Per-game tweak: de game op de snelle videokaart.
     if let (Some(g), Some(p)) = (&game, &profile) {
-        for (id, enabled) in [("fullscreen_opt_off", p.fullscreen_opt_off), ("gpu_high_perf", p.gpu_high_perf)] {
-            if !enabled {
-                continue;
-            }
+        let id = "gpu_high_perf";
+        if p.gpu_high_perf {
             let d = tweaks::get(id)?;
             if tweaks::status(state, id, Some(g)).state == TweakState::On {
                 report.already_ok.push(id.into());
-                continue;
-            }
-            match tweaks::apply(state, id, None, Some(&session_id), Some(g)).and_then(|_| tweaks::verify(state, id, true, Some(g))) {
-                Ok(()) => report.applied.push(AppliedTweak { id: id.into(), timing: d.timing, option: None, count: None }),
-                Err(e) => report.skipped.push(SkippedTweak { id: id.into(), reason: reason_of(&e) }),
-            }
-        }
-        if p.high_priority {
-            match per_game::priority_apply(state, Some(g), Some(&session_id)) {
-                Ok(0) => report.skipped.push(SkippedTweak { id: "high_priority".into(), reason: Msg::new("game_not_running_later") }),
-                Ok(n) => report.applied.push(AppliedTweak { id: "high_priority".into(), timing: Timing::Instant, option: None, count: Some(n as u32) }),
-                Err(e) => report.skipped.push(SkippedTweak { id: "high_priority".into(), reason: reason_of(&e) }),
+            } else {
+                match tweaks::apply(state, id, None, Some(&session_id), Some(g)).and_then(|_| tweaks::verify(state, id, true, Some(g))) {
+                    Ok(()) => report.applied.push(AppliedTweak { id: id.into(), timing: d.timing, option: None, count: None }),
+                    Err(e) => report.skipped.push(SkippedTweak { id: id.into(), reason: reason_of(&e) }),
+                }
             }
         }
     }
@@ -229,7 +219,6 @@ pub fn unboost(app: &AppHandle, state: &AppState) -> AppResult<RevertResult> {
     let report = lock(&state.boost).take().ok_or_else(|| AppError::coded("no_boost"))?;
     let ids = lock(&state.journal).session_ids(&report.session_id);
     let result = lock(&state.journal).revert_ids(&ids);
-    lock(&state.priority_applied).clear();
     emit_state(app, state);
     Ok(result)
 }

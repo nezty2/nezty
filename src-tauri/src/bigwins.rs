@@ -142,17 +142,25 @@ fn refresh_check() -> BigWin {
 }
 
 fn refresh_fix(state: &AppState) -> AppResult<()> {
+    // Lukt één scherm niet, dan gaan de andere schermen toch door.
+    let mut first_err = None;
     for d in display::list() {
         if d.max_hz < d.current_hz + 5 {
             continue;
         }
-        display::set_mode(&d.device, d.width, d.height, d.max_hz)?;
+        if let Err(e) = display::set_mode(&d.device, d.width, d.height, d.max_hz) {
+            first_err.get_or_insert(e);
+            continue;
+        }
         let mut e = JournalEntry::new("refresh_rate", "Highest refresh rate", JournalKind::Display, &format!("{} ({})", d.monitor, d.device));
         e.old_value = Some(format!("{} Hz", d.current_hz));
         e.new_value = Some(format!("{} Hz", d.max_hz));
         e.revertable = true;
         e.payload = RevertPayload::DisplayMode { device: d.device.clone(), width: d.width, height: d.height, freq: d.current_hz };
         lock(&state.journal).record(e)?;
+    }
+    if let Some(e) = first_err {
+        return Err(e);
     }
     // Controle: staat alles nu op het maximum?
     if display::list().iter().any(|d| d.max_hz >= d.current_hz + 5) {
@@ -187,8 +195,15 @@ fn gpu_choice_check(state: &AppState) -> BigWin {
 }
 
 fn gpu_choice_fix(state: &AppState) -> AppResult<()> {
+    // Lukt één game niet, dan gaan de andere games toch door.
+    let mut first_err = None;
     for g in games_without_gpu_pref(state) {
-        tweaks::apply(state, "gpu_high_perf", None, None, Some(&g))?;
+        if let Err(e) = tweaks::apply(state, "gpu_high_perf", None, None, Some(&g)) {
+            first_err.get_or_insert(e);
+        }
+    }
+    if let Some(e) = first_err {
+        return Err(e);
     }
     if !games_without_gpu_pref(state).is_empty() {
         return Err(AppError::coded("verify_failed"));
@@ -385,26 +400,6 @@ fn laptop_gpu_mode_check() -> BigWin {
     vendor_app_param(w)
 }
 
-/// Energiebesparing van het ingebouwde scherm (Intel DPST, AMD Vari-Bright) en dynamische verversingssnelheid.
-/// Die staan in de app van Intel of AMD en in Windows; we kunnen ze niet veilig zelf uitlezen.
-fn laptop_display_check() -> BigWin {
-    let layout = gpu_layout();
-    let igpu = layout.gpus.iter().find(|g| !g.discrete).map(|g| g.vendor.clone()).unwrap_or_default();
-    let variant = match igpu.as_str() {
-        "intel" => "intel",
-        "amd" => "amd",
-        _ => "other",
-    };
-    let mut w = check("laptop_display", CheckStatus::Info, Gain::Small, variant);
-    if let Some(panel) = display::list().into_iter().find(|d| d.internal) {
-        w = p(w, "hz", panel.current_hz);
-        w = p(w, "max", panel.max_hz);
-    }
-    w.action = CheckAction::Link;
-    w.link = Some("ms-settings:display-advanced".into());
-    w
-}
-
 /// Hitte: temperatuur en of Windows of de videokaart terugschakelt. Alleen uitlezen, nooit ventilatoren aansturen.
 fn laptop_heat_check(state: &AppState) -> BigWin {
     let (last, throttle) = state.recent_heat(120);
@@ -426,13 +421,10 @@ fn laptop_heat_check(state: &AppState) -> BigWin {
 
 /// Wifi of kabel. Op een laptop speelt bijna iedereen via wifi; een kabel is de grootste ping-winst.
 fn laptop_wifi_check() -> BigWin {
-    let out = crate::powershell::run_ps(
-        "@(Get-NetAdapter -Physical -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'Up' } | ForEach-Object { [string]$_.PhysicalMediaType }) -join '|'",
-    )
-    .unwrap_or_default()
-    .to_lowercase();
-    let wifi = out.contains("802.11") || out.contains("wireless");
-    let cable = out.contains("802.3") || out.contains("ethernet");
+    use crate::models::AdapterKind;
+    let up: Vec<_> = crate::netinfo::adapters().into_iter().filter(|a| a.status.eq_ignore_ascii_case("Up")).collect();
+    let wifi = up.iter().any(|a| matches!(a.kind, AdapterKind::Wifi));
+    let cable = up.iter().any(|a| matches!(a.kind, AdapterKind::Ethernet));
     if cable {
         return check("laptop_wifi", CheckStatus::Ok, Gain::Big, "cable");
     }
@@ -458,35 +450,27 @@ fn gpu_battery_limit_check() -> Option<BigWin> {
     Some(w)
 }
 
-/// Hulp-apps van de fabrikant die nu draaien en tijdens het gamen dicht kunnen.
-fn vendor_apps_check(state: &AppState) -> BigWin {
-    let list: Vec<ProcessInfo> = crate::processes::list(state).into_iter().filter(|p| p.category == ProcessCategory::Vendor).collect();
-    if list.is_empty() {
-        return check("vendor_apps", CheckStatus::Ok, Gain::Small, "none");
-    }
-    let mem: f32 = list.iter().map(|p| p.memory_mb).sum();
-    let names: Vec<String> = list.iter().take(3).map(|p| p.title.clone()).collect();
-    let mut w = check("vendor_apps", CheckStatus::Info, Gain::Small, "found");
-    w = p(w, "names", names.join(", "));
-    w = p(w, "count", list.len());
-    w = p(w, "mb", mem.round() as u64);
-    w.action = CheckAction::OpenPage;
-    w
-}
-
 pub fn all(state: &AppState) -> Vec<BigWin> {
     let mut out = vec![refresh_check(), gpu_choice_check(state), power_check(), ram_check(), driver_check(), heavy_check(state)];
     if crate::device::is_laptop(state) {
         out.push(laptop_heat_check(state));
         out.push(laptop_gpu_mode_check());
         out.push(laptop_wifi_check());
-        out.push(laptop_display_check());
         if let Some(w) = gpu_battery_limit_check() {
             out.push(w);
         }
-        out.push(vendor_apps_check(state));
     }
     out
+}
+
+/// Eén controle met een knop om op te lossen (voor "Alles activeren"), zonder de trage andere controles.
+pub fn check_one(state: &AppState, id: &str) -> Option<BigWin> {
+    match id {
+        "refresh_rate" => Some(refresh_check()),
+        "gpu_choice" => Some(gpu_choice_check(state)),
+        "power_source" => Some(power_check()),
+        _ => None,
+    }
 }
 
 pub fn fix(state: &AppState, id: &str) -> AppResult<()> {

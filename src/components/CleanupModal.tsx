@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Trash2 } from "lucide-react";
+import { CheckCircle2, Info, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useT } from "@/i18n/hooks";
 import { api } from "@/lib/ipc";
@@ -105,7 +105,7 @@ export function CleanupModal({ open, onClose }: { open: boolean; onClose: () => 
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-medium">{td(`cleanup.items.${item.id}`, undefined, item.id)}</span>
-                    {item.needsAdmin && <Badge variant="warn">{t("cleanup.adminNote")}</Badge>}
+                    {item.needsAdmin && <Badge variant="neutral">{t("cleanup.adminNote")}</Badge>}
                   </div>
                   <div className="mt-0.5 truncate text-[12px] text-ink-3" title={item.path}>
                     {item.path}
@@ -119,8 +119,8 @@ export function CleanupModal({ open, onClose }: { open: boolean; onClose: () => 
             );
           })}
           {shaderSelected && (
-            <div className="mt-3 flex items-start gap-2 rounded-lg border border-warn/30 bg-warn/10 p-3 text-[13px] text-warn">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <div className="card-inset mt-3 flex items-start gap-2 p-3 text-[13px] text-ink-2">
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-ink-3" />
               <span>{t("cleanup.shaderNote")}</span>
             </div>
           )}

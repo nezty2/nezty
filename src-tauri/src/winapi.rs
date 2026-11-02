@@ -7,7 +7,7 @@ use std::ptr::null_mut;
 use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, HANDLE};
 use windows_sys::Win32::Security::{GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY};
 use windows_sys::Win32::System::Threading::{
-    GetCurrentProcess, GetPriorityClass, OpenProcess, OpenProcessToken, SetPriorityClass, HIGH_PRIORITY_CLASS,
+    GetCurrentProcess, GetPriorityClass, OpenProcess, OpenProcessToken, SetPriorityClass,
     PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SET_INFORMATION, REALTIME_PRIORITY_CLASS,
 };
 use windows_sys::Win32::UI::Accessibility::{FILTERKEYS, STICKYKEYS, TOGGLEKEYS};
@@ -16,8 +16,6 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     SPI_GETFILTERKEYS, SPI_GETSTICKYKEYS, SPI_GETTOGGLEKEYS, SPI_SETANIMATION, SPI_SETFILTERKEYS, SPI_SETKEYBOARDDELAY,
     SPI_SETKEYBOARDSPEED, SPI_SETLANGTOGGLE, SPI_SETMOUSE, SPI_SETSTICKYKEYS, SPI_SETTOGGLEKEYS, SPI_SETUIEFFECTS, WM_SETTINGCHANGE,
 };
-
-pub const PRIORITY_HIGH: u32 = HIGH_PRIORITY_CLASS;
 
 pub fn wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()
@@ -52,21 +50,6 @@ pub fn process_exists(pid: u32) -> bool {
         }
         CloseHandle(h);
         true
-    }
-}
-
-pub fn get_priority_class(pid: u32) -> AppResult<u32> {
-    unsafe {
-        let h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
-        if h.is_null() {
-            return Err(AppError::msg(format!("process {pid} cannot be opened (error {})", GetLastError())));
-        }
-        let class = GetPriorityClass(h);
-        CloseHandle(h);
-        if class == 0 {
-            return Err(AppError::msg(format!("priority of process {pid} not readable")));
-        }
-        Ok(class)
     }
 }
 
@@ -137,19 +120,6 @@ pub fn broadcast_setting_change(area: &str) {
     }
 }
 
-/// Leesbare naam van een prioriteitsklasse.
-pub fn priority_label(class: u32) -> String {
-    match class {
-        0x20 => "Normal".into(),
-        0x40 => "Idle".into(),
-        0x80 => "High".into(),
-        0x100 => "Realtime".into(),
-        0x4000 => "Below normal".into(),
-        0x8000 => "Above normal".into(),
-        other => format!("0x{other:x}"),
-    }
-}
-
 fn reg_u32(path: &str, name: &str, default: u32) -> u32 {
     registry::read(Hive::Hkcu, path, name)
         .ok()
@@ -202,21 +172,15 @@ pub fn apply_accessibility_from_registry() {
 /// Wat Windows nu echt gebruikt voor muis en toetsenbord (niet wat in het register staat).
 pub struct LiveInput {
     pub mouse_acceleration: i32,
-    pub keyboard_delay: u32,
-    pub keyboard_speed: u32,
     /// Sneltoets actief voor plak-, filter- en wisseltoetsen.
     pub hotkeys: [bool; 3],
 }
 
 pub fn live_input() -> LiveInput {
-    use windows_sys::Win32::UI::WindowsAndMessaging::{SPI_GETKEYBOARDDELAY, SPI_GETKEYBOARDSPEED, SPI_GETMOUSE};
+    use windows_sys::Win32::UI::WindowsAndMessaging::SPI_GETMOUSE;
     unsafe {
         let mut mouse = [0i32; 3];
         SystemParametersInfoW(SPI_GETMOUSE, 0, mouse.as_mut_ptr() as *mut c_void, 0);
-        let mut delay: u32 = 1;
-        SystemParametersInfoW(SPI_GETKEYBOARDDELAY, 0, &mut delay as *mut u32 as *mut c_void, 0);
-        let mut speed: u32 = 31;
-        SystemParametersInfoW(SPI_GETKEYBOARDSPEED, 0, &mut speed as *mut u32 as *mut c_void, 0);
         let mut sk = STICKYKEYS { cbSize: std::mem::size_of::<STICKYKEYS>() as u32, dwFlags: 0 };
         SystemParametersInfoW(SPI_GETSTICKYKEYS, sk.cbSize, &mut sk as *mut _ as *mut c_void, 0);
         let mut fk: FILTERKEYS = std::mem::zeroed();
@@ -226,8 +190,6 @@ pub fn live_input() -> LiveInput {
         SystemParametersInfoW(SPI_GETTOGGLEKEYS, tk.cbSize, &mut tk as *mut _ as *mut c_void, 0);
         LiveInput {
             mouse_acceleration: mouse[2],
-            keyboard_delay: delay,
-            keyboard_speed: speed,
             hotkeys: [sk.dwFlags & 0x4 != 0, fk.dwFlags & 0x4 != 0, tk.dwFlags & 0x4 != 0],
         }
     }

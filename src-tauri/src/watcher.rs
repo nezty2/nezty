@@ -4,7 +4,6 @@
 use crate::boost;
 use crate::models::{GameEvent, Msg, WatcherStatus};
 use crate::state::{lock, AppState};
-use crate::tweaks::per_game;
 use std::collections::HashSet;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -38,9 +37,6 @@ pub fn start(app: AppHandle, state: Arc<AppState>) {
                 .map(|g| g.id.clone())
                 .collect();
             *lock(&state.running_games) = now.clone();
-            // Experimentele timerresolutie: alleen vasthouden terwijl er een game draait.
-            let timer_on = crate::tweaks::status(&state, "timer_resolution", None).state == crate::models::TweakState::On;
-            crate::timer::hold(timer_on && !now.is_empty());
             let settings = state.settings_clone();
 
             for id in now.difference(&prev) {
@@ -59,18 +55,6 @@ pub fn start(app: AppHandle, state: Arc<AppState>) {
                                 .with("apps", r.closed_processes.len()),
                         ),
                         Err(e) => boost::notify(&app, "error", Msg::new("auto_boost_failed").with("detail", e.to_string())),
-                    }
-                }
-            }
-
-            // Prioriteit toepassen op nieuwe processen van de geboostte game.
-            let active = lock(&state.boost).clone();
-            if let Some(report) = active {
-                if let Some(gid) = &report.game_id {
-                    if now.contains(gid) && state.profile_for(gid).high_priority {
-                        if let Some(g) = games.iter().find(|g| &g.id == gid) {
-                            let _ = per_game::priority_apply(&state, Some(g), Some(&report.session_id));
-                        }
                     }
                 }
             }

@@ -27,7 +27,7 @@ export function OverlaysCard() {
         <ul className="divide-y divide-line">
           {(list ?? []).map((o) => (
             <li key={o.id} className="flex items-start gap-3 py-3">
-              <Layers className={cn("mt-0.5 h-4 w-4 shrink-0", o.active ? "text-warn" : "text-ok")} />
+              <Layers className={cn("mt-0.5 h-4 w-4 shrink-0", o.active ? "text-ink-2" : "text-ok")} />
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium">{t(`fn.overlay.${o.id}.name` as TKey)}</div>
                 <div className="mt-0.5 text-[13px] text-ink-2">{o.active ? t(`fn.overlay.${o.id}.how` as TKey) : t("fn.overlayOff")}</div>

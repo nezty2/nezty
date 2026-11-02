@@ -1,5 +1,5 @@
-//! Muis en toetsenbord: muisversnelling uit, snelste toetsherhaling, sneltoetsen van plak-, filter-
-//! en wisseltoetsen uit, en USB-energiebesparing uit. Alles omkeerbaar via het logboek.
+//! Muis en toetsenbord: muisversnelling uit, sneltoetsen van plak-, filter- en wisseltoetsen uit, en
+//! USB-energiebesparing uit. Alles omkeerbaar via het logboek.
 
 use crate::error::{AppError, AppResult};
 use crate::journal::{JournalEntry, PostAction, RevertPayload};
@@ -43,7 +43,6 @@ pub fn verify_live() -> Vec<crate::models::LiveCheck> {
     let on = |r: AppResult<Status>| r.map(|s| s.state == TweakState::On).unwrap_or(false);
     vec![
         crate::models::LiveCheck { id: "mouse_precision_off".into(), saved: on(mouse_status()), live: live.mouse_acceleration == 0 },
-        crate::models::LiveCheck { id: "keyboard_fast_repeat".into(), saved: on(keyboard_status()), live: live.keyboard_delay == 0 && live.keyboard_speed == 31 },
         crate::models::LiveCheck { id: "accessibility_hotkeys_off".into(), saved: on(accessibility_status()), live: !live.hotkeys.iter().any(|h| *h) },
     ]
 }
@@ -54,31 +53,6 @@ pub fn sync_live() -> Vec<crate::models::LiveCheck> {
     winapi::apply_keyboard_from_registry();
     winapi::apply_accessibility_from_registry();
     verify_live()
-}
-
-// ---------- Toetsherhaling ----------
-
-fn keyboard_specs() -> Vec<RegSpec> {
-    let p = "Control Panel\\Keyboard";
-    vec![
-        // 0 = kortste wachttijd voor herhalen (250 ms), standaard 1 (500 ms).
-        RegSpec::string(Hive::Hkcu, p, "KeyboardDelay", "0", "1"),
-        // 31 = snelste herhaling (ongeveer 30 tekens per seconde), ook de standaard.
-        RegSpec::string(Hive::Hkcu, p, "KeyboardSpeed", "31", "31"),
-    ]
-}
-pub fn keyboard_status() -> AppResult<Status> {
-    Ok(Status::simple(regtweak::state_of(&keyboard_specs())?))
-}
-pub fn keyboard_apply(state: &AppState, session: Option<&str>) -> AppResult<()> {
-    regtweak::apply(state, get("keyboard_fast_repeat")?, &keyboard_specs(), session, None, Some(PostAction::KeyboardSpi))?;
-    winapi::apply_keyboard_from_registry();
-    Ok(())
-}
-pub fn keyboard_disable(state: &AppState) -> AppResult<()> {
-    regtweak::disable(state, get("keyboard_fast_repeat")?, &keyboard_specs(), None, Some(PostAction::KeyboardSpi))?;
-    winapi::apply_keyboard_from_registry();
-    Ok(())
 }
 
 // ---------- Sneltoetsen plak-, filter- en wisseltoetsen ----------

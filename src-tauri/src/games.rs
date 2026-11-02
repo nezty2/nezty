@@ -3,7 +3,7 @@
 
 use crate::error::{AppError, AppResult};
 use crate::models::{Game, Launcher};
-use crate::powershell::{run_ps, spawn_detached};
+use crate::powershell::spawn_detached;
 use crate::registry::{self, Hive, RegData};
 use regex::Regex;
 use std::collections::HashSet;
@@ -526,27 +526,42 @@ fn detect_minecraft(already_bedrock: bool) -> Vec<Game> {
         }
     }
     if !already_bedrock {
-        if let Ok(out) = run_ps("(Get-AppxPackage -Name Microsoft.MinecraftUWP -ErrorAction SilentlyContinue | Select-Object -First 1).InstallLocation") {
-            let loc = out.trim().to_string();
-            if !loc.is_empty() && Path::new(&loc).is_dir() {
-                games.push(Game {
-                    id: "minecraft:bedrock".into(),
-                    name: "Minecraft (Bedrock)".into(),
-                    launcher: Launcher::Xbox,
-                    install_path: Some(loc.clone()),
-                    exe_path: existing(join(&loc, "Minecraft.Windows.exe")),
-                    process_names: vec!["Minecraft.Windows.exe".into()],
-                    launch_uri: Some("minecraft://".into()),
-                    known: true,
-                    icon_key: Some("minecraft".into()),
-                    steam_app_id: None,
-                    cover: None,
-                    icon: None,
-                });
-            }
+        if let Some(loc) = store_package_folder("Microsoft.MinecraftUWP_") {
+            games.push(Game {
+                id: "minecraft:bedrock".into(),
+                name: "Minecraft (Bedrock)".into(),
+                launcher: Launcher::Xbox,
+                install_path: Some(loc.clone()),
+                exe_path: existing(join(&loc, "Minecraft.Windows.exe")),
+                process_names: vec!["Minecraft.Windows.exe".into()],
+                launch_uri: Some("minecraft://".into()),
+                known: true,
+                icon_key: Some("minecraft".into()),
+                steam_app_id: None,
+                cover: None,
+                icon: None,
+            });
         }
     }
     games
+}
+
+/// Installatiemap van een Store-pakket (nieuwste versie), uit het register in plaats van Get-AppxPackage:
+/// zo start de detectie bij het opstarten geen PowerShell.
+fn store_package_folder(prefix: &str) -> Option<String> {
+    const PACKAGES: &str = r"Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\Repository\Packages";
+    let version = |full: &str| -> Vec<u64> { full.split('_').nth(1).unwrap_or_default().split('.').map(|p| p.parse().unwrap_or(0)).collect() };
+    let mut found: Vec<(Vec<u64>, String)> = registry::subkeys(Hive::Hkcu, PACKAGES)
+        .ok()?
+        .into_iter()
+        .filter(|k| k.to_lowercase().starts_with(&prefix.to_lowercase()))
+        .filter_map(|k| match registry::read(Hive::Hkcu, &format!("{PACKAGES}\\{k}"), "PackageRootFolder") {
+            Ok(RegData::Str(dir)) if Path::new(&dir).is_dir() => Some((version(&k), dir)),
+            _ => None,
+        })
+        .collect();
+    found.sort();
+    found.pop().map(|(_, dir)| dir)
 }
 
 /// Alle detectoren samen, ontdubbeld op id en exe. Bekende games eerst.
@@ -643,6 +658,28 @@ fn launch_exe(game: &Game) -> AppResult<()> {
 }
 
 fn open_uri(uri: &str) -> AppResult<()> {
-    // `start` via cmd laat Windows de protocol-handler kiezen.
-    spawn_detached("cmd.exe", &["/C", "start", "", uri], None)
+    // ShellExecute laat Windows de protocol-handler kiezen, zonder cmd.exe ertussen. Protocol-handlers en
+    // Store-apps (minecraft://) starten via COM, en dat moet op de thread eerst aan staan (STA, zoals Microsoft
+    // aanraadt). Daarom op een eigen thread: een thread uit de pool kan COM al anders hebben ingesteld.
+    use windows_sys::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE};
+    use windows_sys::Win32::UI::Shell::ShellExecuteW;
+    use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+    let verb = crate::winapi::wide("open");
+    let file = crate::winapi::wide(uri);
+    let result = std::thread::spawn(move || unsafe {
+        let hr = CoInitializeEx(std::ptr::null(), (COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE) as u32);
+        let r = ShellExecuteW(std::ptr::null_mut(), verb.as_ptr(), file.as_ptr(), std::ptr::null(), std::ptr::null(), SW_SHOWNORMAL) as isize;
+        // S_OK of S_FALSE: COM staat aan op deze thread en moet ook weer uit.
+        if hr >= 0 {
+            CoUninitialize();
+        }
+        r
+    })
+    .join()
+    .map_err(|_| AppError::msg(format!("could not open {uri}")))?;
+    // Waarden tot en met 32 zijn foutcodes.
+    if result <= 32 {
+        return Err(AppError::msg(format!("could not open {uri} (code {result})")));
+    }
+    Ok(())
 }

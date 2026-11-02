@@ -7,10 +7,11 @@ import { Badge, SegmentedControl, Toggle, cn, type BadgeVariant } from "./ui";
 
 const timingIcon = { instant: Zap, game_restart: RotateCcw, pc_restart: Power };
 
+/** Wanneer een tweak werkt. Altijd grijs: dit is uitleg, geen status. Oranje komt alleen van StateBadge. */
 export function TimingBadge({ timing }: { timing: Timing }) {
   const { t } = useT();
   return (
-    <Badge variant={timing === "instant" ? "ok" : timing === "game_restart" ? "info" : "warn"} icon={timingIcon[timing]}>
+    <Badge variant="neutral" icon={timingIcon[timing]}>
       {t(`timing.${timing}`)}
     </Badge>
   );
@@ -26,15 +27,15 @@ export function GainBadge({ gain }: { gain: Gain }) {
   );
 }
 
-/** Statuslabel, concreet: werkt nu, of nog niet (herstart pc of game), of niet beschikbaar. */
+/** Statuslabel: groen als het werkt, oranje alleen als de pc nog moet herstarten, anders grijs. */
 export function StateBadge({ tweak }: { tweak: TweakInfo }) {
   const { t } = useT();
   if (tweak.state === "unavailable") return <Badge variant="neutral">{t("tweakCard.unavailable")}</Badge>;
   if (tweak.state !== "on") return null;
-  if (tweak.active === "after_pc_restart") return <Badge variant="warn" icon={Power}>{t("tweakCard.pendingPc")}</Badge>;
-  if (tweak.active === "after_game_restart") return <Badge variant="warn" icon={RotateCcw}>{t("tweakCard.pendingGame")}</Badge>;
-  if (tweak.appliedByApp) return <Badge variant="ok" icon={Sparkles}>{t("tweakCard.activeByApp")}</Badge>;
-  return <Badge variant="ok" icon={Check}>{t("tweakCard.activeAlready")}</Badge>;
+  if (tweak.active === "after_pc_restart") return <Badge variant="pending" icon={Power}>{t("tweakCard.pendingPc")}</Badge>;
+  if (tweak.active === "after_game_restart") return <Badge variant="neutral" icon={RotateCcw}>{t("tweakCard.pendingGame")}</Badge>;
+  if (tweak.appliedByApp) return <Badge variant="ready" icon={Sparkles}>{t("tweakCard.activeByApp")}</Badge>;
+  return <Badge variant="ready" icon={Check}>{t("tweakCard.activeAlready")}</Badge>;
 }
 
 export function TweakCard({
@@ -74,7 +75,7 @@ export function TweakCard({
       <div className="mt-2.5 flex flex-wrap gap-1.5">
         {tweak.platform !== "all" && (
           <button type="button" onClick={() => setWhy((v) => !v)} title={t("platform.whyHint")} className="rounded-md">
-            <Badge variant={tweak.platformLocked ? "neutral" : "info"} icon={tweak.platformLocked ? Lock : tweak.platform === "laptop_only" ? Laptop : Monitor}>
+            <Badge variant="neutral" icon={tweak.platformLocked ? Lock : tweak.platform === "laptop_only" ? Laptop : Monitor}>
               {t(`platform.${tweak.platform}` as "platform.pc_only")}
             </Badge>
           </button>
@@ -82,9 +83,9 @@ export function TweakCard({
         {tweak.kind === "toggle" && <TimingBadge timing={tweak.timing} />}
         <GainBadge gain={tweak.gain} />
         <StateBadge tweak={tweak} />
-        {tweak.risk === "medium" && <Badge variant="warn">{t("tweakCard.riskMedium")}</Badge>}
-        {tweak.experimental && <Badge variant="warn" icon={FlaskConical}>{t("tweakCard.experimental")}</Badge>}
-        {locked && <Badge variant="warn" icon={Lock} title={t("tweakCard.adminHint")}>{t("tweakCard.adminNeeded")}</Badge>}
+        {tweak.risk === "medium" && <Badge variant="neutral">{t("tweakCard.riskMedium")}</Badge>}
+        {tweak.experimental && <Badge variant="neutral" icon={FlaskConical}>{t("tweakCard.experimental")}</Badge>}
+        {locked && <Badge variant="neutral" icon={Lock} title={t("tweakCard.adminHint")}>{t("tweakCard.adminNeeded")}</Badge>}
       </div>
 
       {why && tweak.platform !== "all" && (
@@ -117,10 +118,16 @@ export function TweakCard({
       )}
 
       {tweak.detail && <p className="mt-3 text-[12px] text-ink-3">{td(`msg.${tweak.detail.key}`, tweak.detail.params)}</p>}
-      {isOn && (tweak.active === "after_pc_restart" || tweak.active === "after_game_restart") && (
+      {isOn && tweak.active === "after_pc_restart" && (
         <p className="mt-3 flex items-start gap-2 text-[12px] text-warn">
           <Power className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          {tweak.active === "after_pc_restart" ? t("tweakCard.pendingPcHint") : t("tweakCard.pendingGameHint")}
+          {t("tweakCard.pendingPcHint")}
+        </p>
+      )}
+      {isOn && tweak.active === "after_game_restart" && (
+        <p className="mt-3 flex items-start gap-2 text-[12px] text-ink-3">
+          <RotateCcw className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          {t("tweakCard.pendingGameHint")}
         </p>
       )}
 
@@ -144,7 +151,7 @@ export function TweakCard({
                     {d}
                   </li>
                 ))}
-                {locked && <li className="list-none text-warn">{t("tweakCard.adminHint")}</li>}
+                {locked && <li className="list-none text-ink">{t("tweakCard.adminHint")}</li>}
               </div>
             </motion.ul>
           )}

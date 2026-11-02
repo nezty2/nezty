@@ -46,6 +46,14 @@ interface AppStore {
   journal: T.JournalEntry[];
   watcher: T.WatcherStatus | null;
   restorePoint: T.RestorePointStatus | null;
+  /** Moet de pc herstarten? De enige reden voor oranje in de app. */
+  restart: T.RestartStatus | null;
+  /** Staat alles uit "Alles activeren" aan? */
+  applyStatus: T.ApplyAllStatus | null;
+  applying: boolean;
+  applyProgress: T.ApplyProgress | null;
+  /** Uitkomst van de laatste "Alles activeren" in deze sessie. */
+  applyReport: T.ApplyAllReport | null;
   toasts: Toast[];
 
   init: () => Promise<void>;
@@ -62,6 +70,10 @@ interface AppStore {
   refreshRestorePoint: () => Promise<void>;
   refreshBigWins: () => Promise<void>;
   refreshDevice: () => Promise<void>;
+  /** Herstartstatus en "Alles activeren"-status opnieuw ophalen. */
+  refreshStatus: () => Promise<void>;
+  runApplyAll: () => Promise<T.ApplyAllReport | null>;
+  clearApplyReport: () => void;
   setLicense: (l: T.LicenseStatus) => void;
   /** Eén korte melding "bijgewerkt naar versie X" bij de eerste start na een update. */
   announceUpdate: (version: string) => void;
@@ -75,6 +87,12 @@ interface AppStore {
 }
 
 let toastSeq = 1;
+// Statuscontrole: nooit twee tegelijk. Komt er een verzoek tijdens een controle, dan volgt er precies één na afloop.
+let statusBusy = false;
+let statusAgain = false;
+// Bij terugkeren naar het venster: herstartstatus vaak, de hele tweaklijst hooguit eens per minuut.
+let lastFocusRestart = 0;
+let lastFocusTweaks = 0;
 
 export const useApp = create<AppStore>()((set, get) => ({
   page: "dashboard",
@@ -106,6 +124,11 @@ export const useApp = create<AppStore>()((set, get) => ({
   journal: [],
   watcher: null,
   restorePoint: null,
+  restart: null,
+  applyStatus: null,
+  applying: false,
+  applyProgress: null,
+  applyReport: null,
   toasts: [],
 
   async init() {
@@ -149,7 +172,30 @@ export const useApp = create<AppStore>()((set, get) => ({
     void listenEvent<T.Notice>(EVENTS.notice, (n) => {
       const tr = get().tr;
       get().toast({ level: n.level, title: tr(`notice.${n.level}`), message: tr(`msg.${n.key}`, n.params) });
+      // Eerste start van 0.5.0: oude wijzigingen zijn teruggezet, dus de lijst en het logboek kloppen niet meer.
+      if (n.key === "migrated_v050") {
+        void get().refreshTweaks();
+        void get().refreshJournal();
+      }
     });
+    void listenEvent<T.ApplyProgress>(EVENTS.applyProgress, (p) => set({ applyProgress: p }));
+    // Terug in het venster (of weer zichtbaar): opnieuw kijken of een herstart nog nodig is, zodat de status na
+    // een herstart of een wijziging buiten nezty meteen klopt.
+    const onFocus = () => {
+      if (document.visibilityState === "hidden") return;
+      const t = Date.now();
+      if (t - lastFocusTweaks > 60_000) {
+        lastFocusTweaks = t;
+        lastFocusRestart = t;
+        void get().refreshTweaks();
+      } else if (t - lastFocusRestart > 5_000) {
+        lastFocusRestart = t;
+        void api.getRestartStatus().then((restart) => set({ restart })).catch(() => undefined);
+      }
+    };
+    lastFocusTweaks = Date.now();
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
     void listenEvent<T.GameEvent>(EVENTS.gameStarted, (e) => {
       set((st) => ({ runningGames: Array.from(new Set([...st.runningGames, e.gameId])) }));
       get().toast({ level: "info", title: get().tr("notice.gameStarted"), message: e.name });
@@ -290,6 +336,49 @@ export const useApp = create<AppStore>()((set, get) => ({
     } finally {
       set({ tweaksLoading: false });
     }
+    void get().refreshStatus();
+  },
+
+  async refreshStatus() {
+    if (statusBusy) {
+      statusAgain = true;
+      return;
+    }
+    statusBusy = true;
+    try {
+      do {
+        statusAgain = false;
+        const [restart, applyStatus] = await Promise.all([api.getRestartStatus().catch(() => null), api.applyAllStatus().catch(() => null)]);
+        set((st) => ({ restart: restart ?? st.restart, applyStatus: applyStatus ?? st.applyStatus }));
+      } while (statusAgain);
+    } finally {
+      statusBusy = false;
+    }
+  },
+
+  async runApplyAll() {
+    if (get().applying) return null;
+    set({ applying: true, applyProgress: null, applyReport: null });
+    try {
+      const report = await api.applyAll();
+      set({ applyReport: report, restart: report.restart });
+      return report;
+    } catch (e) {
+      get().handleError(e);
+      return null;
+    } finally {
+      set({ applying: false, applyProgress: null });
+      // Alles opnieuw ophalen: tweaks (en daarmee de status), logboek, controles, herstelpunt en instellingen.
+      void get().refreshTweaks();
+      void get().refreshJournal();
+      void get().refreshBigWins();
+      void get().refreshRestorePoint();
+      void api.getSettings().then((s) => set({ settings: s })).catch(() => undefined);
+    }
+  },
+
+  clearApplyReport() {
+    set({ applyReport: null });
   },
 
   async refreshGames() {
@@ -341,6 +430,7 @@ export const useApp = create<AppStore>()((set, get) => ({
       const info = await api.setTweak(id, enabled, option, gameId);
       if (!gameId) set((st) => ({ tweaks: st.tweaks.map((t) => (t.id === id ? info : t)) }));
       void get().refreshJournal();
+      void get().refreshStatus();
       return info;
     } catch (e) {
       get().handleError(e);
@@ -406,9 +496,7 @@ export const useApp = create<AppStore>()((set, get) => ({
         autoBoost: false,
         revertOnExit: true,
         globalTweaks: { ...(st.settings?.defaultProfileTweaks ?? {}) },
-        fullscreenOptOff: true,
         gpuHighPerf: true,
-        highPriority: true,
         closeApps: [],
         useGlobalCloseList: true,
       }

@@ -1,4 +1,4 @@
-import { CheckCircle2, FileCog, XCircle } from "lucide-react";
+import { CheckCircle2, Circle, FileCog } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useT } from "@/i18n/hooks";
 import type { TKey } from "@/i18n";
@@ -13,6 +13,7 @@ export function GameConfigCard({ gameId }: { gameId: string }) {
   const { t } = useT();
   const handleError = useApp((s) => s.handleError);
   const toast = useApp((s) => s.toast);
+  const refreshStatus = useApp((s) => s.refreshStatus);
   const [list, setList] = useState<GameConfigCheck[] | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -31,7 +32,7 @@ export function GameConfigCard({ gameId }: { gameId: string }) {
         <ul className="divide-y divide-line">
           {list.map((c) => (
             <li key={c.file + c.id} className="flex items-start gap-3 py-3 first:pt-0">
-              {c.ok ? <CheckCircle2 className="h-[18px] w-[18px] shrink-0 text-ok" /> : <XCircle className="h-[18px] w-[18px] shrink-0 text-warn" />}
+              {c.ok ? <CheckCircle2 className="h-[18px] w-[18px] shrink-0 text-ok" /> : <Circle className="h-[18px] w-[18px] shrink-0 text-ink-3" />}
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium">{t(`gameConfig.check.${c.id}.name` as TKey)}</div>
                 <div className="mt-0.5 text-[13px] text-ink-2">{t(`gameConfig.check.${c.id}.why` as TKey)}</div>
@@ -45,7 +46,7 @@ export function GameConfigCard({ gameId }: { gameId: string }) {
         </ul>
         <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-line pt-3">
           {todo === 0 ? (
-            <Badge variant="ok" icon={CheckCircle2}>
+            <Badge variant="ready" icon={CheckCircle2}>
               {t("fn.allGood")}
             </Badge>
           ) : (
@@ -57,6 +58,7 @@ export function GameConfigCard({ gameId }: { gameId: string }) {
                 setBusy(true);
                 try {
                   setList(await api.applyGameConfig(gameId));
+                  void refreshStatus();
                   toast({ level: "success", title: t("notice.success"), message: t("gameConfig.applied") });
                 } catch (e) {
                   handleError(e);

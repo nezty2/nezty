@@ -23,6 +23,12 @@ export interface Api {
   listTweaks(): Promise<T.TweakInfo[]>;
   getGameTweaks(gameId: string): Promise<T.TweakInfo[]>;
   setTweak(tweakId: string, enabled: boolean, option: string | null, gameId?: string | null): Promise<T.TweakInfo>;
+  /** "Alles activeren". Voortgang komt via het event "apply-progress" (T.ApplyProgress). */
+  applyAll(): Promise<T.ApplyAllReport>;
+  applyAllStatus(): Promise<T.ApplyAllStatus>;
+  getRestartStatus(): Promise<T.RestartStatus>;
+  /** Start Windows echt opnieuw op. Alleen na een bevestiging van de gebruiker aanroepen. */
+  restartPc(): Promise<void>;
   previewCleanup(): Promise<T.CleanupPreview>;
   runCleanup(itemIds: string[]): Promise<T.CleanupResult>;
   getBigWins(): Promise<T.BigWin[]>;
@@ -99,6 +105,10 @@ const tauriApi: Api = {
   listTweaks: () => call("list_tweaks"),
   getGameTweaks: (gameId) => call("get_game_tweaks", { gameId }),
   setTweak: (tweakId, enabled, option, gameId) => call("set_tweak", { tweakId, enabled, option, gameId: gameId ?? null }),
+  applyAll: () => call("apply_all"),
+  applyAllStatus: () => call("apply_all_status"),
+  getRestartStatus: () => call("get_restart_status"),
+  restartPc: () => call("restart_pc"),
   previewCleanup: () => call("preview_cleanup"),
   runCleanup: (itemIds) => call("run_cleanup", { itemIds }),
   getBigWins: () => call("get_big_wins"),
