@@ -1,6 +1,6 @@
 [package]
 name = "nezty"
-version = "0.7.3"
+version = "0.7.4"
 description = "nezty: eerlijke, omkeerbare game-tweaks voor Windows 10 en 11"
 authors = ["Nezty"]
 edition = "2021"
@@ -58,11 +58,6 @@ windows-sys = { version = "0.61", features = [
   "Win32_Graphics_Gdi",
   "Win32_Storage_FileSystem",
   "Win32_UI_Accessibility",
-  "Win32_UI_Input",
-  "Win32_Devices_DeviceAndDriverInstallation",
-  "Win32_Devices_HumanInterfaceDevice",
-  "Win32_System_IO",
-  "Win32_UI_Input_XboxController",
   "Win32_UI_Shell",
   "Win32_UI_WindowsAndMessaging",
   "Win32_NetworkManagement_IpHelper",
@@ -71,9 +66,7 @@ windows-sys = { version = "0.61", features = [
   "Win32_System_Registry",
   "Win32_System_Shutdown",
   "Win32_System_Com",
-  "Win32_System_Diagnostics_Etw",
   "Win32_System_Time",
-  "Win32_System_Performance",
   "Wdk_Graphics_Direct3D",
 ] }
 

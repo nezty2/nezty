@@ -16,7 +16,6 @@ import { CrosshairPage } from "@/pages/Crosshair";
 import { DashboardPage } from "@/pages/Dashboard";
 import { InputPage } from "@/pages/Input";
 import { LaptopPage } from "@/pages/Laptop";
-import { ControllerPage } from "@/pages/Controller";
 import { LogPage } from "@/pages/Log";
 import { NetworkPage } from "@/pages/Network";
 import { SettingsPage } from "@/pages/Settings";
@@ -36,7 +35,6 @@ const pages = {
   license: LicensePage,
   laptop: LaptopPage,
   input: InputPage,
-  controller: ControllerPage,
   crosshair: CrosshairPage,
   background: BackgroundAppsPage,
   network: NetworkPage,

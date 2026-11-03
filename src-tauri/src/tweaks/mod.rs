@@ -79,8 +79,6 @@ pub const CATALOG: &[TweakDef] = &[
     // Netwerk
     def("wifi_power_max", "Wi-Fi power saving off", C::Network, S::Global, Small, Instant, false),
     def("wifi_gaming_mode", "Wi-Fi background scan off while nezty runs", C::Network, S::Global, Measurable, Instant, false),
-    // Windows past QoS-regels op een pc zonder domein pas toe met deze instelling (nodig voor game_qos).
-    def("qos_all_networks", "QoS policies on every network", C::Network, S::Global, Negligible, PcRestart, true),
     // Alleen laptop
     TweakDef { platform: Platform::LaptopOnly, ..def("power_mode_best", "Power mode best performance", C::Laptop, S::Global, Measurable, Instant, true) },
     TweakDef { platform: Platform::LaptopOnly, ..def("battery_saver_off", "Battery saver off while gaming", C::Laptop, S::Global, Measurable, Instant, false) },
@@ -91,7 +89,6 @@ pub const CATALOG: &[TweakDef] = &[
     TweakDef { platform: Platform::LaptopOnly, ..def("touchpad_off_with_mouse", "Touchpad off while a mouse is connected", C::Laptop, S::Global, Small, Instant, false) },
     // Per game
     def("gpu_high_perf", "GPU preference high performance", C::Game, S::PerGame, Small, GameRestart, false),
-    def("game_qos", "Game traffic priority (DSCP 46)", C::Network, S::PerGame, Small, GameRestart, true),
     // Opruimen
     TweakDef { kind: TweakKind::Action, ..def("cleanup_temp", "Clean temp files and shader cache", C::Cleanup, S::Global, Negligible, Instant, false) },
 ];
@@ -177,8 +174,6 @@ pub fn status(state: &AppState, id: &str, game: Option<&Game>) -> Status {
         "touchpad_off_with_mouse" => laptop::touchpad_status(),
         "wifi_gaming_mode" => wifi_gaming::status(),
         "gpu_high_perf" => per_game::gpu_pref_status(game),
-        "qos_all_networks" => crate::gamenet::qos::nla_status(),
-        "game_qos" => crate::gamenet::qos::game_status(state, game),
         _ => Ok(Status::simple(TweakState::Unknown)),
     };
     match r {
@@ -352,8 +347,6 @@ fn apply_inner(state: &AppState, id: &str, option: Option<&str>, session: Option
         "touchpad_off_with_mouse" => laptop::touchpad_apply(state, session),
         "wifi_gaming_mode" => wifi_gaming::apply(state, session),
         "gpu_high_perf" => per_game::gpu_pref_apply(state, game, session),
-        "qos_all_networks" => crate::gamenet::qos::nla_apply(state, session),
-        "game_qos" => crate::gamenet::qos::game_apply(state, game, session),
         _ => Err(AppError::NotFound(format!("tweak {id}"))),
     }
 }
@@ -392,8 +385,6 @@ fn disable_inner(state: &AppState, id: &str, game: Option<&Game>) -> AppResult<(
         "touchpad_off_with_mouse" => laptop::touchpad_disable(state),
         "wifi_gaming_mode" => wifi_gaming::disable(state),
         "gpu_high_perf" => per_game::gpu_pref_disable(state, game),
-        "qos_all_networks" => crate::gamenet::qos::nla_disable(state),
-        "game_qos" => crate::gamenet::qos::game_disable(state, game),
         _ => Err(AppError::NotFound(format!("tweak {id}"))),
     }
 }
@@ -448,6 +439,66 @@ pub fn migrate_removed(state: &AppState) -> Option<RevertResult> {
     }
     if !result.failed.is_empty() {
         log::warn!("opruiming 0.5.0: {} wijziging(en) niet teruggezet, ze blijven in het logboek", result.failed.len());
+    }
+    Some(result)
+}
+
+/// Tweaks die in 0.7.4 met het game-netwerk uit de app zijn gehaald: QoS-voorrang, WARP en Multi-Internet.
+pub const REMOVED_V074: &[&str] = &["qos_all_networks", "game_qos", "warp_route", "preferred_connection"];
+/// De venstermodus van Fortnite: het advies voor echt volledig scherm is in 0.7.4 weggehaald.
+const FORTNITE_WINDOW_KEYS: &[&str] = &["FullscreenMode", "LastConfirmedFullscreenMode", "PreferredFullscreenMode"];
+
+/// Eenmalig bij de eerste start van 0.7.4: wat het game-netwerk en het venstermodus-advies van Fortnite nog aan
+/// hebben staan, exact terugzetten via het logboek. Zet je Fortnite zelf al terug op Volledig scherm in venster, dan
+/// wordt dat alleen afgevinkt. Draait Fortnite en staat het nog anders, dan volgt het bij de volgende start.
+pub fn migrate_v074(state: &AppState) -> Option<RevertResult> {
+    use crate::journal::RevertPayload;
+    if state.settings_clone().migrated_v074 {
+        return None;
+    }
+    if state.elevated {
+        crate::gamenet::stop_old_trace();
+    }
+    lock(&state.settings).fortnite_pending.retain(|id| id != "fullscreen");
+    let fortnite_open = crate::fortnite::is_running(state);
+    let (ids, already, wait) = {
+        let j = lock(&state.journal);
+        let (mut ids, mut already, mut wait) = (vec![], vec![], false);
+        for e in j.entries.iter().filter(|e| !e.reverted && e.revertable) {
+            if REMOVED_V074.contains(&e.tweak_id.as_str()) {
+                ids.push(e.id.clone());
+                continue;
+            }
+            let RevertPayload::IniKey { path, section, key, old } = &e.payload else { continue };
+            if e.tweak_id != "fortnite_ini" || !FORTNITE_WINDOW_KEYS.contains(&key.as_str()) {
+                continue;
+            }
+            let now = crate::ini::read_text(std::path::Path::new(path)).ok().and_then(|(t, _)| crate::ini::value(&t, section, key));
+            let same = match (&now, old) {
+                (Some(n), Some(o)) => n.eq_ignore_ascii_case(o),
+                (None, None) => true,
+                _ => false,
+            };
+            if same {
+                already.push(e.id.clone());
+            } else if fortnite_open {
+                wait = true;
+            } else {
+                ids.push(e.id.clone());
+            }
+        }
+        (ids, already, wait)
+    };
+    lock(&state.journal).mark_reverted(&already);
+    let mut result = lock(&state.journal).revert_ids(&ids);
+    result.reverted += already.len() as u32;
+    // Mislukt er iets zonder beheerdersrechten, of draait Fortnite nog, dan de volgende keer opnieuw.
+    if (result.failed.is_empty() || state.elevated) && !wait {
+        lock(&state.settings).migrated_v074 = true;
+    }
+    state.save_settings();
+    if !result.failed.is_empty() {
+        log::warn!("opruiming 0.7.4: {} wijziging(en) niet teruggezet, ze blijven in het logboek", result.failed.len());
     }
     Some(result)
 }

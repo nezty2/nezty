@@ -1,7 +1,6 @@
 import { Info } from "lucide-react";
 import { useState } from "react";
 import { LiveInputCard } from "@/components/LiveInputCard";
-import { MouseRateCard } from "@/components/MouseRateCard";
 import { TweakCard } from "@/components/TweakCard";
 import { Card, PageHeader, SectionTitle, Skeleton } from "@/components/ui";
 import { useT } from "@/i18n/hooks";
@@ -47,8 +46,6 @@ export function InputPage() {
       </div>
 
       <LiveInputCard />
-
-      <MouseRateCard />
 
       <section>
         <SectionTitle>{t("input.settings")}</SectionTitle>

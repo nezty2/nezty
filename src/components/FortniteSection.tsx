@@ -57,7 +57,6 @@ export function FortniteSection() {
 
   const fps = ov.checks.find((c) => c.id === "fps_limit");
   const render = ov.checks.find((c) => c.id === "render_mode");
-  const fullscreen = ov.checks.find((c) => c.id === "fullscreen");
   // Met Fortnite open kan het wel: dan staat het klaar voor na het afsluiten.
   const locked = !ov.iniExists;
   const fpsText = (v: string | null) => (v == null ? t("fn.notSet") : Number(v) === 0 ? t("fn.unlimited") : `${Math.round(Number(v))} FPS`);
@@ -70,18 +69,6 @@ export function FortniteSection() {
       name: t("fn.check.fps_limit.name"),
       why: t("fn.check.fps_limit.why"),
       now: fps.ok ? fpsText(fps.current) : `${fpsText(fps.current)} · ${t("fn.advice", { value: fpsText(fps.recommended) })}`,
-      action: t("fn.set"),
-      done: t("fn.allGood"),
-    });
-  }
-  if (fullscreen) {
-    const modeText = (v: string | null) => (v === "0" || v === "1" || v === "2" ? t(`fortnite.mode${v}` as TKey) : t("fn.notSet"));
-    rows.push({
-      id: "fullscreen",
-      ok: fullscreen.ok,
-      name: t("fn.check.fullscreen.name"),
-      why: t("fn.check.fullscreen.why"),
-      now: fullscreen.ok ? modeText(fullscreen.current) : `${modeText(fullscreen.current)} · ${t("fn.advice", { value: t("fortnite.mode0") })}`,
       action: t("fn.set"),
       done: t("fn.allGood"),
     });

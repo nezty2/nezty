@@ -191,10 +191,8 @@ pub fn checks_for(text: &str, nvidia: bool, max_hz: u32) -> Vec<FortniteCheck> {
     }
     let mode = render_mode(text);
     checks.push(FortniteCheck { id: "render_mode".into(), ok: mode == "performance", current: Some(mode.into()), recommended: "performance".into() });
-    // Echt volledig scherm (0) gaat langs de Windows-compositor; "volledig scherm in venster" (1) niet. Met twee
-    // schermen op verschillende Hz geeft dat extra vertraging en haperingen.
-    let fullscreen = ini::value(text, SECTION, "PreferredFullscreenMode").or_else(|| ini::value(text, SECTION, "FullscreenMode"));
-    checks.push(FortniteCheck { id: "fullscreen".into(), ok: fullscreen.as_deref() == Some("0"), current: fullscreen, recommended: "0".into() });
+    // Geen advies voor de venstermodus: met "Optimalisaties voor games in een venster" (windowed_opt) is
+    // Volledig scherm in venster even direct, en in de praktijk speelde dat juist beter. Dat blijft je eigen keuze.
     checks
 }
 
@@ -263,11 +261,6 @@ pub fn changes_for(checks: &[FortniteCheck], ids: &[String]) -> Vec<(&'static st
             "vsync" => changes.push((SECTION, "bUseVSync", "False".to_string())),
             "fps_limit" => changes.push((SECTION, "FrameRateLimit", format!("{:.6}", c.recommended.parse::<f32>().unwrap_or(0.0)))),
             "reflex" => changes.push((SECTION, "LatencyTweak2", "2".to_string())),
-            "fullscreen" => {
-                for k in ["FullscreenMode", "LastConfirmedFullscreenMode", "PreferredFullscreenMode"] {
-                    changes.push((SECTION, k, "0".to_string()));
-                }
-            }
             // Prestatiemodus hoort bij DirectX 11. Blijft PreferredRHI op dx12 staan, dan negeert Fortnite de keuze.
             "render_mode" => {
                 changes.push((RHI_SECTION, "PreferredFeatureLevel", "es31".to_string()));

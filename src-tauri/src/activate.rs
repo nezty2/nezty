@@ -12,7 +12,7 @@ use tauri::{AppHandle, Emitter};
 /// laptop- en wifi-instellingen daarna komen dan in het juiste plan terecht.
 const BIG_WINS: &[&str] = &["power_source", "refresh_rate"];
 /// Fortnite-instellingen die in "Alles activeren" zitten (Reflex alleen met een NVIDIA-kaart).
-const FORTNITE_IDS: &[&str] = &["vsync", "reflex", "fullscreen"];
+const FORTNITE_IDS: &[&str] = &["vsync", "reflex"];
 const FORTNITE_GAME: &str = "epic:fortnite";
 
 fn item(id: &str, game_id: Option<&str>, outcome: ApplyOutcome, reason: Option<Msg>) -> ApplyItem {
