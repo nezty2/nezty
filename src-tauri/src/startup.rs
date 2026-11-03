@@ -270,7 +270,8 @@ pub fn start_keeper(app: tauri::AppHandle, state: std::sync::Arc<AppState>) {
     let _ = std::thread::Builder::new().name("startup-keeper".into()).spawn(move || {
         std::thread::sleep(std::time::Duration::from_secs(20));
         loop {
-            if crate::license::require(&state).is_ok() {
+            // Tijdens het spelen niets doen: een app die zichzelf weer aanzet, doet dat bij het opstarten.
+            if crate::license::require(&state).is_ok() && !crate::watcher::playing(&state) {
                 for name in enforce(&state) {
                     let _ = app.emit("notice", crate::models::Notice::new("warning", crate::models::Msg::new("startup_came_back").with("app", &name)));
                 }

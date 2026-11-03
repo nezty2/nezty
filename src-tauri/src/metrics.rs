@@ -146,6 +146,11 @@ pub fn start(app: AppHandle, state: Arc<AppState>) {
         let shared = ping_shared.clone();
         let st = state.clone();
         let _ = std::thread::Builder::new().name("ping".into()).spawn(move || loop {
+            // Tijdens het spelen geen extra pings naast je gameverkeer: het dashboard zie je dan toch niet.
+            if crate::watcher::playing(&st) {
+                std::thread::sleep(Duration::from_secs(2));
+                continue;
+            }
             let host = st.settings_clone().dashboard_ping_host;
             let r = if host.trim().is_empty() { None } else { ping::quick(&host, 1500) };
             if let Ok(mut g) = shared.lock() {

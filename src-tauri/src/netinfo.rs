@@ -63,11 +63,9 @@ pub fn adapters() -> Vec<NetworkAdapter> {
     scan().into_iter().map(|s| s.adapter).collect()
 }
 
-/// Een adapter plus de nummers waarmee Windows hem aanwijst (voor Multi-Internet).
+/// Een gevonden adapter.
 pub struct ScannedAdapter {
     pub adapter: NetworkAdapter,
-    pub luid: u64,
-    pub if_index: u32,
 }
 
 /// Rechtstreeks via GetAdaptersAddresses en GetIfEntry2, zonder PowerShell.
@@ -159,8 +157,6 @@ pub fn scan() -> Vec<ScannedAdapter> {
                 dns,
                 mac,
             },
-            luid: unsafe { a.Luid.Value },
-            if_index: unsafe { a.Anonymous1.Anonymous.IfIndex },
         });
     }
     out

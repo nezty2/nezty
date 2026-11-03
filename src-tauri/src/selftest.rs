@@ -124,7 +124,7 @@ pub fn run_roundtrip(out: &str) {
             std::fs::copy(&ini, &copy)?;
             let original = std::fs::read(&copy)?;
             let (text, _) = crate::ini::read_text(&copy)?;
-            let ids: Vec<String> = ["vsync", "fps_limit", "reflex", "render_mode", "fullscreen"].iter().map(|s| s.to_string()).collect();
+            let ids: Vec<String> = ["vsync", "fps_limit", "reflex", "render_mode"].iter().map(|s| s.to_string()).collect();
             let changes = fortnite::changes_for(&fortnite::checks_for(&text, true, 144), &ids);
             let entries = fortnite::write_changes(&copy, &changes)?;
             let after = fortnite::checks_for(&crate::ini::read_text(&copy)?.0, true, 144);

@@ -493,9 +493,9 @@ pub fn execute_revert(payload: &RevertPayload) -> AppResult<()> {
             ))?;
             Ok(())
         }
-        RevertPayload::QosPolicy { name } => crate::gamenet::qos::remove_policy(name),
-        RevertPayload::Warp => crate::gamenet::warp::revert(),
-        RevertPayload::InterfaceMetric { luid, family, automatic, metric } => crate::gamenet::multinet::revert_metric(*luid, *family, *automatic, *metric),
+        RevertPayload::QosPolicy { name } => crate::gamenet::remove_policy(name),
+        RevertPayload::Warp => crate::gamenet::warp_revert(),
+        RevertPayload::InterfaceMetric { luid, family, automatic, metric } => crate::gamenet::revert_metric(*luid, *family, *automatic, *metric),
         RevertPayload::None => Err(AppError::coded("not_revertable")),
     }
 }

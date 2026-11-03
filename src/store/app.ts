@@ -4,7 +4,7 @@ import { api, asBackendError, listenEvent } from "@/lib/ipc";
 import type * as T from "@/lib/types";
 import { EVENTS } from "@/lib/types";
 
-export type PageId = "dashboard" | "tweaks" | "license" | "laptop" | "input" | "controller" | "crosshair" | "background" | "network" | "startup" | "log" | "settings";
+export type PageId = "dashboard" | "tweaks" | "license" | "laptop" | "input" | "crosshair" | "background" | "network" | "startup" | "log" | "settings";
 
 export interface Toast {
   id: number;

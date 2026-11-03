@@ -1,10 +1,6 @@
 import { Cable, Eye, EyeOff, Globe, RefreshCw, ShieldQuestion, Wifi } from "lucide-react";
 import { BandwidthCard } from "@/components/BandwidthCard";
 import { BufferbloatCard } from "@/components/BufferbloatCard";
-import { AnalyzeTab } from "@/components/netopt/AnalyzeTab";
-import { MultiTab } from "@/components/netopt/MultiTab";
-import { OptimizeTab } from "@/components/netopt/OptimizeTab";
-import { quality, qualityColor } from "@/components/netopt/route";
 import { useCallback, useEffect, useState } from "react";
 import { TweakCard } from "@/components/TweakCard";
 import { Badge, Button, Card, Kv, PageHeader, SectionTitle, Skeleton, cn } from "@/components/ui";
@@ -19,17 +15,12 @@ const INTERNET = [
   { id: "google", label: "Google", host: "8.8.8.8" },
 ];
 
-type Tab = "optimize" | "analyze" | "multi" | "overview";
-const TABS: Tab[] = ["optimize", "analyze", "multi", "overview"];
-
-function savedTab(): Tab {
-  try {
-    const v = window.localStorage.getItem("nezty.network.tab") as Tab | null;
-    return v && TABS.includes(v) ? v : "optimize";
-  } catch {
-    return "optimize";
-  }
+type Quality = "excellent" | "good" | "ok" | "bad";
+function quality(ms: number | null | undefined): Quality | null {
+  if (ms == null) return null;
+  return ms < 20 ? "excellent" : ms < 45 ? "good" : ms < 90 ? "ok" : "bad";
 }
+const qualityColor: Record<Quality, string> = { excellent: "text-ok", good: "text-ok", ok: "text-warn", bad: "text-bad" };
 
 /** Klikbare meetkaart: klik om (opnieuw) te meten. */
 function PingTile({ title, sub, result, loading, onTest }: { title: string; sub?: string; result?: PingResult; loading: boolean; onTest: () => void }) {
@@ -62,33 +53,10 @@ function PingTile({ title, sub, result, loading, onTest }: { title: string; sub?
 
 export function NetworkPage() {
   const { t } = useT();
-  const [tab, setTab] = useState<Tab>(savedTab);
-  const choose = (id: Tab) => {
-    setTab(id);
-    try {
-      window.localStorage.setItem("nezty.network.tab", id);
-    } catch {
-      /* zonder opslag onthoudt de pagina het tabblad niet */
-    }
-  };
   return (
     <div className="space-y-6">
-      <PageHeader title={t("network.title")} subtitle={t("netopt.subtitle")} />
-      <div className="flex gap-1 overflow-x-auto border-b border-line">
-        {TABS.map((id) => (
-          <button
-            key={id}
-            onClick={() => choose(id)}
-            className={cn("-mb-px shrink-0 border-b-2 px-3 py-2 text-sm font-medium transition-colors", tab === id ? "border-accent text-ink" : "border-transparent text-ink-3 hover:text-ink-2")}
-          >
-            {t(`netopt.tabs.${id}`)}
-          </button>
-        ))}
-      </div>
-      {tab === "optimize" && <OptimizeTab />}
-      {tab === "analyze" && <AnalyzeTab />}
-      {tab === "multi" && <MultiTab />}
-      {tab === "overview" && <OverviewTab />}
+      <PageHeader title={t("network.title")} subtitle={t("network.subtitle")} />
+      <OverviewTab />
     </div>
   );
 }
