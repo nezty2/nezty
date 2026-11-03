@@ -224,7 +224,35 @@ pub fn overview(state: &AppState) -> AppResult<FortniteOverview> {
         render_mode: render_mode(&text).into(),
         advice: advice.into(),
         checks: checks_for(&text, nvidia, max_hz),
+        pending: lock(&state.settings).fortnite_pending.clone(),
     })
+}
+
+/// Fortnite draait: de gekozen aanbevelingen onthouden. Zodra Fortnite dicht is, zet de watcher ze (zie
+/// `apply_pending`). Nu schrijven heeft geen zin: Fortnite schrijft zijn ini bij het afsluiten terug.
+pub fn queue(state: &AppState, ids: &[String]) -> AppResult<FortniteOverview> {
+    {
+        let mut s = lock(&state.settings);
+        for id in ids {
+            if !s.fortnite_pending.contains(id) {
+                s.fortnite_pending.push(id.clone());
+            }
+        }
+    }
+    state.save_settings();
+    overview(state)
+}
+
+/// Na het afsluiten van Fortnite: wat klaarstaat zetten. None als er niets klaarstaat of Fortnite nog draait.
+pub fn apply_pending(state: &AppState) -> Option<AppResult<FortniteOverview>> {
+    let ids = lock(&state.settings).fortnite_pending.clone();
+    if ids.is_empty() || is_running(state) {
+        return None;
+    }
+    // Ook bij een fout leeg: anders probeert de watcher het elke 3 seconden opnieuw.
+    lock(&state.settings).fortnite_pending.clear();
+    state.save_settings();
+    Some(apply_recommended(state, &ids))
 }
 
 /// Welke sleutels er moeten veranderen voor de gekozen aanbevelingen. Wat al goed staat, valt weg.

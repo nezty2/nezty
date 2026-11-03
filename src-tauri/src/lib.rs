@@ -142,6 +142,7 @@ fn save_settings(app: AppHandle, state: St<'_>, mut settings: Settings) -> AppRe
     settings.all_active = old.all_active;
     settings.activated_games = old.activated_games.clone();
     settings.license_no_token_since = old.license_no_token_since;
+    settings.fortnite_pending = old.fortnite_pending.clone();
     *lock(&state.settings) = settings.clone();
     state.save_settings();
     if old.language != settings.language {
@@ -866,6 +867,10 @@ async fn apply_fortnite_recommended(app: AppHandle, state: St<'_>, ids: Vec<Stri
     let st = state.inner().clone();
     blocking(move || {
         restore_point_first(&app, &st);
+        // Fortnite open: onthouden en zetten zodra je hem sluit.
+        if fortnite::is_running(&st) {
+            return fortnite::queue(&st, &ids);
+        }
         fortnite::apply_recommended(&st, &ids)
     })
     .await

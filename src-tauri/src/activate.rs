@@ -95,13 +95,19 @@ fn fortnite_checks(state: &AppState, out: &mut Vec<ApplyItem>) {
     };
     let wanted: Vec<&FortniteCheck> = ov.checks.iter().filter(|c| FORTNITE_IDS.contains(&c.id.as_str())).collect();
     let todo: Vec<String> = wanted.iter().filter(|c| !c.ok).map(|c| c.id.clone()).collect();
+    // Fortnite open: klaarzetten. De watcher zet het zodra Fortnite dicht is.
+    if ov.running && !todo.is_empty() {
+        if let Err(e) = fortnite::queue(state, &todo) {
+            log::warn!("fortnite klaarzetten: {e}");
+        }
+    }
     let after = if todo.is_empty() || ov.running { Ok(ov.clone()) } else { fortnite::apply_recommended(state, &todo) };
     for c in wanted {
         let id = format!("fortnite_{}", c.id);
         let it = if c.ok {
             item(&id, Some(FORTNITE_GAME), ApplyOutcome::Already, None)
         } else if ov.running {
-            item(&id, Some(FORTNITE_GAME), ApplyOutcome::Skipped, Some(Msg::new("game_running")))
+            item(&id, Some(FORTNITE_GAME), ApplyOutcome::Skipped, Some(Msg::new("fortnite_queued")))
         } else {
             match &after {
                 Ok(a) if a.checks.iter().any(|x| x.id == c.id && x.ok) => item(&id, Some(FORTNITE_GAME), ApplyOutcome::Applied, None),

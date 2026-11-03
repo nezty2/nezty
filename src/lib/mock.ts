@@ -25,7 +25,8 @@ const msg = (key: string, params: Record<string, string> = {}): T.Msg => ({ key,
 
 let fortniteOverview: T.FortniteOverview = {
   iniExists: true,
-  running: false,
+  // ?fortnite=open speelt een draaiende Fortnite: dan gaan keuzes in de wachtrij voor na het afsluiten.
+  running: typeof location !== "undefined" && new URLSearchParams(location.search).get("fortnite") === "open",
   gpuVendor: "nvidia",
   gpuName: "NVIDIA GeForce RTX 5070 Ti",
   maxHz: 144,
@@ -38,6 +39,7 @@ let fortniteOverview: T.FortniteOverview = {
     { id: "render_mode", current: "dx12", recommended: "performance", ok: false },
     { id: "fullscreen", current: "1", recommended: "0", ok: false },
   ],
+  pending: [],
 };
 let liveChecks: T.LiveCheck[] = [
   { id: "mouse_precision_off", saved: true, live: true },
@@ -98,6 +100,7 @@ let settings: T.Settings = {
   multinetAuto: false,
   startupKeepOff: [],
   startupCameBack: [],
+  fortnitePending: [],
 };
 
 function tw(p: Partial<T.TweakInfo> & { id: string; category: T.TweakCategory }): T.TweakInfo {
@@ -505,6 +508,10 @@ export const mockApi: Api = {
   },
   async applyFortniteRecommended(ids) {
     await delay(600);
+    if (fortniteOverview.running) {
+      fortniteOverview = { ...fortniteOverview, pending: [...new Set([...fortniteOverview.pending, ...ids])] };
+      return fortniteOverview;
+    }
     fortniteOverview = { ...fortniteOverview, renderMode: ids.includes("render_mode") ? "performance" : fortniteOverview.renderMode, checks: fortniteOverview.checks.map((c) => (ids.includes(c.id) ? { ...c, ok: true, current: c.recommended } : c)) };
     return fortniteOverview;
   },

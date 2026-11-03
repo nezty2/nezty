@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { CheckCircle2, ChevronDown, Circle, Info, Pickaxe } from "lucide-react";
+import { CheckCircle2, ChevronDown, Circle, Clock, Info, Pickaxe } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Badge, Button, Card, cn } from "@/components/ui";
 import { useT } from "@/i18n/hooks";
@@ -40,8 +40,10 @@ export function FortniteSection() {
   const apply = async (id: string) => {
     setBusy(id);
     try {
-      setOv(await api.applyFortniteRecommended([id]));
-      toast({ level: "success", title: t("notice.success"), message: t("fn.applied", { count: 1 }) });
+      const next = await api.applyFortniteRecommended([id]);
+      setOv(next);
+      // Fortnite open: de backend onthoudt het en zet het na het afsluiten.
+      toast({ level: "success", title: t("notice.success"), message: next.pending.includes(id) ? t("fn.queued") : t("fn.applied", { count: 1 }) });
       void refreshStatus();
     } catch (e) {
       handleError(e);
@@ -56,7 +58,8 @@ export function FortniteSection() {
   const fps = ov.checks.find((c) => c.id === "fps_limit");
   const render = ov.checks.find((c) => c.id === "render_mode");
   const fullscreen = ov.checks.find((c) => c.id === "fullscreen");
-  const locked = ov.running || !ov.iniExists;
+  // Met Fortnite open kan het wel: dan staat het klaar voor na het afsluiten.
+  const locked = !ov.iniExists;
   const fpsText = (v: string | null) => (v == null ? t("fn.notSet") : Number(v) === 0 ? t("fn.unlimited") : `${Math.round(Number(v))} FPS`);
 
   const rows: { id: string; ok: boolean; name: string; why: string; now: string; action: string; done: string }[] = [];
@@ -128,6 +131,10 @@ export function FortniteSection() {
               {r.ok ? (
                 <Badge variant="ready" icon={CheckCircle2}>
                   {r.done}
+                </Badge>
+              ) : ov.pending.includes(r.id) ? (
+                <Badge variant="pending" icon={Clock}>
+                  {t("fn.pending")}
                 </Badge>
               ) : (
                 <Button size="sm" loading={busy === r.id} disabled={locked} onClick={() => void apply(r.id)}>

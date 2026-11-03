@@ -61,6 +61,8 @@ pub fn playing(state: &AppState) -> bool {
     foreground_game(state).is_some()
 }
 
+const FORTNITE: &str = "epic:fortnite";
+
 pub fn status(state: &AppState) -> WatcherStatus {
     let watching = lock(&state.profiles).iter().filter(|p| p.auto_boost).count() as u32;
     WatcherStatus { running: state.watcher_running.load(Ordering::Relaxed), watching }
@@ -71,6 +73,8 @@ pub fn start(app: AppHandle, state: Arc<AppState>) {
     let _ = builder.spawn(move || {
         let mut sys = System::new();
         let mut prev: HashSet<String> = HashSet::new();
+        // Rondes op rij zonder Fortnite: voor de instellingen die klaarstaan voor na het afsluiten.
+        let mut fortnite_gone: u32 = 0;
         state.watcher_running.store(true, Ordering::Relaxed);
         let _ = app.emit("watcher-status", status(&state));
         loop {
@@ -90,6 +94,17 @@ pub fn start(app: AppHandle, state: Arc<AppState>) {
             // Fijnere timer (0,5 ms) alleen zolang er een game draait en de tweak aan staat.
             let timer_on = crate::tweaks::status(&state, "timer_resolution", None).state == crate::models::TweakState::On;
             crate::timer::hold(timer_on && !now.is_empty());
+
+            // Fortnite schrijft zijn ini bij het afsluiten. Pas na twee rondes zonder Fortnite (zo'n 6 seconden)
+            // zetten wat tijdens het spelen is gekozen, zodat Fortnite het niet meer overschrijft.
+            fortnite_gone = if now.contains(FORTNITE) { 0 } else { fortnite_gone.saturating_add(1) };
+            if fortnite_gone >= 2 && !lock(&state.settings).fortnite_pending.is_empty() {
+                match crate::fortnite::apply_pending(&state) {
+                    Some(Ok(_)) => boost::notify(&app, "success", Msg::new("fortnite_pending_done")),
+                    Some(Err(e)) => boost::notify(&app, "error", Msg::new("fortnite_pending_failed").with("detail", e.to_string())),
+                    None => {}
+                }
+            }
 
             for id in now.difference(&prev) {
                 let Some(game) = games.iter().find(|g| &g.id == id) else { continue };

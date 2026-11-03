@@ -107,6 +107,8 @@ export interface FortniteOverview {
   renderMode: "performance" | "dx12" | "dx11" | "default";
   advice: "igpu" | "nvidia" | "amd" | "other";
   checks: FortniteCheck[];
+  /** Id's die klaarstaan: nezty zet ze zodra Fortnite dicht is. */
+  pending: string[];
 }
 
 export interface FpsDetail {
@@ -234,6 +236,8 @@ export interface Settings {
   multinetAuto: boolean;
   startupKeepOff: string[];
   startupCameBack: string[];
+  /** Alleen door de backend bijgehouden: Fortnite-aanbevelingen voor na het afsluiten. */
+  fortnitePending: string[];
 }
 
 export interface MetricsSample {
