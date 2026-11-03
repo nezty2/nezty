@@ -14,51 +14,16 @@ use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
-use windows_sys::Win32::Foundation::{CloseHandle, HWND, RECT};
+use crate::watcher::foreground_game;
+use windows_sys::Win32::Foundation::{HWND, RECT};
 use windows_sys::Win32::Graphics::Gdi::{GetMonitorInfoW, MonitorFromWindow, MONITORINFO, MONITOR_DEFAULTTONEAREST};
-use windows_sys::Win32::System::Threading::{OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION};
-use windows_sys::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId, SetWindowPos, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE};
+use windows_sys::Win32::UI::WindowsAndMessaging::{GetTopWindow, SetWindowPos, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE};
 
 pub const LABEL: &str = "crosshair";
 /// Logische grootte van het overlayvenster (ruim genoeg voor de grootste crosshair).
 const SIZE: f64 = 400.0;
 
 static KEEPER: AtomicBool = AtomicBool::new(false);
-
-/// Bestandsnaam (bv. "cs2.exe") van het proces achter een venster.
-fn exe_name_of(hwnd: HWND) -> Option<String> {
-    unsafe {
-        let mut pid = 0u32;
-        GetWindowThreadProcessId(hwnd, &mut pid);
-        if pid == 0 {
-            return None;
-        }
-        let h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
-        if h.is_null() {
-            return None;
-        }
-        let mut buf = [0u16; 1024];
-        let mut len = buf.len() as u32;
-        let ok = QueryFullProcessImageNameW(h, 0, buf.as_mut_ptr(), &mut len) != 0;
-        CloseHandle(h);
-        if !ok {
-            return None;
-        }
-        let path = String::from_utf16_lossy(&buf[..len as usize]);
-        path.rsplit(['\\', '/']).next().map(|s| s.to_lowercase())
-    }
-}
-
-/// Het venster van een game dat nu de focus heeft, als dat er is.
-fn foreground_game(state: &AppState) -> Option<HWND> {
-    let fg = unsafe { GetForegroundWindow() };
-    if fg.is_null() {
-        return None;
-    }
-    let name = exe_name_of(fg)?;
-    let is_game = state.all_games().iter().any(|g| g.process_names.iter().any(|n| n.eq_ignore_ascii_case(&name)));
-    is_game.then_some(fg)
-}
 
 /// Het scherm (fysieke pixels) waar een venster op staat.
 fn monitor_rect(hwnd: HWND) -> Option<RECT> {
@@ -102,9 +67,13 @@ pub fn start_keeper(app: AppHandle, state: Arc<AppState>) {
                     last_rect = Some(key);
                 }
             }
-            // De game neemt bij een focuswissel de bovenste plek: steeds opnieuw bovenop, zonder focus te pakken.
+            // De game neemt bij een focuswissel de bovenste plek: dan opnieuw bovenop, zonder focus te pakken.
+            // Staat de overlay al bovenaan, dan niets doen: elke wijziging van de z-volgorde laat Windows het
+            // beeld opnieuw samenstellen, en dat twee keer per seconde geeft haperingen in de game.
             unsafe {
-                SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                if GetTopWindow(std::ptr::null_mut()) != hwnd {
+                    SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                }
             }
         }
     });

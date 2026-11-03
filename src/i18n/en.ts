@@ -816,10 +816,10 @@ export const en: Dict = {
     },
     mem: {
       title: "Memory guard",
-      what: "Empties the Windows standby cache while you play, but only when your truly free memory is almost gone (less than 1 GB). Then it prevents stutters. With enough free memory it deliberately does nothing.",
+      what: "Empties the Windows standby cache while you play, but only when your truly free memory is almost gone (less than 256 MB). Then it prevents stutters. With enough free memory it deliberately does nothing.",
       free: "Truly free",
       standby: "Cache (standby)",
-      needed: "Needed now: less than 1 GB free. During a game the guard empties the cache.",
+      needed: "Needed now: less than 256 MB free. During a game the guard empties the cache.",
       notNeeded: "Not needed: you have {free} truly free.",
       last: "Last emptied {ago}, {mb} freed.",
       purge: "Empty now",

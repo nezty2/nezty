@@ -814,10 +814,10 @@ export const nl = {
     },
     mem: {
       title: "Geheugenbewaker",
-      what: "Leegt tijdens het gamen de standby-cache van Windows, maar alleen als je echt vrije geheugen bijna op is (minder dan 1 GB). Dan voorkomt het haperingen. Met genoeg vrij geheugen doet hij bewust niets.",
+      what: "Leegt tijdens het gamen de standby-cache van Windows, maar alleen als je echt vrije geheugen bijna op is (minder dan 256 MB). Dan voorkomt het haperingen. Met genoeg vrij geheugen doet hij bewust niets.",
       free: "Echt vrij",
       standby: "Cache (standby)",
-      needed: "Nu nodig: minder dan 1 GB vrij. Tijdens een game leegt de bewaker de cache.",
+      needed: "Nu nodig: minder dan 256 MB vrij. Tijdens een game leegt de bewaker de cache.",
       notNeeded: "Niet nodig: je hebt {free} echt vrij.",
       last: "Laatst geleegd {ago}, {mb} vrijgekomen.",
       purge: "Nu legen",

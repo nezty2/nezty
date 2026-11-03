@@ -10,6 +10,56 @@ use std::sync::Arc;
 use std::time::Duration;
 use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System};
 use tauri::{AppHandle, Emitter};
+use windows_sys::Win32::Foundation::{CloseHandle, HWND};
+use windows_sys::Win32::System::Threading::{OpenProcess, QueryFullProcessImageNameW, PROCESS_QUERY_LIMITED_INFORMATION};
+use windows_sys::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId};
+
+/// Bestandsnaam (bv. "cs2.exe") van het proces achter een venster.
+fn exe_name_of(hwnd: HWND) -> Option<String> {
+    unsafe {
+        let mut pid = 0u32;
+        GetWindowThreadProcessId(hwnd, &mut pid);
+        if pid == 0 {
+            return None;
+        }
+        let h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if h.is_null() {
+            return None;
+        }
+        let mut buf = [0u16; 1024];
+        let mut len = buf.len() as u32;
+        let ok = QueryFullProcessImageNameW(h, 0, buf.as_mut_ptr(), &mut len) != 0;
+        CloseHandle(h);
+        if !ok {
+            return None;
+        }
+        let path = String::from_utf16_lossy(&buf[..len as usize]);
+        path.rsplit(['\\', '/']).next().map(|s| s.to_lowercase())
+    }
+}
+
+/// Het venster van een game dat nu de focus heeft, als dat er is: dan ben je echt aan het spelen.
+/// Zonder draaiende game wordt er niets opgevraagd.
+pub fn foreground_game(state: &AppState) -> Option<HWND> {
+    if lock(&state.running_games).is_empty() {
+        return None;
+    }
+    let fg = unsafe { GetForegroundWindow() };
+    if fg.is_null() {
+        return None;
+    }
+    let name = exe_name_of(fg)?;
+    let known = |g: &crate::models::Game| g.process_names.iter().any(|n| n.eq_ignore_ascii_case(&name));
+    // Na elkaar, niet tegelijk vergrendeld.
+    let detected = lock(&state.games).iter().any(known);
+    let is_game = detected || lock(&state.settings).custom_games.iter().any(known);
+    is_game.then_some(fg)
+}
+
+/// Staat er nu een game op de voorgrond? Dan pauzeren metingen die tijdens het spelen niets toevoegen.
+pub fn playing(state: &AppState) -> bool {
+    foreground_game(state).is_some()
+}
 
 pub fn status(state: &AppState) -> WatcherStatus {
     let watching = lock(&state.profiles).iter().filter(|p| p.auto_boost).count() as u32;

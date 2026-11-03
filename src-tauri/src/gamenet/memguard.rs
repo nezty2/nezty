@@ -2,25 +2,30 @@
 //! standby-cache. Is het echt vrije geheugen bijna op, dan moet Windows tijdens het gamen eerst cachepagina's
 //! vrijmaken, en dat geeft op sommige pc's haperingen. De bewaker leegt dan de standby-lijst met
 //! NtSetSystemInformation (MemoryPurgeStandbyList), dezelfde aanroep als RAMMap van Microsoft Sysinternals.
-//! Alleen tijdens een game, alleen onder de grens (minder dan 1 GB vrij en meer dan 1 GB standby) en hooguit eens per
-//! 30 seconden. Met genoeg vrij geheugen doet hij niets: legen gooit dan alleen cache weg die Windows straks
-//! opnieuw van schijf moet lezen.
+//! Alleen tijdens een game, alleen onder de grens (minder dan 256 MB vrij en meer dan 1 GB standby) en hooguit eens
+//! per 2 minuten. Met genoeg vrij geheugen doet hij niets: legen gooit dan alleen cache weg die de game straks
+//! opnieuw van schijf moet lezen, en dat geeft juist haperingen. Een paar honderd MB vrij met veel standby is
+//! gewoon gezond: Windows hergebruikt standby-pagina's zelf en goedkoop.
+//! De meters komen uit PDH, in het eigen proces. WMI vraagt het aan een ander proces dat de hele meterklasse
+//! ververst, en dat elke 3 seconden tijdens het gamen gaf zelf kleine haperingen.
 
 use crate::error::{AppError, AppResult};
 use crate::models::{now_ms, MemGuardStatus, MemStats, PurgeResult};
 use crate::state::{lock, AppState};
 use crate::winapi::wide;
-use std::collections::HashMap;
 use std::ffi::c_void;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
-use wmi::{Variant, WMIConnection};
+use windows_sys::Win32::System::Performance::{
+    PdhAddEnglishCounterW, PdhCloseQuery, PdhCollectQueryData, PdhGetFormattedCounterValue, PdhOpenQueryW, PDH_FMT_COUNTERVALUE,
+    PDH_FMT_LARGE, PDH_HCOUNTER, PDH_HQUERY,
+};
 
-const FREE_LIMIT_MB: u64 = 1024;
+const FREE_LIMIT_MB: u64 = 256;
 const STANDBY_MIN_MB: u64 = 1024;
-const MIN_GAP: Duration = Duration::from_secs(30);
+const MIN_GAP: Duration = Duration::from_secs(120);
 const MB: u64 = 1024 * 1024;
 /// SYSTEM_INFORMATION_CLASS SystemMemoryListInformation en het commando MemoryPurgeStandbyList.
 const SYSTEM_MEMORY_LIST_INFORMATION: u32 = 80;
@@ -31,14 +36,74 @@ static PURGES: AtomicU32 = AtomicU32::new(0);
 /// Laatste keer legen: (tijdstip in ms, vrijgekomen MB, Instant voor de wachttijd).
 static LAST: Mutex<Option<(i64, u64, Instant)>> = Mutex::new(None);
 
-fn variant_u64(v: &Variant) -> Option<u64> {
-    match v {
-        Variant::UI8(x) => Some(*x),
-        Variant::UI4(x) => Some(*x as u64),
-        Variant::I8(x) => u64::try_from(*x).ok(),
-        Variant::I4(x) => u64::try_from(*x).ok(),
-        Variant::String(s) => s.trim().parse().ok(),
-        _ => None,
+/// Geheugenmeters van Windows (werken ook zonder beheerdersrechten). Eén keer openen en dan steeds opnieuw lezen:
+/// het openen laadt de meternamen, het lezen zelf is goedkoop.
+struct Counters {
+    query: PDH_HQUERY,
+    available: PDH_HCOUNTER,
+    free: PDH_HCOUNTER,
+    standby: [PDH_HCOUNTER; 3],
+}
+
+impl Counters {
+    fn open() -> Option<Counters> {
+        unsafe {
+            let mut query: PDH_HQUERY = std::ptr::null_mut();
+            if PdhOpenQueryW(std::ptr::null(), 0, &mut query) != 0 {
+                return None;
+            }
+            let add = |path: &str| {
+                let mut c: PDH_HCOUNTER = std::ptr::null_mut();
+                (PdhAddEnglishCounterW(query, wide(path).as_ptr(), 0, &mut c) == 0).then_some(c)
+            };
+            let counters = (|| {
+                Some(Counters {
+                    query,
+                    available: add("\\Memory\\Available Bytes")?,
+                    free: add("\\Memory\\Free & Zero Page List Bytes")?,
+                    standby: [
+                        add("\\Memory\\Standby Cache Core Bytes")?,
+                        add("\\Memory\\Standby Cache Normal Priority Bytes")?,
+                        add("\\Memory\\Standby Cache Reserve Bytes")?,
+                    ],
+                })
+            })();
+            if counters.is_none() {
+                PdhCloseQuery(query);
+            }
+            counters
+        }
+    }
+
+    fn bytes(c: PDH_HCOUNTER) -> Option<u64> {
+        unsafe {
+            let mut v: PDH_FMT_COUNTERVALUE = std::mem::zeroed();
+            if PdhGetFormattedCounterValue(c, PDH_FMT_LARGE, std::ptr::null_mut(), &mut v) != 0 {
+                return None;
+            }
+            u64::try_from(v.Anonymous.largeValue).ok()
+        }
+    }
+
+    fn read(&self) -> Option<MemStats> {
+        if unsafe { PdhCollectQueryData(self.query) } != 0 {
+            return None;
+        }
+        let standby: u64 = self.standby.iter().map(|&c| Self::bytes(c).unwrap_or(0)).sum();
+        Some(MemStats {
+            total_mb: total_mb(),
+            available_mb: Self::bytes(self.available)? / MB,
+            free_mb: Self::bytes(self.free)? / MB,
+            standby_mb: standby / MB,
+        })
+    }
+}
+
+impl Drop for Counters {
+    fn drop(&mut self) {
+        unsafe {
+            PdhCloseQuery(self.query);
+        }
     }
 }
 
@@ -54,20 +119,9 @@ fn total_mb() -> u64 {
     }
 }
 
-/// Geheugen nu, uit de prestatiemeters van Windows (werkt ook zonder beheerdersrechten).
+/// Geheugen nu, uit de prestatiemeters van Windows.
 pub fn stats() -> Option<MemStats> {
-    let conn = WMIConnection::new().ok()?;
-    let rows: Vec<HashMap<String, Variant>> = conn
-        .raw_query("SELECT AvailableBytes, FreeAndZeroPageListBytes, StandbyCacheCoreBytes, StandbyCacheNormalPriorityBytes, StandbyCacheReserveBytes FROM Win32_PerfFormattedData_PerfOS_Memory")
-        .ok()?;
-    let row = rows.first()?;
-    let n = |k: &str| row.get(k).and_then(variant_u64).unwrap_or(0);
-    Some(MemStats {
-        total_mb: total_mb(),
-        available_mb: n("AvailableBytes") / MB,
-        free_mb: n("FreeAndZeroPageListBytes") / MB,
-        standby_mb: (n("StandbyCacheCoreBytes") + n("StandbyCacheNormalPriorityBytes") + n("StandbyCacheReserveBytes")) / MB,
-    })
+    Counters::open()?.read()
 }
 
 fn needed(m: &MemStats) -> bool {
@@ -149,27 +203,34 @@ pub fn status(state: &AppState) -> MemGuardStatus {
 
 /// De bewaker: elke 3 seconden kijken, alleen als hij aan staat en er een game draait.
 pub fn start(app: AppHandle, state: Arc<AppState>) {
-    let _ = std::thread::Builder::new().name("memguard".into()).spawn(move || loop {
-        std::thread::sleep(Duration::from_secs(3));
-        if !state.settings_clone().mem_guard || !state.elevated || lock(&state.running_games).is_empty() || crate::license::require(&state).is_err() {
-            continue;
-        }
-        if lock(&LAST).is_some_and(|l| l.2.elapsed() < MIN_GAP) {
-            continue;
-        }
-        let Some(before) = stats() else { continue };
-        if !needed(&before) {
-            continue;
-        }
-        match purge_standby() {
-            Ok(()) => {
-                std::thread::sleep(Duration::from_millis(400));
-                let after = stats().unwrap_or(before);
-                record(&before, &after);
-                log::info!("geheugenbewaker: standby geleegd ({} MB vrij, nu {} MB)", before.free_mb, after.free_mb);
-                let _ = app.emit("memguard", status(&state));
+    let _ = std::thread::Builder::new().name("memguard".into()).spawn(move || {
+        let mut counters: Option<Counters> = None;
+        loop {
+            std::thread::sleep(Duration::from_secs(3));
+            if !state.settings_clone().mem_guard || !state.elevated || lock(&state.running_games).is_empty() || crate::license::require(&state).is_err() {
+                continue;
             }
-            Err(e) => log::warn!("geheugenbewaker: legen mislukt: {e}"),
+            if lock(&LAST).is_some_and(|l| l.2.elapsed() < MIN_GAP) {
+                continue;
+            }
+            if counters.is_none() {
+                counters = Counters::open();
+            }
+            let Some(c) = counters.as_ref() else { continue };
+            let Some(before) = c.read() else { continue };
+            if !needed(&before) {
+                continue;
+            }
+            match purge_standby() {
+                Ok(()) => {
+                    std::thread::sleep(Duration::from_millis(400));
+                    let after = c.read().unwrap_or(before);
+                    record(&before, &after);
+                    log::info!("geheugenbewaker: standby geleegd ({} MB vrij, nu {} MB)", before.free_mb, after.free_mb);
+                    let _ = app.emit("memguard", status(&state));
+                }
+                Err(e) => log::warn!("geheugenbewaker: legen mislukt: {e}"),
+            }
         }
     });
 }
