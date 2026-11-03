@@ -171,6 +171,12 @@ pub fn start(app: AppHandle, state: Arc<AppState>) {
         let mut tick: u64 = 0;
         loop {
             std::thread::sleep(Duration::from_secs(1));
+            // Tijdens het spelen (game op de voorgrond) niets meten: de WMI-prestatiemeters en NVML-vragen elke
+            // seconde kosten de game CPU-tijd en geven op veel pc's kleine haperingen. Het dashboard zie je dan
+            // toch niet.
+            if crate::watcher::playing(&state) {
+                continue;
+            }
             tick += 1;
             sys.refresh_cpu_usage();
             sys.refresh_memory();

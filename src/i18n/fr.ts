@@ -816,10 +816,10 @@ export const fr: Dict = {
     },
     mem: {
       title: "Gardien de mémoire",
-      what: "Vide le cache standby de Windows pendant que vous jouez, mais seulement quand votre mémoire vraiment libre est presque épuisée (moins de 1 Go). Cela évite alors les saccades. Avec assez de mémoire libre, il ne fait volontairement rien.",
+      what: "Vide le cache standby de Windows pendant que vous jouez, mais seulement quand votre mémoire vraiment libre est presque épuisée (moins de 256 Mo). Cela évite alors les saccades. Avec assez de mémoire libre, il ne fait volontairement rien.",
       free: "Vraiment libre",
       standby: "Cache (standby)",
-      needed: "Nécessaire maintenant : moins de 1 Go libre. Pendant un jeu, le gardien vide le cache.",
+      needed: "Nécessaire maintenant : moins de 256 Mo libre. Pendant un jeu, le gardien vide le cache.",
       notNeeded: "Pas nécessaire : vous avez {free} vraiment libres.",
       last: "Dernier vidage {ago}, {mb} libérés.",
       purge: "Vider maintenant",
