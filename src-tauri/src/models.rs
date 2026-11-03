@@ -218,6 +218,8 @@ pub struct FortniteOverview {
     /// igpu | nvidia | amd | other: welk advies voor de rendermodus past bij deze pc.
     pub advice: String,
     pub checks: Vec<FortniteCheck>,
+    /// Id's die klaarstaan voor na het afsluiten van Fortnite.
+    pub pending: Vec<String>,
 }
 
 #[cfg(feature = "selftest")]
@@ -432,6 +434,8 @@ pub struct Settings {
     pub startup_keep_off: Vec<String>,
     /// Opstart-apps die zichzelf weer aanzetten (gezien door nezty), voor de uitleg op de pagina.
     pub startup_came_back: Vec<String>,
+    /// Fortnite-aanbevelingen die tijdens het spelen zijn gekozen: nezty zet ze zodra Fortnite dicht is.
+    pub fortnite_pending: Vec<String>,
 }
 
 impl Default for Settings {
@@ -476,6 +480,7 @@ impl Default for Settings {
             multinet_auto: false,
             startup_keep_off: vec![],
             startup_came_back: vec![],
+            fortnite_pending: vec![],
         }
     }
 }

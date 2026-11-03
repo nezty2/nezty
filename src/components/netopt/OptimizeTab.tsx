@@ -1,13 +1,13 @@
-import { AlertTriangle, Cpu, ExternalLink, Gauge, Info, MemoryStick, Radar, RefreshCw, Route, ShieldQuestion, Zap } from "lucide-react";
+import { Cpu, Gauge, Info, MemoryStick, Radar, ShieldQuestion, Zap } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useT } from "@/i18n/hooks";
 import { api, listenEvent } from "@/lib/ipc";
 import { formatMb, formatMs, timeAgo } from "@/lib/format";
-import type { Game, MemGuardStatus, NetRegion, PurgeResult, TweakInfo, WarpInfo, WarpTest } from "@/lib/types";
+import type { Game, MemGuardStatus, NetRegion, PurgeResult, TweakInfo } from "@/lib/types";
 import { useApp } from "@/store/app";
 import { targetOf, useNetOpt } from "@/store/netopt";
 import { Sparkline } from "../Sparkline";
-import { Badge, Button, Card, Toggle, cn } from "../ui";
+import { Button, Card, Toggle, cn } from "../ui";
 import { RouteLine, placeLabel, quality, qualityColor, useLiveMonitor } from "./route";
 
 /** Games die via Valve-servers spelen (CS2, Dota 2, Deadlock): daar meten we naar de echte Valve-locaties. */
@@ -211,7 +211,7 @@ export function OptimizeTab() {
         <Sparkline values={live.values.filter((v) => v != null)} min={0} height={44} className="h-12" format={(v) => formatMs(lang, v)} />
       </Card>
 
-      <div className="grid gap-4 xl:grid-cols-3">
+      <div className="grid gap-4 xl:grid-cols-2">
         <Card className="space-y-3">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-2 text-sm font-semibold">
@@ -228,97 +228,11 @@ export function OptimizeTab() {
           {qos?.detail && <p className="text-[12px] text-warn">{td(`msg.${qos.detail.key}`, qos.detail.params)}</p>}
           {qosOn && qos?.active === "after_game_restart" && <p className="text-[12px] text-warn">{t("netopt.shaper.restartGame")}</p>}
         </Card>
-        <WarpCard host={target?.host ?? null} />
         <MemoryCard />
       </div>
 
       <HonestCard />
     </div>
-  );
-}
-
-/** Snellere route via Cloudflare WARP: meten zonder en met, en alleen houden als het echt sneller is. */
-function WarpCard({ host }: { host: string | null }) {
-  const { t, td, lang } = useT();
-  const handleError = useApp((s) => s.handleError);
-  const [info, setInfo] = useState<WarpInfo | null>(null);
-  const [testing, setTesting] = useState(false);
-  const [result, setResult] = useState<WarpTest | null>(null);
-  useEffect(() => {
-    api.warpInfo().then(setInfo).catch(handleError);
-  }, [handleError]);
-
-  const test = async () => {
-    if (!host) return;
-    setTesting(true);
-    setResult(null);
-    try {
-      setResult(await api.warpTest(host));
-      setInfo(await api.warpInfo());
-    } catch (e) {
-      handleError(e);
-    } finally {
-      setTesting(false);
-    }
-  };
-
-  return (
-    <Card className="space-y-3">
-      <div className="flex items-center gap-2 text-sm font-semibold">
-        <Route className="h-4 w-4 text-accent" />
-        {t("netopt.warp.title")}
-        {info?.connectedByNezty && <Badge variant="ok">{t("netopt.warp.on")}</Badge>}
-      </div>
-      <p className="text-[13px] text-ink-2">{t("netopt.warp.what")}</p>
-      {info && !info.installed ? (
-        <>
-          <p className="text-[12px] text-ink-3">{t("netopt.warp.notInstalled")}</p>
-          <Button size="sm" icon={ExternalLink} onClick={() => void api.openUrl("https://one.one.one.one/")}>
-            {t("netopt.warp.download")}
-          </Button>
-        </>
-      ) : info && (info.status === "needs_tos" || info.status === "unregistered") ? (
-        <p className="text-[12px] text-warn">{t("netopt.warp.setup")}</p>
-      ) : (
-        <>
-          <p className="flex items-start gap-1.5 text-[12px] text-ink-3">
-            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warn" />
-            {t("netopt.warp.notInMatch")}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="primary" icon={RefreshCw} loading={testing} disabled={!host || !info} onClick={() => void test()}>
-              {testing ? t("netopt.warp.testing") : t("netopt.warp.test")}
-            </Button>
-            {info?.connectedByNezty && (
-              <Button size="sm" onClick={() => api.warpStop().then(setInfo).catch(handleError)}>
-                {t("netopt.warp.stop")}
-              </Button>
-            )}
-          </div>
-        </>
-      )}
-      {result && (
-        <div className="card-inset space-y-1 px-3 py-2.5 text-[12px]">
-          <div className="flex justify-between">
-            <span className="text-ink-3">{t("netopt.warp.direct")}</span>
-            <span className="tnum">{formatMs(lang, result.direct.avgMs)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-ink-3">{t("netopt.warp.via")}</span>
-            <span className="tnum">{result.warp ? formatMs(lang, result.warp.avgMs) : "-"}</span>
-          </div>
-          <div className={cn("pt-1 font-medium", result.decision === "warp" ? "text-ok" : result.decision === "error" ? "text-warn" : "text-ink-2")}>
-            {result.decision === "warp"
-              ? t("netopt.warp.keep")
-              : result.decision === "direct"
-                ? t("netopt.warp.direct_better")
-                : result.detail
-                  ? td(`msg.${result.detail.key}`, result.detail.params)
-                  : t("netopt.warp.failed")}
-          </div>
-        </div>
-      )}
-    </Card>
   );
 }
 
