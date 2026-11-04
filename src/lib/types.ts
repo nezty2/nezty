@@ -556,7 +556,7 @@ export type LicenseMode = "off" | "signed_out" | "active" | "expired" | "revoked
 
 export interface LicenseStatus {
   mode: LicenseMode;
-  kind: "month" | "demo" | null;
+  kind: "month" | "demo" | "lifetime" | null;
   username: string | null;
   keyHint: string | null;
   licenseId: string | null;

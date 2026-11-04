@@ -1,6 +1,6 @@
 [package]
 name = "nezty"
-version = "0.7.8"
+version = "0.7.9"
 description = "nezty: eerlijke, omkeerbare game-tweaks voor Windows 10 en 11"
 authors = ["Nezty"]
 edition = "2021"

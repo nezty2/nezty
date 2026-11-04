@@ -288,7 +288,7 @@ async function adminCreate(store: Store, env: Env, now: number, b: Record<string
       key_hash: await keyHash(env, norm),
       key_hint: norm.slice(-4),
       type,
-      duration_minutes: DURATION[type],
+      duration_minutes: Number(b.days) && Number(b.days) > 0 ? Math.round(Number(b.days) * 1440) : DURATION[type],
       created_at: iso(now),
       activated_at: null,
       expires_at: null,

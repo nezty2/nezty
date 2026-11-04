@@ -5,7 +5,7 @@ import { ContactInfo, useServerNow } from "@/components/license/LicenseParts";
 import { Button, Card, PageHeader, SectionTitle, cn } from "@/components/ui";
 import { useT } from "@/i18n/hooks";
 import { api } from "@/lib/ipc";
-import { isLocked, progress, tone } from "@/lib/license";
+import { isLifetime, isLocked, progress, tone } from "@/lib/license";
 import { useApp } from "@/store/app";
 
 /** Licentiepagina: type, einddatum, laatste 4 tekens, verlengen en uitloggen. */
@@ -52,11 +52,11 @@ export function LicensePage() {
   };
 
   const rows: [string, string][] = [
-    [t("license.fieldType"), license.kind === "demo" ? t("license.typeDemo") : t("license.typeMonth")],
+    [t("license.fieldType"), isLifetime(license) ? t("license.typeLifetime") : license.kind === "demo" ? t("license.typeDemo") : t("license.typeMonth")],
     [t("license.fieldUser"), license.username ?? "-"],
     [t("license.fieldKey"), license.kind === "demo" ? "-" : `•••• ${license.keyHint ?? ""}`],
     [t("license.fieldStart"), fmt(license.activatedAt)],
-    [t("license.fieldEnd"), fmt(license.expiresAt)],
+    [t("license.fieldEnd"), isLifetime(license) ? t("license.noEndDate") : fmt(license.expiresAt)],
   ];
 
   return (
