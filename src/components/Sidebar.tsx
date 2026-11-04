@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useT } from "@/i18n/hooks";
+import { BrandLogo } from "./BrandLogo";
 import type { TKey } from "@/i18n";
 import { useApp, type PageId } from "@/store/app";
 import { LicenseBlock } from "./license/LicenseBlock";
@@ -68,12 +69,15 @@ export function Sidebar() {
     <aside className="glass relative z-10 flex h-full w-[68px] shrink-0 flex-col border-r border-line min-[1120px]:w-[224px]">
       <div className="flex h-16 items-center px-4 min-[1120px]:px-5">
         {/* Smalle zijbalk: alleen "nezty"; breed: "nezty tweaks" met versie. */}
-        <div className="text-[13px] font-semibold leading-tight tracking-tight min-[1120px]:hidden">nezty</div>
-        <div className="hidden min-w-0 min-[1120px]:block">
+        <BrandLogo size={26} glow={false} className="min-[1120px]:hidden" />
+        <div className="hidden min-w-0 min-[1120px]:flex items-center gap-2.5">
+          <BrandLogo size={26} glow={false} />
+          <div>
           <div className="text-[16px] font-semibold leading-tight tracking-tight">
             nezty <span className="text-accent">tweaks</span>
           </div>
           <div className="text-[12px] text-ink-3">v{appInfo?.version ?? ""}</div>
+          </div>
         </div>
       </div>
 
