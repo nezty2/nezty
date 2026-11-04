@@ -1,7 +1,7 @@
 //! Systeemtweaks: Game Mode, Game Bar/DVR, meldingen, energieplan, HAGS en games in een venster.
 
 use crate::error::{AppError, AppResult};
-use crate::journal::{JournalEntry, RevertPayload};
+use crate::journal::{JournalEntry, PostAction, RevertPayload};
 use crate::models::{JournalKind, Msg, TweakState};
 use crate::powershell::run_cmd;
 use crate::registry::{self, Hive, RegData};
@@ -104,7 +104,11 @@ pub fn timer_status() -> AppResult<Status> {
     Ok(Status::simple(regtweak::state_of(&timer_specs())?))
 }
 pub fn timer_apply(state: &AppState, session: Option<&str>) -> AppResult<()> {
-    regtweak::apply(state, get("timer_resolution")?, &timer_specs(), session, None, None)
+    regtweak::apply(state, get("timer_resolution")?, &timer_specs(), session, None, None)?;
+    if !lock(&state.running_games).is_empty() {
+        crate::timer::hold(true);
+    }
+    Ok(())
 }
 pub fn timer_disable(state: &AppState) -> AppResult<()> {
     crate::timer::hold(false);
@@ -346,7 +350,7 @@ pub fn power_plan_disable(state: &AppState) -> AppResult<()> {
 // ---------- Optimalisaties voor games in een venster ----------
 // Windows 11-instelling (Instellingen > Systeem > Beeldscherm > Grafische kaart). Laat DirectX 10/11-games in
 // een venster of borderless het snellere "flip"-model gebruiken: minder vertraging, soms iets meer FPS.
-// Staat samen met andere waarden (bv. AutoHDREnable) in één tekst; die blijven ongemoeid.
+// Staat samen met andere waarden (bv. AutoHDREnable) in ÃƒÂ©ÃƒÂ©n tekst; die blijven ongemoeid.
 
 const DX_PATH: &str = "Software\\Microsoft\\DirectX\\UserGpuPreferences";
 const DX_VALUE: &str = "DirectXUserGlobalSettings";
@@ -356,12 +360,12 @@ fn dx_settings() -> AppResult<RegData> {
     registry::read(Hive::Hkcu, DX_PATH, DX_VALUE)
 }
 
-/// Waarde van één sleutel in een tekst als "A=1;B=0;".
+/// Waarde van ÃƒÂ©ÃƒÂ©n sleutel in een tekst als "A=1;B=0;".
 fn dx_get(text: &str, key: &str) -> Option<String> {
     text.split(';').filter_map(|p| p.split_once('=')).find(|(k, _)| k.trim().eq_ignore_ascii_case(key)).map(|(_, v)| v.trim().to_string())
 }
 
-/// Zet één sleutel en laat de rest van de tekst staan.
+/// Zet ÃƒÂ©ÃƒÂ©n sleutel en laat de rest van de tekst staan.
 fn dx_set(text: &str, key: &str, value: &str) -> String {
     let mut parts: Vec<String> = text
         .split(';')
@@ -430,6 +434,148 @@ pub fn windowed_opt_disable(state: &AppState) -> AppResult<()> {
         return Ok(());
     }
     windowed_opt_write(state, "0", None, Some("manual_off"))
+}
+
+// ---------- CPU-voorrang voor het actieve spelvenster ----------
+
+fn foreground_priority_specs() -> Vec<RegSpec> {
+    // 0x26 (38) = korte variabele quanta met maximale voorgrondboost (3x), standaard in Windows is 2.
+    vec![RegSpec::dword(Hive::Hklm, r"SYSTEM\CurrentControlSet\Control\PriorityControl", "Win32PrioritySeparation", 0x26, 2)]
+}
+pub fn foreground_priority_status() -> AppResult<Status> {
+    Ok(Status::simple(regtweak::state_of(&foreground_priority_specs())?))
+}
+pub fn foreground_priority_apply(state: &AppState, session: Option<&str>) -> AppResult<()> {
+    regtweak::apply(state, get("foreground_priority")?, &foreground_priority_specs(), session, None, None)
+}
+pub fn foreground_priority_disable(state: &AppState) -> AppResult<()> {
+    regtweak::disable(state, get("foreground_priority")?, &foreground_priority_specs(), None, None)
+}
+
+// ---------- Windows sneller maken (animaties, menuvertraging en blur uit) ----------
+
+fn windows_snappy_specs() -> Vec<RegSpec> {
+    vec![
+        RegSpec::string(Hive::Hkcu, r"Control Panel\Desktop", "MenuShowDelay", "0", "400"),
+        RegSpec::string(Hive::Hkcu, r"Control Panel\Desktop\WindowMetrics", "MinAnimate", "0", "1"),
+        RegSpec::dword(Hive::Hkcu, r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced", "TaskbarAnimations", 0, 1),
+        RegSpec::dword(Hive::Hkcu, r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "EnableTransparency", 0, 1),
+    ]
+}
+pub fn windows_snappy_status() -> AppResult<Status> {
+    Ok(Status::simple(regtweak::state_of(&windows_snappy_specs())?))
+}
+pub fn windows_snappy_apply(state: &AppState, session: Option<&str>) -> AppResult<()> {
+    regtweak::apply(state, get("windows_snappy")?, &windows_snappy_specs(), session, None, Some(PostAction::SnappyUi))?;
+    crate::winapi::apply_snappy_ui_from_registry();
+    Ok(())
+}
+pub fn windows_snappy_disable(state: &AppState) -> AppResult<()> {
+    regtweak::disable(state, get("windows_snappy")?, &windows_snappy_specs(), None, Some(PostAction::SnappyUi))?;
+    crate::winapi::apply_snappy_ui_from_registry();
+    Ok(())
+}
+
+// ---------- Windows-zoekwebresultaten en tips op de achtergrond uit ----------
+
+fn windows_bloat_specs() -> Vec<RegSpec> {
+    let cdm = r"Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager";
+    vec![
+        RegSpec::dword(Hive::Hkcu, r"Software\Policies\Microsoft\Windows\Explorer", "DisableSearchBoxSuggestions", 1, 0).off_absent(),
+        RegSpec::dword(Hive::Hkcu, r"Software\Microsoft\Windows\CurrentVersion\Search", "BingSearchEnabled", 0, 1).off_absent(),
+        RegSpec::dword(Hive::Hkcu, cdm, "SubscribedContent-338389Enabled", 0, 1),
+        RegSpec::dword(Hive::Hkcu, cdm, "SoftLandingEnabled", 0, 1),
+    ]
+}
+pub fn windows_bloat_status() -> AppResult<Status> {
+    Ok(Status::simple(regtweak::state_of(&windows_bloat_specs())?))
+}
+pub fn windows_bloat_apply(state: &AppState, session: Option<&str>) -> AppResult<()> {
+    regtweak::apply(state, get("windows_bloat_off")?, &windows_bloat_specs(), session, None, None)
+}
+pub fn windows_bloat_disable(state: &AppState) -> AppResult<()> {
+    regtweak::disable(state, get("windows_bloat_off")?, &windows_bloat_specs(), None, None)
+}
+
+// ---------- Store- en browser-achtergrondprocessen uit ----------
+
+fn background_apps_specs() -> Vec<RegSpec> {
+    vec![
+        RegSpec::dword(Hive::Hkcu, r"Software\Microsoft\Windows\CurrentVersion\BackgroundAccessApplications", "GlobalUserDisabled", 1, 0),
+        RegSpec::dword(Hive::Hkcu, r"Software\Microsoft\Windows\CurrentVersion\Search", "BackgroundAppGlobalToggle", 0, 1),
+        RegSpec::dword(Hive::Hkcu, r"Software\Policies\Microsoft\Edge", "StartupBoostEnabled", 0, 1).off_absent(),
+        RegSpec::dword(Hive::Hkcu, r"Software\Policies\Microsoft\Edge", "BackgroundModeEnabled", 0, 1).off_absent(),
+        RegSpec::dword(Hive::Hkcu, r"Software\Policies\Google\Chrome", "BackgroundModeEnabled", 0, 1).off_absent(),
+    ]
+}
+pub fn background_apps_status() -> AppResult<Status> {
+    Ok(Status::simple(regtweak::state_of(&background_apps_specs())?))
+}
+pub fn background_apps_apply(state: &AppState, session: Option<&str>) -> AppResult<()> {
+    regtweak::apply(state, get("background_apps_off")?, &background_apps_specs(), session, None, None)
+}
+pub fn background_apps_disable(state: &AppState) -> AppResult<()> {
+    regtweak::disable(state, get("background_apps_off")?, &background_apps_specs(), None, None)
+}
+
+// ---------- Systeemdrivers in RAM vergrendelen (DisablePagingExecutive) ----------
+
+fn driver_paging_specs() -> Vec<RegSpec> {
+    vec![
+        RegSpec::dword(
+            Hive::Hklm,
+            r"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management",
+            "DisablePagingExecutive",
+            1,
+            0,
+        ),
+    ]
+}
+pub fn driver_paging_status() -> AppResult<Status> {
+    Ok(Status::simple(regtweak::state_of(&driver_paging_specs())?))
+}
+pub fn driver_paging_apply(state: &AppState, session: Option<&str>) -> AppResult<()> {
+    regtweak::apply(state, get("driver_paging_off")?, &driver_paging_specs(), session, None, None)
+}
+pub fn driver_paging_disable(state: &AppState) -> AppResult<()> {
+    regtweak::disable(state, get("driver_paging_off")?, &driver_paging_specs(), None, None)
+}
+
+// ---------- Game Bar render-hooks en PresenceWriter uitschakelen ----------
+
+fn game_bar_presence_specs() -> Vec<RegSpec> {
+    vec![
+        RegSpec::dword(
+            Hive::Hkcu,
+            r"System\GameConfigStore",
+            "GameDVR_FSEBehaviorMode",
+            2,
+            0,
+        ),
+        RegSpec::dword(
+            Hive::Hkcu,
+            r"System\GameConfigStore",
+            "GameDVR_HonorUserFSEBehaviorMode",
+            1,
+            0,
+        ),
+        RegSpec::dword(
+            Hive::Hkcu,
+            r"System\GameConfigStore",
+            "GameDVR_DXGIHonorFSEWindowsCompatible",
+            1,
+            0,
+        ),
+    ]
+}
+pub fn game_bar_presence_status() -> AppResult<Status> {
+    Ok(Status::simple(regtweak::state_of(&game_bar_presence_specs())?))
+}
+pub fn game_bar_presence_apply(state: &AppState, session: Option<&str>) -> AppResult<()> {
+    regtweak::apply(state, get("game_bar_presence_off")?, &game_bar_presence_specs(), session, None, None)
+}
+pub fn game_bar_presence_disable(state: &AppState) -> AppResult<()> {
+    regtweak::disable(state, get("game_bar_presence_off")?, &game_bar_presence_specs(), None, None)
 }
 
 #[cfg(test)]

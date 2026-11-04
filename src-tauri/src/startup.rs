@@ -268,15 +268,11 @@ pub fn enforce(state: &AppState) -> Vec<String> {
 pub fn start_keeper(app: tauri::AppHandle, state: std::sync::Arc<AppState>) {
     use tauri::Emitter;
     let _ = std::thread::Builder::new().name("startup-keeper".into()).spawn(move || {
-        std::thread::sleep(std::time::Duration::from_secs(20));
-        loop {
-            // Tijdens het spelen niets doen: een app die zichzelf weer aanzet, doet dat bij het opstarten.
-            if crate::license::require(&state).is_ok() && !crate::watcher::playing(&state) {
-                for name in enforce(&state) {
-                    let _ = app.emit("notice", crate::models::Notice::new("warning", crate::models::Msg::new("startup_came_back").with("app", &name)));
-                }
+        std::thread::sleep(std::time::Duration::from_secs(15));
+        if crate::license::require(&state).is_ok() && !crate::watcher::playing(&state) {
+            for name in enforce(&state) {
+                let _ = app.emit("notice", crate::models::Notice::new("warning", crate::models::Msg::new("startup_came_back").with("app", &name)));
             }
-            std::thread::sleep(std::time::Duration::from_secs(60));
         }
     });
 }

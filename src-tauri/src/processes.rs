@@ -16,8 +16,8 @@ const SYSTEM_PROCS: &[&str] = &[
     "taskhostw.exe", "ctfmon.exe", "runtimebroker.exe", "searchhost.exe", "searchindexer.exe", "startmenuexperiencehost.exe",
     "shellexperiencehost.exe", "textinputhost.exe", "audiodg.exe", "conhost.exe", "wmiprvse.exe", "spoolsv.exe", "dllhost.exe",
     "applicationframehost.exe", "systemsettings.exe", "sgrmbroker.exe", "wudfhost.exe", "dashost.exe", "unsecapp.exe",
-    "lockapp.exe", "logonui.exe", "userinit.exe", "taskmgr.exe", "widgets.exe", "msedgewebview2.exe", "nvcontainer.exe",
-    "nvdisplay.container.exe", "rtkauduservice64.exe", "gamingservices.exe", "gamingservicesnet.exe", "crossdeviceservice.exe",
+    "lockapp.exe", "logonui.exe", "userinit.exe", "taskmgr.exe", "msedgewebview2.exe", "nvcontainer.exe",
+    "nvdisplay.container.exe", "rtkauduservice64.exe", "gamingservices.exe", "gamingservicesnet.exe",
     "backgroundtaskhost.exe", "wlanext.exe", "mousocoreworker.exe", "compattelrunner.exe", "powershell.exe", "pwsh.exe",
     "cmd.exe", "openconsole.exe", "windowsterminal.exe", "presentmon.exe", "amdrsserv.exe", "atieclxx.exe", "atiesrxx.exe",
 ];
@@ -45,8 +45,9 @@ const BROWSERS: &[&str] = &["chrome.exe", "msedge.exe", "firefox.exe", "brave.ex
 const LAUNCHERS: &[&str] = &["steam.exe", "steamwebhelper.exe", "epicgameslauncher.exe", "epicwebhelper.exe", "battle.net.exe", "agent.exe", "eadesktop.exe", "eabackgroundservice.exe", "origin.exe", "riotclientservices.exe", "riotclientux.exe", "riotclientuxrender.exe", "ubisoftconnect.exe", "upc.exe", "galaxyclient.exe", "galaxyclient helper.exe", "rockstarservice.exe", "playnite.desktopapp.exe", "xboxpcapp.exe", "xboxpcappft.exe"];
 const CLOUD: &[&str] = &["onedrive.exe", "dropbox.exe", "googledrivefs.exe", "icloudservices.exe", "iclouddrive.exe", "megasync.exe", "nextcloud.exe", "pcloud.exe", "box.exe", "boxsync.exe"];
 const UPDATERS: &[&str] = &["googleupdate.exe", "updater.exe", "adobeupdateservice.exe", "armsvc.exe", "jusched.exe", "microsoftedgeupdate.exe", "adobe desktop service.exe", "creative cloud.exe", "ccxprocess.exe", "coresync.exe", "nvidia web helper.exe", "nvbackend.exe"];
-const COMMUNICATION: &[&str] = &["discord.exe", "teams.exe", "ms-teams.exe", "slack.exe", "zoom.exe", "telegram.exe", "whatsapp.exe", "signal.exe", "skype.exe", "element.exe", "guilded.exe", "teamspeak3.exe", "ts3client_win64.exe", "mumble.exe", "teamspeak.exe"];
-const MEDIA: &[&str] = &["spotify.exe", "itunes.exe", "vlc.exe", "musicbee.exe", "amazon music.exe", "wallpaper32.exe", "wallpaper64.exe", "tidal.exe", "deezer.exe", "obs64.exe", "nvidia overlay.exe", "nvidia share.exe", "nvsphelper64.exe", "medal.exe", "plays.exe", "xsplit.core.exe", "streamlabs obs.exe"];
+const COMMUNICATION: &[&str] = &["discord.exe", "discordptb.exe", "discordcanary.exe", "vesktop.exe", "teams.exe", "ms-teams.exe", "slack.exe", "zoom.exe", "telegram.exe", "whatsapp.exe", "signal.exe", "skype.exe", "element.exe", "guilded.exe", "teamspeak3.exe", "ts3client_win64.exe", "mumble.exe", "teamspeak.exe"];
+const MEDIA: &[&str] = &["spotify.exe", "itunes.exe", "vlc.exe", "musicbee.exe", "amazon music.exe", "wallpaper32.exe", "wallpaper64.exe", "tidal.exe", "deezer.exe", "obs64.exe", "nvidia overlay.exe", "nvidia share.exe", "nvsphelper64.exe", "medal.exe", "plays.exe", "overwolf.exe", "outplayed.exe", "xsplit.core.exe", "streamlabs obs.exe"];
+const BLOAT: &[&str] = &["widgets.exe", "widgetservice.exe", "crossdeviceservice.exe", "phoneexperiencehost.exe", "yourphone.exe", "cortana.exe", "copilot.exe", "gamebar.exe", "gamebarftserver.exe"];
 const RGB: &[&str] = &["icue.exe", "nzxt cam.exe", "armourycrate.exe", "armourycrate.service.exe", "lightingservice.exe", "rgbfusion.exe", "msi center.exe", "msicenter.exe", "mystic_light.exe", "razer synapse 3.exe", "razer synapse.exe", "rzsynapse.exe", "razercentral.exe", "logioptionsplus_agent.exe", "lghub.exe", "lghub_agent.exe", "openrgb.exe", "signalrgb.exe", "corsair.service.exe", "steelseriesgg.exe", "steelseriesengine3.exe"];
 
 /// Is dit proces beschermd? Zo ja, welke categorie.
@@ -231,7 +232,7 @@ pub fn list(state: &AppState) -> Vec<ProcessInfo> {
             exe_path: exe,
             memory_mb: mem_mb,
             cpu_pct: cpu,
-            unneeded: is_unneeded(cat),
+            unneeded: is_unneeded(cat) || BLOAT.contains(&name_lower.as_str()),
             category: cat,
             instances: 1,
         });
@@ -328,6 +329,7 @@ pub fn close_many(state: &AppState, names: &[String], session: Option<&str>, gam
 // ---------- Store-achtergrondapps (alleen de hoofdschakelaar) ----------
 
 const BAA: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\BackgroundAccessApplications";
+const SEARCH_BG: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Search";
 
 /// `true` als Store-apps op de achtergrond mogen draaien (de Windows-standaard).
 pub fn store_background_allowed() -> AppResult<bool> {
@@ -347,5 +349,16 @@ pub fn set_store_background(state: &AppState, allowed: bool) -> AppResult<()> {
     e.revertable = true;
     e.payload = RevertPayload::Registry { hive: Hive::Hkcu, path: BAA.into(), name: "GlobalUserDisabled".into(), old, post: None };
     lock(&state.journal).record(e)?;
+    let old_s = registry::read(Hive::Hkcu, SEARCH_BG, "BackgroundAppGlobalToggle")?;
+    let new_s = RegData::Dword(if allowed { 1 } else { 0 });
+    if old_s != new_s {
+        registry::write(Hive::Hkcu, SEARCH_BG, "BackgroundAppGlobalToggle", &new_s)?;
+        let mut es = JournalEntry::new("store_background_apps", "Store apps in background", JournalKind::StoreApp, &registry::full_path(Hive::Hkcu, SEARCH_BG, "BackgroundAppGlobalToggle"));
+        es.old_value = Some(old_s.display());
+        es.new_value = Some(new_s.display());
+        es.revertable = true;
+        es.payload = RevertPayload::Registry { hive: Hive::Hkcu, path: SEARCH_BG.into(), name: "BackgroundAppGlobalToggle".into(), old: old_s, post: None };
+        lock(&state.journal).record(es)?;
+    }
     Ok(())
 }

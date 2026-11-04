@@ -35,6 +35,29 @@ pub fn mouse_disable(state: &AppState) -> AppResult<()> {
     Ok(())
 }
 
+// ---------- Snelle toetsenbordreactie ----------
+
+fn keyboard_specs() -> Vec<RegSpec> {
+    let p = "Control Panel\\Keyboard";
+    vec![
+        RegSpec::string(Hive::Hkcu, p, "KeyboardDelay", "0", "1"),
+        RegSpec::string(Hive::Hkcu, p, "KeyboardSpeed", "31", "31"),
+    ]
+}
+pub fn keyboard_status() -> AppResult<Status> {
+    Ok(Status::simple(regtweak::state_of(&keyboard_specs())?))
+}
+pub fn keyboard_apply(state: &AppState, session: Option<&str>) -> AppResult<()> {
+    regtweak::apply(state, get("keyboard_response_fast")?, &keyboard_specs(), session, None, Some(PostAction::KeyboardSpi))?;
+    winapi::apply_keyboard_from_registry();
+    Ok(())
+}
+pub fn keyboard_disable(state: &AppState) -> AppResult<()> {
+    regtweak::disable(state, get("keyboard_response_fast")?, &keyboard_specs(), None, Some(PostAction::KeyboardSpi))?;
+    winapi::apply_keyboard_from_registry();
+    Ok(())
+}
+
 // ---------- Echt actief? ----------
 
 /// Vergelijkt per aangezette tweak wat in het register staat met wat Windows nu echt gebruikt.
@@ -44,6 +67,7 @@ pub fn verify_live() -> Vec<crate::models::LiveCheck> {
     vec![
         crate::models::LiveCheck { id: "mouse_precision_off".into(), saved: on(mouse_status()), live: live.mouse_acceleration == 0 },
         crate::models::LiveCheck { id: "accessibility_hotkeys_off".into(), saved: on(accessibility_status()), live: !live.hotkeys.iter().any(|h| *h) },
+        crate::models::LiveCheck { id: "keyboard_response_fast".into(), saved: on(keyboard_status()), live: live.keyboard_delay == 0 && live.keyboard_speed == 31 },
     ]
 }
 

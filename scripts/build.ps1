@@ -81,7 +81,7 @@ if ($Sign) {
 $extra = @()
 if ($override.Count -gt 0) {
     $overridePath = Join-Path $env:TEMP "nezty-build.conf.json"
-    $override | ConvertTo-Json -Depth 8 | Set-Content -Path $overridePath -Encoding UTF8
+    [IO.File]::WriteAllText($overridePath, ($override | ConvertTo-Json -Depth 8), (New-Object Text.UTF8Encoding $false))
     $extra = @("--config", $overridePath)
 }
 

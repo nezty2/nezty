@@ -1,5 +1,5 @@
-//! "Alles activeren": in één keer alles wat op dit apparaat echt helpt. Elk onderdeel staat los: mislukt er
-//! één, dan gaat de rest gewoon door. Wat niet bij het apparaat past, slaat nezty over. Alles komt in het
+//! "Alles activeren": in Ã©Ã©n keer alles wat op dit apparaat echt helpt. Elk onderdeel staat los: mislukt er
+//! Ã©Ã©n, dan gaat de rest gewoon door. Wat niet bij het apparaat past, slaat nezty over. Alles komt in het
 //! logboek en is exact terug te zetten.
 
 use crate::boost::reason_of;
@@ -25,7 +25,7 @@ fn progress(app: &AppHandle, step: &str, done: u32, total: u32) {
 
 // ---------- Onderdelen ----------
 
-/// Een tweak (algemeen of voor één game) aanzetten als dat kan en nog niet zo is.
+/// Een tweak (algemeen of voor Ã©Ã©n game) aanzetten als dat kan en nog niet zo is.
 fn tweak(state: &AppState, id: &str, game: Option<&Game>) -> ApplyItem {
     let game_id = game.map(|g| g.id.as_str());
     let d = match tweaks::get(id) {
@@ -111,7 +111,10 @@ fn fortnite_checks(state: &AppState, out: &mut Vec<ApplyItem>) {
         } else {
             match &after {
                 Ok(a) if a.checks.iter().any(|x| x.id == c.id && x.ok) => item(&id, Some(FORTNITE_GAME), ApplyOutcome::Applied, None),
-                Ok(_) => item(&id, Some(FORTNITE_GAME), ApplyOutcome::Failed, Some(Msg::new("verify_failed"))),
+                Ok(_) => {
+                    let key = if fortnite::is_running(state) { "fortnite_running" } else { "verify_failed" };
+                    item(&id, Some(FORTNITE_GAME), ApplyOutcome::Failed, Some(Msg::new(key)))
+                }
                 Err(e) => item(&id, Some(FORTNITE_GAME), ApplyOutcome::Failed, Some(reason_of(e))),
             }
         };
@@ -119,7 +122,7 @@ fn fortnite_checks(state: &AppState, out: &mut Vec<ApplyItem>) {
     }
 }
 
-/// V-Sync uit in het configbestand van één game (CS2, Minecraft Java), als de game dicht is.
+/// V-Sync uit in het configbestand van Ã©Ã©n game (CS2, Minecraft Java), als de game dicht is.
 fn game_config(state: &AppState, game_id: &str) -> Option<ApplyItem> {
     let checks = gameconfig::list(game_id);
     if checks.is_empty() {
@@ -215,9 +218,21 @@ pub fn run(app: &AppHandle, state: &AppState) -> ApplyAllReport {
         }
     }
     for t in status(state).missing {
-        if let Some(it) = items.iter_mut().find(|i| i.id == t.id && i.game_id == t.game_id && i.outcome != ApplyOutcome::Failed) {
+        if let Some(it) = items.iter_mut().find(|i| {
+            i.id == t.id
+                && i.game_id == t.game_id
+                && i.outcome != ApplyOutcome::Failed
+                && i.reason.as_ref().map(|r| r.key.as_str()) != Some("fortnite_queued")
+        }) {
             it.outcome = ApplyOutcome::Failed;
-            it.reason = Some(Msg::new("verify_failed"));
+            let key = if t.id.starts_with("fortnite_") {
+                "fortnite_running"
+            } else if t.id == "game_vsync" {
+                "game_running"
+            } else {
+                "verify_failed"
+            };
+            it.reason = Some(Msg::new(key));
         }
     }
     progress(app, "done", total, total);

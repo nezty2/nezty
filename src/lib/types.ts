@@ -210,6 +210,7 @@ export interface Settings {
   restorePointDone: boolean;
   dashboardPingHost: string;
   closeDuringGaming: string[];
+  autoCloseUnneeded: boolean;
   customPingTargets: unknown[];
   customGames: Game[];
   startMinimized: boolean;
@@ -506,7 +507,7 @@ export type CheckStatus = "ok" | "issue" | "info" | "unavailable";
 export type CheckAction = "none" | "fix" | "open_page" | "link";
 
 export interface BigWin {
-  id: "refresh_rate" | "gpu_choice" | "power_source" | "ram_speed" | "rebar" | "memory_integrity" | "gpu_driver" | "heavy_apps" | "laptop_heat" | "laptop_gpu_mode" | "laptop_wifi" | "gpu_battery_limit";
+  id: "refresh_rate" | "gpu_choice" | "power_source" | "ram_speed" | "rebar" | "memory_integrity" | "gpu_driver" | "heavy_apps" | "laptop_heat" | "laptop_gpu_mode" | "laptop_wifi" | "gpu_battery_limit" | "bloat_services" | "desktop_igpu";
   status: CheckStatus;
   gain: Gain;
   variant: string;
@@ -648,6 +649,17 @@ export type ApplyStep =
   | "restore_point"
   | "power_source"
   | "refresh_rate"
+  | "power_plan"
+  | "game_bar_dvr_off"
+  | "foreground_priority"
+  | "windows_snappy"
+  | "windows_bloat_off"
+  | "background_apps_off"
+  | "keyboard_response_fast"
+  | "usb_suspend_off"
+  | "lang_hotkey_off"
+  | "mmcss_gaming"
+  | "ethernet_power_off"
   | "game_mode"
   | "windowed_opt"
   | "timer_resolution"

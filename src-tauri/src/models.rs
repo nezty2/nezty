@@ -398,7 +398,10 @@ pub struct Settings {
     pub restore_point_policy: RestorePointPolicy,
     pub restore_point_done: bool,
     pub dashboard_ping_host: String,
+    /// Apps die bij een spelstart dicht moeten.
     pub close_during_gaming: Vec<String>,
+    /// Alle onnodige achtergrond-apps (browsers, cloud, updaters, widgets) automatisch sluiten bij spelstart.
+    pub auto_close_unneeded: bool,
     pub custom_ping_targets: Vec<PingTarget>,
     pub custom_games: Vec<Game>,
     /// Bij starten met Windows verborgen in het systeemvak starten.
@@ -456,6 +459,7 @@ impl Default for Settings {
             restore_point_done: false,
             dashboard_ping_host: "1.1.1.1".to_string(),
             close_during_gaming: vec![],
+            auto_close_unneeded: false,
             custom_ping_targets: vec![],
             custom_games: vec![],
             start_minimized: true,

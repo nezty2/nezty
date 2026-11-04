@@ -56,15 +56,17 @@ export function BigWinCard({ win, onFixed }: { win: BigWin; onFixed: (list: BigW
         </div>
       </div>
 
-      {win.id === "ram_speed" && (win.status === "issue" || win.status === "info") && (
+      {((win.id === "ram_speed" && (win.status === "issue" || win.status === "info")) ||
+        (win.id === "desktop_igpu" && win.variant === "unused_igpu") ||
+        (win.id === "bloat_services" && win.variant === "found")) && (
         <div className="mt-3 pl-8">
           <button onClick={() => setHowTo((v) => !v)} className="flex items-center gap-1 text-[12px] font-medium text-ink-3 hover:text-ink-2">
             <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", howTo && "rotate-180")} />
-            {t("bigwin.ram_speed.howTo")}
+            {td(`${base}.howTo`)}
           </button>
           {howTo && (
             <ol className="card-inset mt-2 list-decimal space-y-1 py-2.5 pl-8 pr-3 text-[13px] text-ink-2">
-              {tl("bigwin.ram_speed.steps").map((s, i) => (
+              {tl(`${base}.steps`).map((s, i) => (
                 <li key={i}>{s}</li>
               ))}
             </ol>

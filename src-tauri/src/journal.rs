@@ -24,6 +24,8 @@ pub enum PostAction {
     LangToggleSpi,
     /// Windows-energiemodus (overlay) opnieuw toepassen vanuit het register.
     PowerOverlay,
+    /// Vensteranimaties en transparantie direct opnieuw toepassen vanuit het register.
+    SnappyUi,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -120,6 +122,11 @@ pub enum RevertPayload {
         family: u16,
         automatic: bool,
         metric: u32,
+    },
+    /// Een DWORD-instelling in het globale NVIDIA-driverprofiel (NVAPI DRS). `old` None = terug naar driver-standaard.
+    NvDrsDword {
+        setting_id: u32,
+        old: Option<u32>,
     },
     None,
 }
@@ -413,6 +420,7 @@ pub fn execute_revert(payload: &RevertPayload) -> AppResult<()> {
                 Some(PostAction::AccessibilitySpi) => winapi::apply_accessibility_from_registry(),
                 Some(PostAction::LangToggleSpi) => winapi::apply_lang_toggle_from_registry(),
                 Some(PostAction::PowerOverlay) => crate::tweaks::laptop::apply_overlay_from_registry(),
+                Some(PostAction::SnappyUi) => winapi::apply_snappy_ui_from_registry(),
                 None => {}
             }
             Ok(())
@@ -496,6 +504,7 @@ pub fn execute_revert(payload: &RevertPayload) -> AppResult<()> {
         RevertPayload::QosPolicy { name } => crate::gamenet::remove_policy(name),
         RevertPayload::Warp => crate::gamenet::warp_revert(),
         RevertPayload::InterfaceMetric { luid, family, automatic, metric } => crate::gamenet::revert_metric(*luid, *family, *automatic, *metric),
+        RevertPayload::NvDrsDword { setting_id, old } => crate::tweaks::smoothness::nvdrs_write_dword(*setting_id, *old),
         RevertPayload::None => Err(AppError::coded("not_revertable")),
     }
 }

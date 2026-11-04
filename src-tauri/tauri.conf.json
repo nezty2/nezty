@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "nezty",
   "mainBinaryName": "nezty",
-  "version": "0.7.4",
+  "version": "0.7.7",
   "identifier": "com.nzty.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -77,7 +77,10 @@
   "plugins": {
     "nezty-update": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQ3NUVBNTk0ODczNDY1MjgKUldRb1pUU0hsS1ZlMTg2eEY3WUtiM3ZmK1g1cEF6OXIxcDd0M3pPaldmNVhxMjAvU1d1RDIreGoK",
-      "endpoints": []
+      "endpoints": [
+        "https://rzhiahfwlmfcqiupilxe.supabase.co/storage/v1/object/public/updates/latest.json",
+        "https://github.com/nezty2/nezty/releases/latest/download/latest.json"
+      ]
     }
   }
 }

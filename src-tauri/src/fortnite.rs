@@ -1,6 +1,6 @@
 //! Fortnite: GameUserSettings.ini lezen en (met back-up) aanpassen, plus de aanbevolen instellingen
-//! voor snel bouwen en editten. Fortnite schrijft zijn instellingen bij het afsluiten terug, dus
-//! wijzigen kan alleen als Fortnite dicht is.
+//! voor snel bouwen, editten en stabiele frametijden. Fortnite schrijft zijn instellingen bij het
+//! afsluiten terug, dus wijzigen kan alleen als Fortnite dicht is.
 
 use crate::error::{AppError, AppResult};
 use crate::journal::{JournalEntry, RevertPayload};
@@ -10,12 +10,32 @@ use crate::{bigwins, display, ini, processes};
 use std::path::{Path, PathBuf};
 
 const SECTION: &str = "[/Script/FortniteGame.FortGameUserSettings]";
+const SCALABILITY_SECTION: &str = "[ScalabilityGroups]";
 const RHI_SECTION: &str = "[D3DRHIPreference]";
 const PROCESSES: [&str; 4] = [
     "fortniteclient-win64-shipping.exe",
     "fortniteclient-win64-shipping_eac_eos.exe",
     "fortniteclient-win64-shipping_be.exe",
     "fortnitelauncher.exe",
+];
+
+const COMPETITIVE_GFX_KEYS: &[(&str, &str, &str)] = &[
+    (SECTION, "bMotionBlur", "False"),
+    (SECTION, "bShowGrass", "False"),
+    (SECTION, "bUseNanite", "False"),
+    (SECTION, "bEnableDLSSFrameGeneration", "False"),
+    (SECTION, "bAllowUIParallax", "False"),
+    (SECTION, "bIsEnergySavingEnabledIdle", "False"),
+    (SECTION, "bIsEnergySavingEnabledFocusLoss", "False"),
+    (SECTION, "LowInputLatencyModeIsEnabled", "True"),
+    (SCALABILITY_SECTION, "sg.ShadowQuality", "0"),
+    (SCALABILITY_SECTION, "sg.PostProcessQuality", "0"),
+    (SCALABILITY_SECTION, "sg.EffectsQuality", "0"),
+    (SCALABILITY_SECTION, "sg.FoliageQuality", "0"),
+    (SCALABILITY_SECTION, "sg.GlobalIlluminationQuality", "0"),
+    (SCALABILITY_SECTION, "sg.ReflectionQuality", "0"),
+    (SCALABILITY_SECTION, "sg.ShadingQuality", "0"),
+    (SCALABILITY_SECTION, "sg.LandscapeQuality", "0"),
 ];
 
 pub fn ini_path() -> PathBuf {
@@ -167,7 +187,22 @@ fn render_mode(text: &str) -> &'static str {
     }
 }
 
-/// De controles voor een ini-tekst. Met NVIDIA Reflex mag de framerate onbeperkt, anders gelijk aan het scherm.
+/// Competitieve FPS-limiet net boven de verversingssnelheid van het scherm (passend bij de keuzelijst van
+/// Fortnite). Onbeperkt (0) jaagt CPU en GPU op 100%, wat in drukke gevechten juist haperingen en
+/// wachtrijvertraging veroorzaakt.
+fn recommended_fps(max_hz: u32) -> u32 {
+    match max_hz {
+        0..=119 => 120,
+        120..=143 => 144,
+        144..=164 => 165,
+        165..=179 => 180,
+        180..=199 => 200,
+        200..=240 => 240,
+        _ => 360,
+    }
+}
+
+/// De controles voor een ini-tekst.
 pub fn checks_for(text: &str, nvidia: bool, max_hz: u32) -> Vec<FortniteCheck> {
     let mut checks = vec![];
     let vsync = ini::value(text, SECTION, "bUseVSync");
@@ -177,7 +212,7 @@ pub fn checks_for(text: &str, nvidia: bool, max_hz: u32) -> Vec<FortniteCheck> {
         current: vsync,
         recommended: "False".into(),
     });
-    let fps_target: f32 = if nvidia { 0.0 } else { max_hz as f32 };
+    let fps_target = recommended_fps(max_hz) as f32;
     let fps = ini::value(text, SECTION, "FrameRateLimit");
     checks.push(FortniteCheck {
         id: "fps_limit".into(),
@@ -187,12 +222,28 @@ pub fn checks_for(text: &str, nvidia: bool, max_hz: u32) -> Vec<FortniteCheck> {
     });
     if nvidia {
         let reflex = ini::value(text, SECTION, "LatencyTweak2");
-        checks.push(FortniteCheck { id: "reflex".into(), ok: reflex.as_deref() == Some("2"), current: reflex, recommended: "2".into() });
+        let low_lat = ini::value(text, SECTION, "LowInputLatencyModeIsEnabled");
+        let ok = reflex.as_deref() == Some("2") && low_lat.as_deref().is_some_and(|v| v.eq_ignore_ascii_case("true"));
+        checks.push(FortniteCheck { id: "reflex".into(), ok, current: reflex, recommended: "2".into() });
     }
+    let mouse_raw = ini::value(text, SECTION, "bDisableMouseAcceleration");
+    checks.push(FortniteCheck {
+        id: "mouse_raw".into(),
+        ok: mouse_raw.as_deref().is_some_and(|v| v.eq_ignore_ascii_case("true")),
+        current: mouse_raw,
+        recommended: "True".into(),
+    });
     let mode = render_mode(text);
     checks.push(FortniteCheck { id: "render_mode".into(), ok: mode == "performance", current: Some(mode.into()), recommended: "performance".into() });
-    // Geen advies voor de venstermodus: met "Optimalisaties voor games in een venster" (windowed_opt) is
-    // Volledig scherm in venster even direct, en in de praktijk speelde dat juist beter. Dat blijft je eigen keuze.
+    let gfx_ok = COMPETITIVE_GFX_KEYS
+        .iter()
+        .all(|(sec, key, want)| ini::value(text, sec, key).as_deref().is_some_and(|v| v.eq_ignore_ascii_case(want)));
+    checks.push(FortniteCheck {
+        id: "competitive_gfx".into(),
+        ok: gfx_ok,
+        current: Some(if gfx_ok { "competitive" } else { "custom" }.into()),
+        recommended: "competitive".into(),
+    });
     checks
 }
 
@@ -259,12 +310,21 @@ pub fn changes_for(checks: &[FortniteCheck], ids: &[String]) -> Vec<(&'static st
     for c in checks.iter().filter(|c| !c.ok && ids.contains(&c.id)) {
         match c.id.as_str() {
             "vsync" => changes.push((SECTION, "bUseVSync", "False".to_string())),
-            "fps_limit" => changes.push((SECTION, "FrameRateLimit", format!("{:.6}", c.recommended.parse::<f32>().unwrap_or(0.0)))),
-            "reflex" => changes.push((SECTION, "LatencyTweak2", "2".to_string())),
+            "fps_limit" => changes.push((SECTION, "FrameRateLimit", format!("{:.6}", c.recommended.parse::<f32>().unwrap_or(144.0)))),
+            "reflex" => {
+                changes.push((SECTION, "LatencyTweak2", "2".to_string()));
+                changes.push((SECTION, "LowInputLatencyModeIsEnabled", "True".to_string()));
+            }
+            "mouse_raw" => changes.push((SECTION, "bDisableMouseAcceleration", "True".to_string())),
             // Prestatiemodus hoort bij DirectX 11. Blijft PreferredRHI op dx12 staan, dan negeert Fortnite de keuze.
             "render_mode" => {
                 changes.push((RHI_SECTION, "PreferredFeatureLevel", "es31".to_string()));
                 changes.push((RHI_SECTION, "PreferredRHI", "dx11".to_string()));
+            }
+            "competitive_gfx" => {
+                for (sec, key, want) in COMPETITIVE_GFX_KEYS {
+                    changes.push((*sec, *key, (*want).to_string()));
+                }
             }
             _ => {}
         }
