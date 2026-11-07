@@ -8,6 +8,7 @@ use crate::registry::{self, Hive, RegData};
 use crate::{display, winapi};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::os::windows::fs::OpenOptionsExt;
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -24,6 +25,8 @@ pub enum PostAction {
     LangToggleSpi,
     /// Windows-energiemodus (overlay) opnieuw toepassen vanuit het register.
     PowerOverlay,
+    /// Vensteranimaties en transparantie direct opnieuw toepassen vanuit het register.
+    SnappyUi,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -121,6 +124,11 @@ pub enum RevertPayload {
         automatic: bool,
         metric: u32,
     },
+    /// Een DWORD-instelling in het globale NVIDIA-driverprofiel (NVAPI DRS). `old` None = terug naar driver-standaard.
+    NvDrsDword {
+        setting_id: u32,
+        old: Option<u32>,
+    },
     None,
 }
 
@@ -180,6 +188,8 @@ impl JournalEntry {
 
 pub struct Journal {
     path: PathBuf,
+    _writer: Option<std::fs::File>,
+    _installation: Option<std::fs::File>,
     pub entries: Vec<JournalEntry>,
     /// Regels die deze versie niet kan lezen (bv. van een nieuwere versie). Ze blijven ongewijzigd
     /// in het bestand staan, zodat er nooit oude waarden voor "Alles terugzetten" verloren gaan.
@@ -213,6 +223,55 @@ fn parse(text: &str) -> Parsed {
 }
 
 impl Journal {
+    /// Only the elevated process may supply executable recovery records. Keep a
+    /// protected snapshot for review when moving from the old AppData format.
+    pub fn open(legacy: &Path, uninstalling: bool) -> AppResult<Self> {
+        let dir = crate::protected::recovery_dir()?;
+        let machine = dir.parent().ok_or_else(|| AppError::msg("Missing recovery directory"))?.join("installation.lock");
+        if !machine.try_exists()? {
+            match std::fs::File::create_new(&machine) {
+                Ok(_) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(e) => return Err(e.into()),
+            }
+        }
+        let share = if uninstalling { 0 } else { windows_sys::Win32::Storage::FileSystem::FILE_SHARE_READ };
+        let installation = std::fs::OpenOptions::new().read(true).share_mode(share).open(machine)
+            .map_err(|e| AppError::msg(format!("Sluit andere Nezty-sessies en probeer het opnieuw ({e}).")))?;
+        let writer = std::fs::OpenOptions::new().write(true).create(true).truncate(false)
+            .share_mode(0).open(dir.join("writer.lock"))?;
+        let path = dir.join("journal.json");
+        if !path.try_exists()? {
+            Self::prepare_legacy(&legacy.join("journal.json"), &dir)?;
+        }
+        crate::protected::check(&path)?;
+        let mut journal = Self::load(&dir);
+        if journal.blocked { return Err(AppError::msg(format!("Onleesbaar hersteljournaal: {}", path.display()))); }
+        journal._writer = Some(writer);
+        journal._installation = Some(installation);
+        Ok(journal)
+    }
+
+    fn prepare_legacy(source: &Path, dir: &Path) -> AppResult<()> {
+        let review = dir.join("legacy-review.json");
+        if !review.try_exists()? {
+            let bytes = match std::fs::read(source) {
+                Ok(bytes) => bytes,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => b"[]".to_vec(),
+                Err(e) => return Err(e.into()),
+            };
+            let inactive = std::str::from_utf8(&bytes).ok().is_some_and(|text|
+                matches!(parse(text), Parsed::Ok(entries, unknown) if unknown.is_empty() &&
+                    entries.iter().all(|e| e.reverted || !e.revertable)));
+            if inactive {
+                crate::state::write_atomic(&dir.join("journal.json"), &bytes)?;
+                return Ok(());
+            }
+            crate::state::write_atomic(&review, &bytes)?;
+        }
+        Err(AppError::msg(format!("Controleer als beheerder de oude herstelgegevens in {}. Hernoem de gecontroleerde kopie naar journal.json en start Nezty opnieuw.", review.display())))
+    }
+
     /// Leest het logboek. Is (een deel) niet te lezen, dan komt er eerst een kopie naast
     /// (journal.unreadable-<tijd>.json). Een onleesbaar logboek wordt nooit stil overschreven.
     pub fn load(dir: &Path) -> Journal {
@@ -222,7 +281,7 @@ impl Journal {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Parsed::Missing,
             Err(_) => Parsed::Unreadable,
         };
-        let mut j = Journal { path, entries: Vec::new(), unknown: Vec::new(), backup: None, blocked: false };
+        let mut j = Journal { path, entries: Vec::new(), unknown: Vec::new(), backup: None, blocked: false, _writer: None, _installation: None };
         match parsed {
             Parsed::Missing => {}
             Parsed::Ok(entries, unknown) => {
@@ -236,7 +295,7 @@ impl Journal {
             Parsed::Unreadable => {
                 log::error!("logboek niet leesbaar: kopie gemaakt voordat er iets wordt overschreven");
                 j.backup = j.make_backup();
-                j.blocked = j.backup.is_none();
+                j.blocked = true;
             }
         }
         j
@@ -270,7 +329,47 @@ impl Journal {
 
     pub fn record(&mut self, entry: JournalEntry) -> AppResult<()> {
         self.entries.push(entry);
-        self.save()
+        if let Err(e) = self.save() {
+            self.entries.pop();
+            return Err(e);
+        }
+        Ok(())
+    }
+
+    /// Keep the journal lock across comparison, durable recording and mutation.
+    /// If Windows fails partway, the saved inverse remains available for retry.
+    pub fn write_registry(&mut self, entry: JournalEntry, new: &registry::RegData) -> AppResult<()> {
+        let RevertPayload::Registry { hive, path, name, old, .. } = &entry.payload else {
+            return Err(AppError::msg("Missing registry recovery data"));
+        };
+        if !registry::matches_exact(*hive, path, name, old)? {
+            return Err(AppError::msg("De oorspronkelijke registerwaarde kan niet exact worden teruggezet of is ondertussen gewijzigd."));
+        }
+        let (hive, path, name, old) = (*hive, path.clone(), name.clone(), old.clone());
+        self.record(entry)?;
+        if let Err(e) = registry::write(hive, &path, &name, new) {
+            // A definite no-op does not need future recovery. If saving this
+            // status also fails, leave the durable inverse eligible for retry.
+            if registry::matches_exact(hive, &path, &name, &old).unwrap_or(false) {
+                let index = self.entries.len() - 1;
+                self.entries[index].reverted = true;
+                if self.save().is_err() { self.entries[index].reverted = false; }
+            }
+            return Err(e);
+        }
+        Ok(())
+    }
+
+    pub fn write_power(&mut self, entry: JournalEntry, new_ac: u32, new_dc: u32) -> AppResult<()> {
+        let RevertPayload::PowerSetting { scheme, sub, setting, ac, dc } = &entry.payload else {
+            return Err(AppError::msg("Missing power recovery data"));
+        };
+        if crate::tweaks::input::read_power_setting(scheme, sub, setting)? != Some((*ac, *dc)) {
+            return Err(AppError::msg("De energie-instelling is ondertussen gewijzigd."));
+        }
+        let (scheme, sub, setting) = (scheme.clone(), sub.clone(), setting.clone());
+        self.record(entry)?;
+        crate::tweaks::input::write_power_setting(&scheme, &sub, &setting, new_ac, new_dc)
     }
 
     /// Actieve (niet teruggezette) wijzigingen van een tweak, eventueel voor één game.
@@ -363,23 +462,29 @@ impl Journal {
             .filter(|(_, e)| ids.contains(&e.id) && !e.reverted)
             .map(|(i, _)| i)
             .collect();
-        order.sort_by(|a, b| self.entries[*b].ts.cmp(&self.entries[*a].ts));
+        order.reverse(); // The append order survives clock adjustments and equal timestamps.
+        let mut failed_targets = std::collections::HashSet::new();
         for i in order {
             let entry = &self.entries[i];
-            if !entry.revertable {
+            if !entry.revertable || failed_targets.contains(&entry.target) {
                 result.skipped += 1;
                 continue;
             }
             match execute_revert(&entry.payload) {
                 Ok(()) => {
                     self.entries[i].reverted = true;
+                    if let Err(e) = self.save() {
+                        self.entries[i].reverted = false;
+                        result.failed.push(RevertFailure { id: self.entries[i].id.clone(), target: self.path.display().to_string(), error: e.to_string() });
+                        break;
+                    }
                     result.reverted += 1;
                 }
-                Err(e) => result.failed.push(RevertFailure { id: entry.id.clone(), target: entry.target.clone(), error: e.to_string() }),
+                Err(e) => {
+                    failed_targets.insert(entry.target.clone());
+                    result.failed.push(RevertFailure { id: entry.id.clone(), target: entry.target.clone(), error: e.to_string() });
+                }
             }
-        }
-        if let Err(e) = self.save() {
-            log::error!("logboek opslaan mislukt: {e}");
         }
         result
     }
@@ -389,10 +494,43 @@ impl Journal {
         self.entries.iter().any(|e| !e.reverted && e.revertable)
     }
 
+    /// A machine-wide uninstall must leave the app available to other users
+    /// who still need it to undo changes in their own Windows accounts.
+    pub fn check_other_users(&self) -> AppResult<()> {
+        let own = self.path.parent().ok_or_else(|| AppError::msg("Missing journal directory"))?;
+        let root = own.parent().ok_or_else(|| AppError::msg("Missing recovery directory"))?;
+        for entry in std::fs::read_dir(root)? {
+            let dir = entry?.path();
+            if dir == own || dir == root.join("installation.lock") { continue; }
+            crate::protected::check(&dir)?;
+            if !dir.is_dir() { continue; }
+            let path = dir.join("journal.json");
+            let complete = if path.try_exists()? {
+                matches!(parse(&std::fs::read_to_string(path)?), Parsed::Ok(entries, unknown)
+                    if unknown.is_empty() && entries.iter().all(|e| e.reverted || !e.revertable))
+            } else { !dir.join("legacy-review.json").try_exists()? };
+            if !complete { return Err(AppError::msg(format!("Open Nezty in het andere Windows-account om eerst de wijzigingen terug te zetten: {}", dir.display()))); }
+        }
+        Ok(())
+    }
+
     pub fn revert_all(&mut self) -> RevertResult {
         let ids: Vec<String> = self.entries.iter().filter(|e| !e.reverted).map(|e| e.id.clone()).collect();
-        self.revert_ids(&ids)
+        let mut result = self.revert_ids(&ids);
+        if self.blocked || !self.unknown.is_empty() {
+            result.failed.push(RevertFailure { id: String::new(), target: self.path.display().to_string(), error: "Onleesbare herstelgegevens".into() });
+        }
+        result
     }
+}
+
+fn adapter_restore_command(name: &str, old_value: &str) -> AppResult<String> {
+    let enable = match old_value.to_ascii_lowercase().as_str() {
+        "enabled" => "$true",
+        "disabled" => "$false",
+        _ => return Err(AppError::msg("Unknown adapter power management state")),
+    };
+    Ok(format!("& {{ {} }} -Name {} -Enable {enable}", include_str!("restore_adapter.ps1"), ps_quote(name)))
 }
 
 /// Voert één terugzet-actie uit.
@@ -400,6 +538,9 @@ pub fn execute_revert(payload: &RevertPayload) -> AppResult<()> {
     match payload {
         RevertPayload::Registry { hive, path, name, old, post } => {
             registry::write(*hive, path, name, old)?;
+            if !registry::matches_exact(*hive, path, name, old)? {
+                return Err(AppError::coded("verify_failed"));
+            }
             match post {
                 Some(PostAction::MouseSpi) => winapi::apply_mouse_from_registry(),
                 Some(PostAction::UiEffects) => {
@@ -413,6 +554,7 @@ pub fn execute_revert(payload: &RevertPayload) -> AppResult<()> {
                 Some(PostAction::AccessibilitySpi) => winapi::apply_accessibility_from_registry(),
                 Some(PostAction::LangToggleSpi) => winapi::apply_lang_toggle_from_registry(),
                 Some(PostAction::PowerOverlay) => crate::tweaks::laptop::apply_overlay_from_registry(),
+                Some(PostAction::SnappyUi) => winapi::apply_snappy_ui_from_registry(),
                 None => {}
             }
             Ok(())
@@ -451,7 +593,7 @@ pub fn execute_revert(payload: &RevertPayload) -> AppResult<()> {
             Ok(())
         }
         RevertPayload::Adapter { name, old_value } => {
-            run_ps(&format!("Set-NetAdapterPowerManagement -Name {} -AllowComputerToTurnOffDevice {}", ps_quote(name), old_value))?;
+            run_ps(&adapter_restore_command(name, old_value)?)?;
             Ok(())
         }
         RevertPayload::Priority { pid, old_class } => {
@@ -496,6 +638,109 @@ pub fn execute_revert(payload: &RevertPayload) -> AppResult<()> {
         RevertPayload::QosPolicy { name } => crate::gamenet::remove_policy(name),
         RevertPayload::Warp => crate::gamenet::warp_revert(),
         RevertPayload::InterfaceMetric { luid, family, automatic, metric } => crate::gamenet::revert_metric(*luid, *family, *automatic, *metric),
+        RevertPayload::NvDrsDword { setting_id, old } => crate::tweaks::smoothness::nvdrs_write_dword(*setting_id, *old),
         RevertPayload::None => Err(AppError::coded("not_revertable")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn refuses_untrusted_adapter_expression() {
+        let payload = RevertPayload::Adapter { name: "test".into(), old_value: "Enabled; throw 'injected'".into() };
+        assert!(execute_revert(&payload).unwrap_err().to_string().contains("Unknown adapter"));
+    }
+
+    #[test]
+    fn adapter_restore_checks_both_states_and_verifies_the_driver_result() {
+        // These local functions shadow the Windows CIM cmdlets in this child process.
+        let provider = r#"
+            $script:enabled = $false
+            function Get-CimInstance($ClassName, $Namespace) {
+                if ($ClassName -eq 'Win32_NetworkAdapter') {
+                    [pscustomobject]@{ NetConnectionID = "test's adapter"; PNPDeviceID = 'PCI\test' }
+                } else {
+                    [pscustomobject]@{ InstanceName = 'PCI\test_0'; Enable = $script:enabled }
+                }
+            }
+            function Set-CimInstance($InputObject, $Property, $ErrorAction) { $script:enabled = $Property.Enable }
+        "#;
+        let enable = adapter_restore_command("test's adapter", "Enabled").unwrap();
+        let disable = adapter_restore_command("test's adapter", "Disabled").unwrap();
+        let result = run_ps(&format!("{provider}\n{enable}; $script:enabled; {disable}; $script:enabled")).unwrap();
+        assert_eq!(result.lines().collect::<Vec<_>>(), ["True", "False"]);
+        let ignores_write = provider.replace("$script:enabled = $Property.Enable", "");
+        assert!(run_ps(&format!("{ignores_write}\n{enable}")).is_err());
+    }
+
+    #[test]
+    fn restores_game_settings_after_reopen_without_losing_other_options() {
+        let dir = std::env::temp_dir().join(format!("nezty-game-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&dir).unwrap();
+        let path = dir.join("GameUserSettings.ini");
+        let original = b"[Game]\r\nbUseVSync=True\r\nResolutionSizeX=1920\r\n";
+        std::fs::write(&path, original).unwrap();
+        let changes = [("[Game]", "bUseVSync", "False".to_string()), ("[Game]", "LowLatency", "1".to_string())];
+        let mut journal = Journal::load(&dir);
+        for entry in crate::fortnite::write_changes(&path, &changes).unwrap() {
+            journal.record(entry).unwrap();
+        }
+        assert_ne!(std::fs::read(&path).unwrap(), original);
+        drop(journal);
+        let result = Journal::load(&dir).revert_all();
+        assert!(result.failed.is_empty());
+        assert_eq!(result.reverted, 2);
+        assert_eq!(std::fs::read(&path).unwrap(), original);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn failed_restore_and_failed_save_remain_retryable() {
+        let dir = std::env::temp_dir().join(format!("nezty-retry-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&dir).unwrap();
+        let path = dir.join("game.ini");
+        let backup = dir.join("original.ini");
+        std::fs::write(&path, "new").unwrap();
+        let mut entry = JournalEntry::new("fortnite_ini", "test", JournalKind::File, "game.ini");
+        entry.revertable = true;
+        entry.payload = RevertPayload::File { path: path.display().to_string(), backup_path: backup.display().to_string() };
+        Journal::load(&dir).record(entry).unwrap();
+        assert_eq!(Journal::load(&dir).revert_all().failed.len(), 1);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "new");
+        std::fs::write(&backup, "original").unwrap();
+        let obstacle = dir.join("journal.json.tmp");
+        std::fs::create_dir(&obstacle).unwrap();
+        assert_eq!(Journal::load(&dir).revert_all().failed.len(), 1);
+        assert!(Journal::load(&dir).has_any_active());
+        std::fs::remove_dir(&obstacle).unwrap();
+        let result = Journal::load(&dir).revert_all();
+        assert!(result.failed.is_empty());
+        assert_eq!(result.reverted, 1);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "original");
+        assert!(!Journal::load(&dir).has_any_active());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn legacy_pending_or_unknown_requires_review_of_frozen_copy() {
+        let dir = std::env::temp_dir().join(format!("nezty-migrate-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&dir).unwrap();
+        let old = dir.join("legacy.json");
+        let pending = br#"[{"futureVersion":true}]"#;
+        std::fs::write(&old, pending).unwrap();
+        assert!(Journal::prepare_legacy(&old, &dir).is_err());
+        std::fs::write(&old, "[]").unwrap();
+        assert!(Journal::prepare_legacy(&old, &dir).is_err());
+        assert!(!dir.join("journal.json").exists());
+        assert_eq!(std::fs::read(dir.join("legacy-review.json")).unwrap(), pending);
+        std::fs::rename(dir.join("legacy-review.json"), dir.join("journal.json")).unwrap();
+        assert_eq!(Journal::load(&dir).revert_all().failed.len(), 1);
+        std::fs::write(dir.join("journal.json"), "{").unwrap();
+        let mut corrupted = Journal::load(&dir);
+        assert_eq!(corrupted.revert_all().failed.len(), 1);
+        assert!(corrupted.save().is_err());
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }

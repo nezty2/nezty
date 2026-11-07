@@ -34,15 +34,22 @@ let fortniteOverview: T.FortniteOverview = {
   advice: "nvidia",
   checks: [
     { id: "vsync", current: "False", recommended: "False", ok: true },
-    { id: "fps_limit", current: "240.000000", recommended: "0", ok: false },
+    { id: "fps_limit", current: "0.000000", recommended: "165", ok: false },
+
+    { id: "mouse_raw", current: "False", recommended: "True", ok: false },
+
     { id: "reflex", current: "1", recommended: "2", ok: false },
     { id: "render_mode", current: "dx12", recommended: "performance", ok: false },
+    { id: "competitive_gfx", current: "custom", recommended: "competitive", ok: false },
+
+
   ],
   pending: [],
 };
 let liveChecks: T.LiveCheck[] = [
   { id: "mouse_precision_off", saved: true, live: true },
   { id: "accessibility_hotkeys_off", saved: false, live: false },
+  { id: "keyboard_response_fast", saved: false, live: false },
 ];
 let gameConfig: T.GameConfigCheck[] = [
   { gameId: "steam:cs2", id: "vsync", file: "C:\\Program Files (x86)\\Steam\\userdata\\123\\730\\local\\cfg\\cs2_video.txt", current: "1", recommended: "0", ok: false },
@@ -79,6 +86,7 @@ let settings: T.Settings = {
   restorePointDone: false,
   dashboardPingHost: "1.1.1.1",
   closeDuringGaming: ["OneDrive.exe"],
+  autoCloseUnneeded: false,
   customPingTargets: [],
   customGames: [],
   startMinimized: false,
@@ -94,7 +102,6 @@ let settings: T.Settings = {
   migratedV050: true,
   allActive: false,
   activatedGames: [],
-  licenseNoTokenSince: null,
   startupKeepOff: [],
   startupCameBack: [],
   fortnitePending: [],
@@ -117,6 +124,16 @@ let tweaks: T.TweakInfo[] = [
   tw({ id: "hags", category: "system", risk: "medium", timing: "pc_restart", requiresAdmin: true, state: "on", active: "after_pc_restart" }),
   tw({ id: "windowed_opt", category: "system", timing: "game_restart" }),
   tw({ id: "timer_resolution", category: "system", gain: "measurable", timing: "pc_restart", requiresAdmin: true }),
+  tw({ id: "foreground_priority", category: "system", gain: "measurable", requiresAdmin: true }),
+  tw({ id: "background_tamer", category: "system", gain: "measurable" }),
+  tw({ id: "nvidia_shader_cache", category: "system", gain: "measurable", timing: "game_restart" }),
+  tw({ id: "cpu_desktop_tuning", category: "system", gain: "small", platform: "pc_only" }),
+  tw({ id: "windows_snappy", category: "system", gain: "measurable" }),
+  tw({ id: "windows_bloat_off", category: "system" }),
+  tw({ id: "background_apps_off", category: "system", gain: "measurable" }),
+  tw({ id: "mmcss_gaming", category: "network", gain: "measurable", timing: "game_restart", requiresAdmin: true }),
+  tw({ id: "ethernet_power_off", category: "network", gain: "measurable", timing: "pc_restart", requiresAdmin: true }),
+  tw({ id: "keyboard_response_fast", category: "input" }),
   tw({ id: "mouse_precision_off", category: "input", state: "on", active: "now" }),
   tw({ id: "accessibility_hotkeys_off", category: "input", state: "on", active: "now" }),
   tw({ id: "lang_hotkey_off", category: "input", state: "off" }),
@@ -239,6 +256,8 @@ let bigWins: T.BigWin[] = [
   { id: "refresh_rate", status: "issue", gain: "big", variant: "one", params: { monitor: "AOC 24G2W1G4", current: "60", max: "144", count: "1" }, action: "fix", link: null },
   { id: "gpu_choice", status: "issue", gain: "big", variant: "missing", params: { gpu: "NVIDIA GeForce RTX 5070 Ti", count: "5", names: "Apex Legends, Call of Duty, Counter-Strike 2" }, action: "fix", link: null },
   { id: "power_source", status: "ok", gain: "big", variant: "desktop", params: { plan: "High performance" }, action: "none", link: null },
+  { id: "bloat_services", status: "info", gain: "small", variant: "found", params: { names: "Razer Game Manager 3", count: "1" }, action: "none", link: null },
+  { id: "desktop_igpu", status: "info", gain: "small", variant: "unused_igpu", params: { igpu: "AMD Radeon(TM) Graphics", dgpu: "NVIDIA GeForce RTX 5070 Ti" }, action: "none", link: null },
   { id: "ram_speed", status: "ok", gain: "big", variant: "ok", params: { configured: "6000", rated: "6000", type: "DDR5" }, action: "none", link: null },
   { id: "rebar", status: "info", gain: "measurable", variant: "off", params: { gpu: "NVIDIA GeForce RTX 4060 Laptop GPU", bar: "256", vram: "8188" }, action: "none", link: null },
   { id: "memory_integrity", status: "info", gain: "measurable", variant: "on", params: {}, action: "link", link: "windowsdefender://coreisolation" },

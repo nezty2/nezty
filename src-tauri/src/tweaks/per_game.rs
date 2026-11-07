@@ -34,7 +34,7 @@ fn record_reg(state: &AppState, tweak_id: &str, game: &Game, path: &str, name: &
     e.game_id = Some(game.id.clone());
     e.note = note.map(|s| s.to_string());
     e.payload = RevertPayload::Registry { hive: Hive::Hkcu, path: path.to_string(), name: name.to_string(), old, post: None };
-    lock(&state.journal).record(e)
+    lock(&state.journal).write_registry(e, new)
 }
 
 // ---------- GPU-voorkeur ----------
@@ -78,7 +78,6 @@ pub fn gpu_pref_apply(state: &AppState, game: Option<&Game>, session: Option<&st
     pairs.retain(|(k, _)| k != "GpuPreference");
     pairs.push(("GpuPreference".to_string(), "2".to_string()));
     let new = RegData::Str(gpu_join(&pairs));
-    registry::write(Hive::Hkcu, GPU_PREFS, &exe, &new)?;
     record_reg(state, "gpu_high_perf", g, GPU_PREFS, &exe, old, &new, session, None)
 }
 
@@ -95,7 +94,6 @@ pub fn gpu_pref_disable(state: &AppState, game: Option<&Game>) -> AppResult<()> 
         return Ok(());
     }
     let new = if pairs.is_empty() { RegData::Absent } else { RegData::Str(gpu_join(&pairs)) };
-    registry::write(Hive::Hkcu, GPU_PREFS, &exe, &new)?;
     record_reg(state, "gpu_high_perf", g, GPU_PREFS, &exe, old, &new, None, Some("manual_off"))
 }
 

@@ -19,7 +19,7 @@ const MORE_KEY = "nezty.tweaks.more";
 /** Oude sleutel van de tabbladen (tot 0.4.0): wordt opgeruimd. */
 const OLD_TAB_KEY = "nezty.tweaks.tab";
 /** Controles die nezty niet zelf kan oplossen. De andere zitten in "Alles activeren" of staan op de laptoppagina. */
-const MANUAL_CHECKS = ["ram_speed", "rebar", "memory_integrity", "gpu_driver", "heavy_apps"];
+const MANUAL_CHECKS = ["bloat_services", "desktop_igpu", "ram_speed", "rebar", "memory_integrity", "gpu_driver", "heavy_apps"];
 
 /** Waar een link naartoe moet. Oude links met een tabblad (van vóór 0.5.0) komen op de juiste plek uit. */
 function targetOf(params: Record<string, string>): "more" | "games" | null {

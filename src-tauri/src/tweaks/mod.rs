@@ -9,6 +9,7 @@ pub mod input_extra;
 pub mod laptop;
 pub mod wifi_gaming;
 pub mod regtweak;
+pub mod smoothness;
 pub mod system;
 
 use crate::error::{AppError, AppResult};
@@ -70,14 +71,27 @@ pub const CATALOG: &[TweakDef] = &[
     def("windowed_opt", "Optimizations for windowed games", C::System, S::Global, Small, GameRestart, false),
     // Terug sinds 0.6.1: 0,5 ms timer zolang er een game draait (zoals in 0.3.16).
     def("timer_resolution", "Higher timer resolution while gaming", C::System, S::Global, Measurable, PcRestart, true),
+    def("foreground_priority", "Foreground game CPU priority", C::System, S::Global, Measurable, Instant, true),
+    def("windows_snappy", "Snappy Windows UI without blur", C::System, S::Global, Measurable, Instant, false),
+    def("windows_bloat_off", "Windows search web and tips bloat off", C::System, S::Global, Small, Instant, false),
+    def("background_apps_off", "Store and browser background apps off", C::System, S::Global, Measurable, Instant, false),
+    def("background_tamer", "Tame background apps while gaming", C::System, S::Global, Measurable, Instant, false),
+    def("nvidia_shader_cache", "NVIDIA 100 GB Shader Cache", C::System, S::Global, Measurable, GameRestart, false),
+    def("nvidia_max_perf", "NVIDIA Power Management: Prefer Maximum Performance", C::System, S::Global, Measurable, GameRestart, false),
+    def("driver_paging_off", "Limit paging of Windows system code", C::System, S::Global, Measurable, PcRestart, false),
+    def("game_bar_presence_off", "Windows full-screen presentation preferences", C::System, S::Global, Measurable, Instant, false),
+    TweakDef { platform: Platform::PcOnly, ..def("cpu_desktop_tuning", "Desktop CPU minimum 100% and PCIe/NVMe sleep off", C::System, S::Global, Small, Instant, false) },
     def("notifications_off", "Notification banners off", C::System, S::Global, Negligible, Instant, false),
     // Muis en toetsenbord
     def("mouse_precision_off", "Enhance pointer precision off", C::Input, S::Global, Small, Instant, false),
+    def("keyboard_response_fast", "Fastest keyboard response", C::Input, S::Global, Small, Instant, false),
     def("accessibility_hotkeys_off", "Sticky/Filter/Toggle keys shortcuts off", C::Input, S::Global, Small, Instant, false),
     TweakDef { platform: Platform::PcOnly, ..def("usb_suspend_off", "USB selective suspend off", C::Input, S::Global, Small, Instant, false) },
     def("lang_hotkey_off", "Language switch shortcuts off", C::Input, S::Global, Small, Instant, false),
     // Netwerk
     def("wifi_power_max", "Wi-Fi power saving off", C::Network, S::Global, Small, Instant, false),
+    def("mmcss_gaming", "Multimedia scheduler and network throttling off", C::Network, S::Global, Measurable, GameRestart, true),
+    def("ethernet_power_off", "Ethernet power saving and Green Ethernet off", C::Network, S::Global, Measurable, PcRestart, true),
     def("wifi_gaming_mode", "Wi-Fi background scan off while nezty runs", C::Network, S::Global, Measurable, Instant, false),
     // Alleen laptop
     TweakDef { platform: Platform::LaptopOnly, ..def("power_mode_best", "Power mode best performance", C::Laptop, S::Global, Measurable, Instant, true) },
@@ -118,15 +132,28 @@ pub const ACTIVATE_ALL: &[&str] = &[
     "power_mode_best",
     "game_mode",
     "game_bar_dvr_off",
+    "game_bar_presence_off",
     "windowed_opt",
     "timer_resolution",
+    "foreground_priority",
+    "driver_paging_off",
+    "background_tamer",
+    "nvidia_shader_cache",
+    "nvidia_max_perf",
+    "windows_snappy",
+    "windows_bloat_off",
+    "background_apps_off",
     "mouse_precision_off",
-    "accessibility_hotkeys_off",
+    "keyboard_response_fast",
     "usb_suspend_off",
-    "lang_hotkey_off",
     "cpu_full_speed",
+    "cpu_epp_performance",
+    "cpu_prefer_pcores",
+    "battery_saver_off",
+    "usb_suspend_ac_off",
     "wifi_power_max",
-    "wifi_gaming_mode",
+    "mmcss_gaming",
+    "ethernet_power_off",
 ];
 
 pub fn get(id: &str) -> AppResult<&'static TweakDef> {
@@ -160,8 +187,21 @@ pub fn status(state: &AppState, id: &str, game: Option<&Game>) -> Status {
         "windowed_opt" => system::windowed_opt_status(),
         "timer_resolution" => system::timer_status(),
         "notifications_off" => system::notifications_status(state),
+        "foreground_priority" => system::foreground_priority_status(),
+        "windows_snappy" => system::windows_snappy_status(),
+        "windows_bloat_off" => system::windows_bloat_status(),
+        "background_apps_off" => system::background_apps_status(),
+        "background_tamer" => smoothness::bg_tamer_status(),
+        "nvidia_shader_cache" => smoothness::nvidia_shader_status(),
+        "nvidia_max_perf" => smoothness::nvidia_max_perf_status(),
+        "driver_paging_off" => system::driver_paging_status(),
+        "game_bar_presence_off" => system::game_bar_presence_status(),
+        "cpu_desktop_tuning" => smoothness::cpu_desktop_status(),
         "wifi_power_max" => network_extra::wifi_status(network_extra::has_wifi()),
+        "mmcss_gaming" => network_extra::mmcss_status(),
+        "ethernet_power_off" => network_extra::ethernet_power_status(),
         "mouse_precision_off" => input::mouse_status(),
+        "keyboard_response_fast" => input::keyboard_status(),
         "accessibility_hotkeys_off" => input::accessibility_status(),
         "usb_suspend_off" => input::usb_suspend_status(),
         "lang_hotkey_off" => input_extra::lang_hotkey_status(),
@@ -310,10 +350,15 @@ fn admin_check(state: &AppState, d: &TweakDef) -> AppResult<()> {
 
 /// Past een tweak toe. `session` koppelt de wijziging aan een boost-sessie.
 pub fn apply(state: &AppState, id: &str, option: Option<&str>, session: Option<&str>, game: Option<&Game>) -> AppResult<()> {
+    crate::license::require(state)?;
     let d = get(id)?;
     admin_check(state, d)?;
     if platform_locked(state, d) || (id == "power_plan" && option == Some("ultimate") && crate::device::is_laptop(state)) {
         return Err(AppError::coded("platform_locked"));
+    }
+    let before = status(state, id, game);
+    if matches!(before.state, TweakState::Unavailable | TweakState::Unknown) {
+        return Err(AppError::coded(before.detail.as_ref().map_or("not_available", |reason| reason.key.as_str())));
     }
     let journal_len = lock(&state.journal).entries.len();
     let result = apply_inner(state, id, option, session, game);
@@ -333,8 +378,21 @@ fn apply_inner(state: &AppState, id: &str, option: Option<&str>, session: Option
         "windowed_opt" => system::windowed_opt_apply(state, session),
         "timer_resolution" => system::timer_apply(state, session),
         "notifications_off" => system::notifications_apply(state, session),
+        "foreground_priority" => system::foreground_priority_apply(state, session),
+        "windows_snappy" => system::windows_snappy_apply(state, session),
+        "windows_bloat_off" => system::windows_bloat_apply(state, session),
+        "background_apps_off" => system::background_apps_apply(state, session),
+        "background_tamer" => smoothness::bg_tamer_apply(state, session),
+        "nvidia_shader_cache" => smoothness::nvidia_shader_apply(state, session),
+        "nvidia_max_perf" => smoothness::nvidia_max_perf_apply(state, session),
+        "driver_paging_off" => system::driver_paging_apply(state, session),
+        "game_bar_presence_off" => system::game_bar_presence_apply(state, session),
+        "cpu_desktop_tuning" => smoothness::cpu_desktop_apply(state, session),
         "wifi_power_max" => network_extra::wifi_apply(state, session),
+        "mmcss_gaming" => network_extra::mmcss_apply(state, session),
+        "ethernet_power_off" => network_extra::ethernet_power_apply(state, session),
         "mouse_precision_off" => input::mouse_apply(state, session),
+        "keyboard_response_fast" => input::keyboard_apply(state, session),
         "accessibility_hotkeys_off" => input::accessibility_apply(state, session),
         "usb_suspend_off" => input::usb_suspend_apply(state, session),
         "lang_hotkey_off" => input_extra::lang_hotkey_apply(state, session),
@@ -371,8 +429,21 @@ fn disable_inner(state: &AppState, id: &str, game: Option<&Game>) -> AppResult<(
         "windowed_opt" => system::windowed_opt_disable(state),
         "timer_resolution" => system::timer_disable(state),
         "notifications_off" => system::notifications_disable(state),
+        "foreground_priority" => system::foreground_priority_disable(state),
+        "windows_snappy" => system::windows_snappy_disable(state),
+        "windows_bloat_off" => system::windows_bloat_disable(state),
+        "background_apps_off" => system::background_apps_disable(state),
+        "background_tamer" => smoothness::bg_tamer_disable(state),
+        "nvidia_shader_cache" => smoothness::nvidia_shader_disable(state),
+        "nvidia_max_perf" => smoothness::nvidia_max_perf_disable(state),
+        "driver_paging_off" => system::driver_paging_disable(state),
+        "game_bar_presence_off" => system::game_bar_presence_disable(state),
+        "cpu_desktop_tuning" => smoothness::cpu_desktop_disable(state),
         "wifi_power_max" => network_extra::wifi_disable(state),
+        "mmcss_gaming" => network_extra::mmcss_disable(state),
+        "ethernet_power_off" => network_extra::ethernet_power_disable(state),
         "mouse_precision_off" => input::mouse_disable(state),
+        "keyboard_response_fast" => input::keyboard_disable(state),
         "accessibility_hotkeys_off" => input::accessibility_disable(state),
         "usb_suspend_off" => input::usb_suspend_disable(state),
         "lang_hotkey_off" => input_extra::lang_hotkey_disable(state),
@@ -392,9 +463,6 @@ fn disable_inner(state: &AppState, id: &str, game: Option<&Game>) -> AppResult<(
 /// Controleert na een wijziging of Windows hem echt heeft overgenomen.
 pub fn verify(state: &AppState, id: &str, enabled: bool, game: Option<&Game>) -> AppResult<()> {
     let st = status(state, id, game);
-    if matches!(st.state, TweakState::Unknown | TweakState::Unavailable) {
-        return Ok(());
-    }
     let expected = if enabled { TweakState::On } else { TweakState::Off };
     if st.state != expected {
         return Err(AppError::coded("verify_failed"));

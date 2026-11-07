@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use wmi::{Variant, WMIConnection};
 
 fn variant_f64(v: &Variant) -> Option<f64> {
@@ -145,9 +145,10 @@ pub fn start(app: AppHandle, state: Arc<AppState>) {
     {
         let shared = ping_shared.clone();
         let st = state.clone();
+        let app_ping = app.clone();
         let _ = std::thread::Builder::new().name("ping".into()).spawn(move || loop {
-            // Tijdens het spelen geen extra pings naast je gameverkeer: het dashboard zie je dan toch niet.
-            if crate::watcher::playing(&st) {
+            let win_active = app_ping.get_webview_window("main").is_some_and(|w| w.is_visible().unwrap_or(false) && !w.is_minimized().unwrap_or(true));
+            if !win_active || crate::watcher::playing(&st) {
                 std::thread::sleep(Duration::from_secs(2));
                 continue;
             }
@@ -160,6 +161,7 @@ pub fn start(app: AppHandle, state: Arc<AppState>) {
         });
     }
 
+    let app_metrics = app.clone();
     let _ = std::thread::Builder::new().name("metrics".into()).spawn(move || {
         let mut sys = System::new();
         sys.refresh_memory();
@@ -176,10 +178,8 @@ pub fn start(app: AppHandle, state: Arc<AppState>) {
         let mut tick: u64 = 0;
         loop {
             std::thread::sleep(Duration::from_secs(1));
-            // Tijdens het spelen (game op de voorgrond) niets meten: de WMI-prestatiemeters en NVML-vragen elke
-            // seconde kosten de game CPU-tijd en geven op veel pc's kleine haperingen. Het dashboard zie je dan
-            // toch niet.
-            if crate::watcher::playing(&state) {
+            let win_active = app_metrics.get_webview_window("main").is_some_and(|w| w.is_visible().unwrap_or(false) && !w.is_minimized().unwrap_or(true));
+            if !win_active || crate::watcher::playing(&state) {
                 continue;
             }
             tick += 1;

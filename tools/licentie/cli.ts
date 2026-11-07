@@ -36,7 +36,18 @@ function stop(msg: string): never {
 }
 
 const STATUS: Record<string, string> = { unused: "niet gebruikt", active: "actief", expired: "verlopen", revoked: "ingetrokken", deleted: "verwijderd" };
-const TYPE: Record<string, string> = { month: "maand", demo: "demo" };
+const TYPE: Record<string, string> = { month: "maand", demo: "demo", lifetime: "lifetime" };
+
+function isLifetimeLic(l: Record<string, any>): boolean {
+  if (l.type === "lifetime") return true;
+  const m = Number(l.durationMinutes ?? l.durationDays * 1440);
+  if (m >= 365 * 1440) return true;
+  if (l.expiresAt) {
+    const start = l.activatedAt ? Date.parse(l.activatedAt) : Date.now();
+    if (Date.parse(l.expiresAt) - start > 365 * 86_400_000) return true;
+  }
+  return false;
+}
 const ERRORS: Record<string, string> = {
   unauthorized: "De server accepteert je beheerderssleutel niet. Controleer NEZTY_ADMIN_KEY.",
   key_format: "Dit is geen geldige sleutel. Controleer of je hem goed hebt overgetypt.",
@@ -51,6 +62,7 @@ const ERRORS: Record<string, string> = {
 
 function span(l: Record<string, any>): string {
   const m = Number(l.durationMinutes ?? l.durationDays * 1440);
+  if (isLifetimeLic(l)) return "onbeperkt (levenslang)";
   return m < 1440 ? `${Math.round(m / 60)} uur na activeren` : `${Math.round(m / 1440)} dagen na activeren`;
 }
 
@@ -103,13 +115,13 @@ function showLicense(l: Record<string, any>) {
   const rows: [string, string][] = [
     ["Sleutel", `...${l.hint}`],
     ["Id", l.id.slice(0, 8)],
-    ["Type", TYPE[l.type] ?? l.type],
+    ["Type", isLifetimeLic(l) ? "lifetime" : (TYPE[l.type] ?? l.type)],
     ["Status", STATUS[l.status] ?? l.status],
     ["Gebruiker", l.username ?? "-"],
     ["Apparaat", l.device ?? "-"],
     ["Gemaakt", date(l.createdAt)],
     ["Geactiveerd", date(l.activatedAt)],
-    ["Einddatum", l.expiresAt ? date(l.expiresAt) : span(l)],
+    ["Einddatum", isLifetimeLic(l) ? "levenslang" : (l.expiresAt ? date(l.expiresAt) : span(l))],
     ["Notitie", l.note ?? "-"],
   ];
   console.log("");
@@ -128,12 +140,12 @@ async function main() {
   switch (command) {
     case "maak": {
       const t = opt("type");
-      const type = t === "maand" ? "month" : t === "demo" ? "demo" : null;
-      if (!type) stop("Kies --type maand of --type demo.");
+      const type = t === "maand" || t === "month" ? "month" : t === "demo" ? "demo" : t === "lifetime" || t === "levenslang" ? "lifetime" : null;
+      if (!type) stop("Kies --type maand, --type lifetime of --type demo.");
       const count = Number(opt("aantal") ?? "1");
       if (!Number.isInteger(count) || count < 1 || count > 100) stop("--aantal moet tussen 1 en 100 liggen.");
-      const r = await api("/admin/create", { type, count, note: opt("notitie") });
-      console.log(`\n  ${r.keys.length} ${type === "month" ? "maandlicentie(s) (30 dagen)" : "demolicentie(s) (2 uur)"} gemaakt. De tijd start pas als de klant de sleutel activeert.`);
+      const r = await api("/admin/create", { type: type === "lifetime" ? "month" : type, days: type === "lifetime" ? 36500 : undefined, count, note: opt("notitie") ? `${opt("notitie")}${type === "lifetime" ? " [lifetime]" : ""}` : (type === "lifetime" ? "[lifetime]" : undefined) });
+      console.log(`\n  ${r.keys.length} ${type === "lifetime" ? "lifetime licentie(s) (onbeperkt)" : type === "month" ? "maandlicentie(s) (30 dagen)" : "demolicentie(s) (2 uur)"} gemaakt. De tijd start pas als de klant de sleutel activeert.`);
       box(r.keys);
       console.log("  Kopieer de sleutel nu: hij wordt nergens bewaard en is later niet meer op te vragen.\n");
       break;
@@ -180,12 +192,12 @@ async function main() {
       const rows = list.map((l) => [
         l.id.slice(0, 8),
         `...${l.hint}`,
-        TYPE[l.type] ?? l.type,
+        isLifetimeLic(l) ? "lifetime" : (TYPE[l.type] ?? l.type),
         STATUS[l.status] ?? l.status,
         l.username ?? "-",
         l.device ?? "-",
         date(l.activatedAt),
-        l.expiresAt ? date(l.expiresAt) : span(l),
+        isLifetimeLic(l) ? "levenslang" : (l.expiresAt ? date(l.expiresAt) : span(l)),
       ]);
       const widths = head.map((h, i) => Math.max(h.length, ...rows.map((r) => String(r[i]).length)));
       const line = (cells: string[]) => "  " + cells.map((c, i) => String(c).padEnd(widths[i])).join("  ");

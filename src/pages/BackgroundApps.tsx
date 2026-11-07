@@ -1,5 +1,6 @@
 import { AppWindow, RefreshCw, ShieldCheck, Sparkles, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { HwAccelCard } from "@/components/HwAccelCard";
 import { useAppIcons } from "@/components/useAppIcons";
 import { Badge, Button, Card, Modal, PageHeader, Row, Skeleton, Toggle, cn } from "@/components/ui";
 import { useT } from "@/i18n/hooks";
@@ -200,6 +201,18 @@ export function BackgroundAppsPage() {
         {t("background.protectedNote")}
       </p>
 
+      {settings && (
+        <Card className="!py-1">
+          <Row title={t("background.autoCloseTitle")} desc={t("background.autoCloseDesc")}>
+            <Toggle
+              checked={settings.autoCloseUnneeded}
+              onChange={(v) => void updateSettings({ autoCloseUnneeded: v })}
+              label={t("background.autoCloseTitle")}
+            />
+          </Row>
+        </Card>
+      )}
+
       {storeBg !== null && (
         <Card className="!py-1">
           <Row title={t("background.storeTitle")} desc={t("background.storeDesc")}>
@@ -219,6 +232,8 @@ export function BackgroundAppsPage() {
           </Row>
         </Card>
       )}
+
+      <HwAccelCard refreshTrigger={procs} />
 
       <Modal
         open={confirm}

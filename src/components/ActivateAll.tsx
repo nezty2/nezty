@@ -13,15 +13,24 @@ export const ACTIVATE_ALL_TWEAKS = [
   "power_mode_best",
   "game_mode",
   "game_bar_dvr_off",
+  "game_bar_presence_off",
   "windowed_opt",
   "timer_resolution",
+  "foreground_priority",
+  "driver_paging_off",
+  "background_tamer",
+  "nvidia_shader_cache",
+  "nvidia_max_perf",
+  "windows_snappy",
+  "windows_bloat_off",
+  "background_apps_off",
   "mouse_precision_off",
-  "accessibility_hotkeys_off",
+  "keyboard_response_fast",
   "usb_suspend_off",
-  "lang_hotkey_off",
   "cpu_full_speed",
+  "mmcss_gaming",
+  "ethernet_power_off",
   "wifi_power_max",
-  "wifi_gaming_mode",
 ];
 
 /** Alles wat "Alles activeren" doet, in de volgorde van de backend. Tweaks hebben hun eigen naam en uitleg. */
@@ -36,7 +45,7 @@ const COVERS: { id: string; kind: "check" | "tweak" | "game" }[] = [
 ];
 
 /** Overgeslagen omdat het op dit apparaat niet nodig is: geen fout, dus apart en kort samengevat. */
-const NOT_NEEDED = ["platform_locked", "not_hybrid", "not_available", "wifi_none", "windowed_opt_os", "hags_unsupported"];
+const NOT_NEEDED = ["platform_locked", "not_hybrid", "not_available", "wifi_none", "ethernet_none", "windowed_opt_os", "hags_unsupported", "nvidia_only", "power_setting_missing"];
 
 /** Namen voor games met een eigen instellingenbestand, ook als ze niet bij de gevonden games staan. */
 const GAME_NAMES: Record<string, string> = {

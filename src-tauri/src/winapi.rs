@@ -13,7 +13,7 @@ use windows_sys::Win32::System::Threading::{
 use windows_sys::Win32::UI::Accessibility::{FILTERKEYS, STICKYKEYS, TOGGLEKEYS};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     SendMessageTimeoutW, SystemParametersInfoW, ANIMATIONINFO, HWND_BROADCAST, SMTO_ABORTIFHUNG, SPIF_SENDCHANGE,
-    SPI_GETFILTERKEYS, SPI_GETSTICKYKEYS, SPI_GETTOGGLEKEYS, SPI_SETANIMATION, SPI_SETFILTERKEYS, SPI_SETKEYBOARDDELAY,
+    SPI_GETFILTERKEYS, SPI_GETKEYBOARDDELAY, SPI_GETKEYBOARDSPEED, SPI_GETSTICKYKEYS, SPI_GETTOGGLEKEYS, SPI_SETANIMATION, SPI_SETFILTERKEYS, SPI_SETKEYBOARDDELAY,
     SPI_SETKEYBOARDSPEED, SPI_SETLANGTOGGLE, SPI_SETMOUSE, SPI_SETSTICKYKEYS, SPI_SETTOGGLEKEYS, SPI_SETUIEFFECTS, WM_SETTINGCHANGE,
 };
 
@@ -87,6 +87,8 @@ pub fn set_mouse_params(params: [i32; 3]) {
 
 /// Leest MouseThreshold1/2 en MouseSpeed uit het register en past ze direct toe.
 pub fn apply_mouse_from_registry() {
+    #[cfg(test)]
+    if registry::testing_hives() { return; }
     let read = |name: &str, default: i32| -> i32 {
         registry::read(Hive::Hkcu, "Control Panel\\Mouse", name)
             .ok()
@@ -112,6 +114,20 @@ pub fn set_min_animate(enabled: bool) {
 }
 
 /// Laat andere programma's weten dat een instelling is veranderd.
+/// Past vensteranimaties en taakbalk-/transparantiewijzigingen direct toe vanuit het register, zonder ClearType aan te raken.
+pub fn apply_snappy_ui_from_registry() {
+    #[cfg(test)]
+    if registry::testing_hives() { return; }
+    let min_animate = registry::read(Hive::Hkcu, "Control Panel\\Desktop\\WindowMetrics", "MinAnimate")
+        .ok()
+        .and_then(|d| d.as_str().map(|v| v.trim() != "0"))
+        .unwrap_or(true);
+    set_min_animate(min_animate);
+    broadcast_setting_change("WindowMetrics");
+    broadcast_setting_change("ImmersiveColorSet");
+}
+
+/// Laat andere programma's weten dat een instelling is veranderd.
 pub fn broadcast_setting_change(area: &str) {
     let w = wide(area);
     let mut result: usize = 0;
@@ -129,6 +145,8 @@ fn reg_u32(path: &str, name: &str, default: u32) -> u32 {
 
 /// Past toetsenbordvertraging (0-3) en herhaalsnelheid (0-31) direct toe vanuit het register.
 pub fn apply_keyboard_from_registry() {
+    #[cfg(test)]
+    if registry::testing_hives() { return; }
     let delay = reg_u32("Control Panel\\Keyboard", "KeyboardDelay", 1).min(3);
     let speed = reg_u32("Control Panel\\Keyboard", "KeyboardSpeed", 31).min(31);
     unsafe {
@@ -139,6 +157,8 @@ pub fn apply_keyboard_from_registry() {
 
 /// Laat Windows de sneltoetsen voor taal- en indelingswissel opnieuw uit het register lezen.
 pub fn apply_lang_toggle_from_registry() {
+    #[cfg(test)]
+    if registry::testing_hives() { return; }
     unsafe {
         SystemParametersInfoW(SPI_SETLANGTOGGLE, 0, std::ptr::null_mut(), SPIF_SENDCHANGE);
     }
@@ -146,6 +166,8 @@ pub fn apply_lang_toggle_from_registry() {
 
 /// Past de vlaggen van plaktoetsen, filtertoetsen en wisseltoetsen direct toe vanuit het register.
 pub fn apply_accessibility_from_registry() {
+    #[cfg(test)]
+    if registry::testing_hives() { return; }
     let sticky = reg_u32("Control Panel\\Accessibility\\StickyKeys", "Flags", 510);
     let filter = reg_u32("Control Panel\\Accessibility\\Keyboard Response", "Flags", 126);
     let toggle = reg_u32("Control Panel\\Accessibility\\ToggleKeys", "Flags", 62);
@@ -174,6 +196,8 @@ pub struct LiveInput {
     pub mouse_acceleration: i32,
     /// Sneltoets actief voor plak-, filter- en wisseltoetsen.
     pub hotkeys: [bool; 3],
+    pub keyboard_delay: i32,
+    pub keyboard_speed: u32,
 }
 
 pub fn live_input() -> LiveInput {
@@ -188,9 +212,15 @@ pub fn live_input() -> LiveInput {
         SystemParametersInfoW(SPI_GETFILTERKEYS, fk.cbSize, &mut fk as *mut _ as *mut c_void, 0);
         let mut tk = TOGGLEKEYS { cbSize: std::mem::size_of::<TOGGLEKEYS>() as u32, dwFlags: 0 };
         SystemParametersInfoW(SPI_GETTOGGLEKEYS, tk.cbSize, &mut tk as *mut _ as *mut c_void, 0);
+        let mut kb_delay: i32 = 1;
+        SystemParametersInfoW(SPI_GETKEYBOARDDELAY, 0, &mut kb_delay as *mut i32 as *mut c_void, 0);
+        let mut kb_speed: u32 = 31;
+        SystemParametersInfoW(SPI_GETKEYBOARDSPEED, 0, &mut kb_speed as *mut u32 as *mut c_void, 0);
         LiveInput {
             mouse_acceleration: mouse[2],
             hotkeys: [sk.dwFlags & 0x4 != 0, fk.dwFlags & 0x4 != 0, tk.dwFlags & 0x4 != 0],
+            keyboard_delay: kb_delay,
+            keyboard_speed: kb_speed,
         }
     }
 }

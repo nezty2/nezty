@@ -43,12 +43,27 @@ export function isLocked(l: LicenseStatus | null): boolean {
   return !!l && LOCKED_MODES.includes(l.mode);
 }
 
+/** Is dit een levenslange licentie? (type is lifetime of geldigheidsduur > 1 jaar). */
+export function isLifetime(l: LicenseStatus | null): boolean {
+  if (!l) return false;
+  if (l.kind === "lifetime") return true;
+  // Als een licentie meer dan 365 dagen geldig is (zoals 30 jaar = 10977 dagen), is het een lifetime licentie.
+  if (l.expiresAt != null && l.activatedAt != null && (l.expiresAt - l.activatedAt) > 365 * 86_400_000) {
+    return true;
+  }
+  if (l.expiresAt != null && (l.expiresAt - Date.now()) > 365 * 86_400_000) {
+    return true;
+  }
+  return false;
+}
+
 /** Resterende tijd in ms (servertijd). */
 export function remainingMs(l: LicenseStatus, serverNow: number): number {
   return l.expiresAt == null ? 0 : Math.max(0, l.expiresAt - serverNow);
 }
 
 export function progress(l: LicenseStatus, serverNow: number): number {
+  if (isLifetime(l)) return 1;
   if (l.expiresAt == null || l.activatedAt == null) return 0;
   const total = l.expiresAt - l.activatedAt;
   return total > 0 ? Math.min(1, Math.max(0, remainingMs(l, serverNow) / total)) : 0;
@@ -56,6 +71,7 @@ export function progress(l: LicenseStatus, serverNow: number): number {
 
 export function tone(l: LicenseStatus, serverNow: number): LicenseTone {
   if (isLocked(l)) return "bad";
+  if (isLifetime(l)) return "normal";
   const left = remainingMs(l, serverNow);
   const limit = l.kind === "demo" ? 15 * 60_000 : 3 * 86_400_000;
   return left < limit ? "warn" : "normal";
@@ -75,7 +91,8 @@ export function parts(ms: number): { days: number; hours: number; minutes: numbe
   return { days: Math.floor(m / 1440), hours: Math.floor((m % 1440) / 60), minutes: m % 60 };
 }
 
-/** Momenten waarop we waarschuwen: 3 dagen en 1 dag (maand), 15 minuten (demo). */
+/** Momenten waarop we waarschuwen: 3 dagen en 1 dag (maand), 15 minuten (demo). Nooit bij lifetime. */
 export function warnThresholds(l: LicenseStatus): number[] {
+  if (isLifetime(l)) return [];
   return l.kind === "demo" ? [15 * 60_000] : [3 * 86_400_000, 86_400_000];
 }

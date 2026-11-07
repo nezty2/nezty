@@ -398,7 +398,10 @@ pub struct Settings {
     pub restore_point_policy: RestorePointPolicy,
     pub restore_point_done: bool,
     pub dashboard_ping_host: String,
+    /// Apps die bij een spelstart dicht moeten.
     pub close_during_gaming: Vec<String>,
+    /// Alle onnodige achtergrond-apps (browsers, cloud, updaters, widgets) automatisch sluiten bij spelstart.
+    pub auto_close_unneeded: bool,
     pub custom_ping_targets: Vec<PingTarget>,
     pub custom_games: Vec<Game>,
     /// Bij starten met Windows verborgen in het systeemvak starten.
@@ -426,8 +429,6 @@ pub struct Settings {
     pub all_active: bool,
     /// Games die de instellingen van "Alles activeren" al hebben gehad.
     pub activated_games: Vec<String>,
-    /// Licentie: sinds wanneer (ms) er wijzigingen aan staan zonder enig bewaard token. Na 24 uur gaat alles terug.
-    pub license_no_token_since: Option<i64>,
     /// Opstart-apps die de gebruiker heeft uitgezet: zet zo'n app zichzelf weer aan, dan zet nezty hem weer uit.
     pub startup_keep_off: Vec<String>,
     /// Opstart-apps die zichzelf weer aanzetten (gezien door nezty), voor de uitleg op de pagina.
@@ -456,6 +457,7 @@ impl Default for Settings {
             restore_point_done: false,
             dashboard_ping_host: "1.1.1.1".to_string(),
             close_during_gaming: vec![],
+            auto_close_unneeded: false,
             custom_ping_targets: vec![],
             custom_games: vec![],
             start_minimized: true,
@@ -474,7 +476,6 @@ impl Default for Settings {
             migrated_v074: false,
             all_active: false,
             activated_games: vec![],
-            license_no_token_since: None,
             startup_keep_off: vec![],
             startup_came_back: vec![],
             fortnite_pending: vec![],

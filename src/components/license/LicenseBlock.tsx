@@ -1,18 +1,19 @@
 import { KeyRound, Lock, WifiOff } from "lucide-react";
 import { cn } from "@/components/ui";
 import { useT } from "@/i18n/hooks";
-import { clock, isLocked, parts, progress, remainingMs, tone } from "@/lib/license";
+import { clock, isLifetime, isLocked, parts, progress, remainingMs, tone } from "@/lib/license";
 import type { LicenseStatus } from "@/lib/types";
 import { useApp } from "@/store/app";
 import { useServerNow } from "./LicenseParts";
 
-/** Resterende tijd in gewone taal: "Nog 23 dagen en 4 uur" of "Demo: nog 1:42:10". */
+/** Resterende tijd in gewone taal: "Nog 23 dagen en 4 uur" of "Demo: nog 1:42:10" of "Levenslang actief". */
 export function useRemainingText() {
   const { t } = useT();
   return (l: LicenseStatus, now: number): string => {
     if (l.mode === "revoked") return t("license.revoked");
     if (l.mode === "expired") return t("license.expired");
     if (l.mode === "offline") return t("license.offline");
+    if (isLifetime(l)) return t("license.leftLifetime");
     const left = remainingMs(l, now);
     if (l.kind === "demo") return t("license.demoLeft", { clock: clock(left) });
     const p = parts(left);
@@ -36,6 +37,7 @@ export function LicenseBlock() {
   const tn = tone(license, now);
   const Icon = license.mode === "offline" ? WifiOff : isLocked(license) ? Lock : KeyRound;
   const pct = isLocked(license) ? 1 : progress(license, now);
+  const typeLabel = isLifetime(license) ? t("license.typeLifetime") : license.kind === "demo" ? t("license.typeDemo") : t("license.typeMonth");
 
   return (
     <div className="px-2.5 pb-1">
@@ -48,7 +50,7 @@ export function LicenseBlock() {
         <div className="flex items-center gap-2">
           <Icon className={cn("h-4 w-4 shrink-0", toneText[tn])} />
           <div className="hidden min-w-0 flex-1 min-[1120px]:block">
-            <div className="text-[11px] uppercase tracking-wide text-ink-3">{license.kind === "demo" ? t("license.typeDemo") : t("license.typeMonth")}</div>
+            <div className="text-[11px] uppercase tracking-wide text-ink-3">{typeLabel}</div>
             <div className={cn("truncate text-[13px] font-semibold tnum", tn === "normal" ? "text-ink" : toneText[tn])}>{text(license, now)}</div>
           </div>
         </div>

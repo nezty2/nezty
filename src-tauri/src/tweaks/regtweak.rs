@@ -82,6 +82,71 @@ fn ensure_rights(state: &AppState, specs: &[RegSpec], name: &str) -> AppResult<(
     Ok(())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    struct Fixture { dir: PathBuf, key: String }
+    impl Fixture {
+        fn new() -> Self {
+            let id = uuid::Uuid::new_v4();
+            Self { dir: std::env::temp_dir().join(format!("nezty-roundtrip-{id}")), key: format!(r"Software\Nezty-Test-{id}") }
+        }
+        fn app(&self) -> AppState { AppState::new(self.dir.clone(), false) }
+    }
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = Hive::Hkcu.root().delete_subkey_all(&self.key);
+            let _ = std::fs::remove_dir_all(&self.dir);
+        }
+    }
+
+    #[test]
+    fn apply_disable_and_bulk_restore_after_restart() {
+        let f = Fixture::new();
+        let def = crate::tweaks::get("game_mode").unwrap();
+        let specs = [RegSpec::dword(Hive::Hkcu, &f.key, "absent", 1, 0),
+            RegSpec::string(Hive::Hkcu, &f.key, "custom", "on", "off")];
+        let custom = RegData::Str("original".into());
+        registry::write(Hive::Hkcu, &f.key, "custom", &custom).unwrap();
+        {
+            let app = f.app();
+            apply(&app, def, &specs, Some("boost"), None, None).unwrap();
+            assert_eq!(state_of(&specs).unwrap(), TweakState::On);
+        }
+        let app = f.app();
+        disable(&app, def, &specs, None, None).unwrap();
+        assert_eq!(registry::read(Hive::Hkcu, &f.key, "absent").unwrap(), RegData::Absent);
+        assert_eq!(registry::read(Hive::Hkcu, &f.key, "custom").unwrap(), custom);
+        // A manually disabled setting that was originally on must also be undoable.
+        registry::write(Hive::Hkcu, &f.key, "absent", &RegData::Dword(1)).unwrap();
+        disable(&app, def, &specs[..1], None, None).unwrap();
+        assert_eq!(registry::read(Hive::Hkcu, &f.key, "absent").unwrap(), RegData::Dword(0));
+        drop(app);
+        let result = lock(&f.app().journal).revert_all();
+        assert!(result.failed.is_empty());
+        assert_eq!(result.reverted, 1);
+        assert_eq!(registry::read(Hive::Hkcu, &f.key, "absent").unwrap(), RegData::Dword(1));
+        assert_eq!(lock(&f.app().journal).revert_all().reverted, 0);
+    }
+
+    #[test]
+    fn failed_journal_write_leaves_registry_and_memory_unchanged() {
+        let f = Fixture::new();
+        let app = f.app();
+        let def = crate::tweaks::get("game_mode").unwrap();
+        let spec = [RegSpec::dword(Hive::Hkcu, &f.key, "probe", 1, 0)];
+        std::fs::create_dir(f.dir.join("journal.json.tmp")).unwrap();
+        assert!(apply(&app, def, &spec, None, None, None).is_err());
+        assert_eq!(registry::read(Hive::Hkcu, &f.key, "probe").unwrap(), RegData::Absent);
+        registry::write(Hive::Hkcu, &f.key, "probe", &RegData::Dword(1)).unwrap();
+        assert!(disable(&app, def, &spec, None, None).is_err());
+        assert_eq!(registry::read(Hive::Hkcu, &f.key, "probe").unwrap(), RegData::Dword(1));
+        assert!(lock(&app.journal).entries.is_empty());
+    }
+}
+
 /// Schrijft de "aan"-waarden en logt elke daadwerkelijke wijziging. Waarden die al goed staan
 /// worden niet opnieuw geschreven.
 pub fn apply(
@@ -98,7 +163,6 @@ pub fn apply(
         if s.is_on(&old) {
             continue;
         }
-        registry::write(s.hive, &s.path, &s.name, &s.on)?;
         let mut e = JournalEntry::new(def.id, def.name, JournalKind::Registry, &registry::full_path(s.hive, &s.path, &s.name));
         e.old_value = Some(old.display());
         e.new_value = Some(s.on.display());
@@ -106,7 +170,7 @@ pub fn apply(
         e.session_id = session.map(|x| x.to_string());
         e.game_id = game_id.map(|x| x.to_string());
         e.payload = RevertPayload::Registry { hive: s.hive, path: s.path.clone(), name: s.name.clone(), old, post };
-        lock(&state.journal).record(e)?;
+        lock(&state.journal).write_registry(e, &s.on)?;
     }
     Ok(())
 }
@@ -132,7 +196,6 @@ pub fn disable(
         if old == s.off {
             continue;
         }
-        registry::write(s.hive, &s.path, &s.name, &s.off)?;
         let mut e = JournalEntry::new(def.id, def.name, JournalKind::Registry, &registry::full_path(s.hive, &s.path, &s.name));
         e.old_value = Some(old.display());
         e.new_value = Some(s.off.display());
@@ -140,7 +203,7 @@ pub fn disable(
         e.note = Some("manual_off".to_string());
         e.game_id = game_id.map(|x| x.to_string());
         e.payload = RevertPayload::Registry { hive: s.hive, path: s.path.clone(), name: s.name.clone(), old, post };
-        lock(&state.journal).record(e)?;
+        lock(&state.journal).write_registry(e, &s.off)?;
     }
     Ok(())
 }

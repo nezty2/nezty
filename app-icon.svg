@@ -1,21 +1,75 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#1c1245"/>
-      <stop offset="1" stop-color="#0a0f1f"/>
+    <!-- Background: Deep Obsidian / Titanium Slate -->
+    <linearGradient id="bg" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#131024"/>
+      <stop offset="100%" stop-color="#06050c"/>
     </linearGradient>
-    <linearGradient id="acc" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#a78bfa"/>
-      <stop offset="1" stop-color="#22d3ee"/>
+
+    <!-- Top Specular Rim Stroke -->
+    <linearGradient id="top_rim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.02"/>
     </linearGradient>
-    <radialGradient id="glow" cx="0.5" cy="0.45" r="0.6">
-      <stop offset="0" stop-color="#8b5cf6" stop-opacity="0.55"/>
-      <stop offset="1" stop-color="#8b5cf6" stop-opacity="0"/>
+
+    <!-- Accent Perimeter Rim Stroke -->
+    <linearGradient id="accent_rim" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#a855f7" stop-opacity="0.5"/>
+      <stop offset="50%" stop-color="#6366f1" stop-opacity="0.2"/>
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.4"/>
+    </linearGradient>
+
+    <!-- Left Pillar Gradient: Royal Sapphire & Indigo -->
+    <linearGradient id="pillar_left" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#818cf8"/>
+      <stop offset="45%" stop-color="#4f46e5"/>
+      <stop offset="100%" stop-color="#312e81"/>
+    </linearGradient>
+
+    <!-- Right Pillar Gradient: Electric Amethyst & Violet -->
+    <linearGradient id="pillar_right" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#c084fc"/>
+      <stop offset="50%" stop-color="#9333ea"/>
+      <stop offset="100%" stop-color="#581c87"/>
+    </linearGradient>
+
+    <!-- Diagonal Kinetic Beam: Bright Neon Cyan into Ice-Violet with Specular Core -->
+    <linearGradient id="diagonal_beam" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="25%" stop-color="#67e8f9"/>
+      <stop offset="65%" stop-color="#c084fc"/>
+      <stop offset="100%" stop-color="#9333ea"/>
+    </linearGradient>
+
+    <!-- Subtle Ambient Energy Glow behind the N -->
+    <radialGradient id="ambient_glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0%" stop-color="#7c3aed" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#7c3aed" stop-opacity="0"/>
     </radialGradient>
   </defs>
-  <rect x="64" y="64" width="896" height="896" rx="208" fill="url(#bg)"/>
-  <rect x="64" y="64" width="896" height="896" rx="208" fill="url(#glow)"/>
-  <rect x="88" y="88" width="848" height="848" rx="188" fill="none" stroke="url(#acc)" stroke-width="20" opacity="0.55"/>
-  <path d="M582 150 L292 572 H486 L430 874 L748 420 H556 Z" fill="url(#acc)"/>
-  <path d="M582 150 L292 572 H486 L430 874 L748 420 H556 Z" fill="none" stroke="#ffffff" stroke-opacity="0.35" stroke-width="14" stroke-linejoin="round"/>
+
+  <!-- Squircle Base Canvas (Matches Windows 11 Fluent Spec) -->
+  <rect x="48" y="48" width="928" height="928" rx="240" fill="url(#bg)"/>
+  <rect x="48" y="48" width="928" height="928" rx="240" fill="url(#ambient_glow)"/>
+  
+  <!-- Metallic Border Strokes -->
+  <rect x="48" y="48" width="928" height="928" rx="240" fill="none" stroke="url(#top_rim)" stroke-width="8"/>
+  <rect x="52" y="52" width="920" height="920" rx="236" fill="none" stroke="url(#accent_rim)" stroke-width="10"/>
+
+  <!-- Left Pillar -->
+  <path d="M250 240 C250 196 284 164 326 164 C368 164 402 196 402 240 V784 C402 828 368 860 326 860 C284 860 250 828 250 784 Z" fill="url(#pillar_left)"/>
+  <!-- Left Pillar Top Specular Cap -->
+  <ellipse cx="326" cy="205" rx="55" ry="25" fill="#ffffff" opacity="0.25"/>
+
+  <!-- Right Pillar -->
+  <path d="M622 240 C622 196 656 164 698 164 C740 164 774 196 774 240 V784 C774 828 740 860 698 860 C656 860 622 828 622 784 Z" fill="url(#pillar_right)"/>
+  <!-- Right Pillar Top Specular Cap -->
+  <ellipse cx="698" cy="205" rx="55" ry="25" fill="#ffffff" opacity="0.25"/>
+
+  <!-- Diagonal Kinetic Slicer (Connecting the pillars to form the 'N') -->
+  <path d="M336 172 L770 736 L688 852 L254 288 Z" fill="url(#diagonal_beam)"/>
+  
+  <!-- Razor-sharp Center Specular Highlight -->
+  <path d="M336 172 L770 736" stroke="#ffffff" stroke-width="10" stroke-linecap="round" opacity="0.55"/>
+  <path d="M295 230 L729 794" stroke="#ffffff" stroke-width="4" stroke-linecap="round" opacity="0.2"/>
 </svg>

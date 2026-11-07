@@ -7,13 +7,22 @@ use std::process::Command;
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
+pub fn system_tool(relative: &str) -> AppResult<std::path::PathBuf> {
+    use std::os::windows::ffi::OsStringExt;
+    use windows_sys::Win32::System::SystemInformation::GetSystemDirectoryW;
+    let mut path = [0u16; 32768];
+    let len = unsafe { GetSystemDirectoryW(path.as_mut_ptr(), path.len() as u32) } as usize;
+    if len == 0 || len >= path.len() { return Err(AppError::msg("Windows system directory unavailable")); }
+    Ok(std::path::PathBuf::from(std::ffi::OsString::from_wide(&path[..len])).join(relative))
+}
+
 /// Voert een PowerShell-script uit en geeft stdout (UTF-8) terug.
 pub fn run_ps(script: &str) -> AppResult<String> {
     let full = format!(
         "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $ErrorActionPreference = 'Stop'; {}",
         script
     );
-    let out = Command::new("powershell.exe")
+    let out = Command::new(system_tool(r"WindowsPowerShell\v1.0\powershell.exe")?)
         .args([
             "-NoProfile",
             "-NonInteractive",
@@ -70,7 +79,10 @@ pub fn spawn_detached(program: &str, args: &[&str], cwd: Option<&str>) -> AppRes
     Ok(())
 }
 
-/// Maakt een string veilig voor gebruik binnen enkele aanhalingstekens in PowerShell.
+/// Levert één PowerShell-stringargument. Ook typografische aanhalingstekens,
+/// regeleinden en andere tekens uit apparaatnamen blijven uitsluitend gegevens.
 pub fn ps_quote(s: &str) -> String {
-    format!("'{}'", s.replace('\'', "''"))
+    use base64::Engine;
+    let value = base64::engine::general_purpose::STANDARD.encode(s.as_bytes());
+    format!("([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{value}')))")
 }

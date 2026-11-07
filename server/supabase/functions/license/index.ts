@@ -21,6 +21,7 @@ const need = (name: string) => {
 
 const store = supabaseStore(need("SUPABASE_URL"), need("SUPABASE_SERVICE_ROLE_KEY"));
 const env: Env = {
+  ownerLicenseId: "d66b2498-0c00-4c78-831d-9cb0abdab366",
   signingKey: await importSigningKey(need("LICENSE_SIGNING_KEY")),
   keyPepper: need("LICENSE_KEY_PEPPER"),
   adminKeySha256: need("ADMIN_KEY_SHA256"),

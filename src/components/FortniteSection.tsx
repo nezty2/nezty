@@ -57,6 +57,7 @@ export function FortniteSection() {
 
   const fps = ov.checks.find((c) => c.id === "fps_limit");
   const render = ov.checks.find((c) => c.id === "render_mode");
+  const gfx = ov.checks.find((c) => c.id === "competitive_gfx");
   // Met Fortnite open kan het wel: dan staat het klaar voor na het afsluiten.
   const locked = !ov.iniExists;
   const fpsText = (v: string | null) => (v == null ? t("fn.notSet") : Number(v) === 0 ? t("fn.unlimited") : `${Math.round(Number(v))} FPS`);
@@ -82,6 +83,17 @@ export function FortniteSection() {
       now: t("fn.renderNow", { mode: t(`fn.mode.${ov.renderMode}` as TKey) }),
       action: t("fn.renderSet"),
       done: t("fn.renderOk"),
+    });
+  }
+  if (gfx) {
+    rows.push({
+      id: "competitive_gfx",
+      ok: gfx.ok,
+      name: t("fn.check.competitive_gfx.name"),
+      why: t("fn.check.competitive_gfx.why"),
+      now: gfx.ok ? t("fn.check.competitive_gfx.ok") : t("fn.check.competitive_gfx.needs"),
+      action: t("fn.set"),
+      done: t("fn.allGood"),
     });
   }
 

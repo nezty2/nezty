@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { Zap } from "lucide-react";
+import { BrandLogo } from "./BrandLogo";
 
 /** Openingsanimatie: het logo springt in beeld met een gloed, daarna vervaagt het scherm naar de app. */
 export function Splash({ show }: { show: boolean }) {
@@ -21,12 +21,12 @@ export function Splash({ show }: { show: boolean }) {
               transition={{ duration: 1.1, ease: "easeOut" }}
             />
             <motion.div
-              className="relative flex h-16 w-16 items-center justify-center rounded-2xl btn-primary"
+              className="relative flex items-center justify-center drop-shadow-2xl"
               initial={{ scale: 0.5, opacity: 0, rotate: -14 }}
               animate={{ scale: 1, opacity: 1, rotate: 0 }}
               transition={{ type: "spring", stiffness: 260, damping: 17 }}
             >
-              <Zap className="h-8 w-8 text-white" fill="currentColor" />
+              <BrandLogo size={72} glow={false} />
             </motion.div>
             <motion.div
               className="relative mt-4 text-xl font-semibold tracking-[0.2em] text-ink"

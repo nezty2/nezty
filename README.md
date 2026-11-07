@@ -4,11 +4,11 @@ Windows-desktopapp (Windows 10 en 11) die games soepeler laat draaien met eerlij
 
 ## Wat de app doet
 
-- **Tweaks**: één scherm met bovenaan de status, daaronder de grote knop **Alles activeren** en een ingeklapt blok **Meer opties**. Er zijn geen tabbladen meer en ook geen apart Fortnite-tabblad: game-instellingen gelden voor alle games die nezty vindt. nezty toont alleen tweaks met een echt, meetbaar effect. Bij elke tweak staan twee korte regels uitleg ("Wat doet het?" en "Wat merk je ervan?"), technische details achter "Meer info", en wanneer hij werkt (meteen, na een herstart van de game of na een herstart van de pc).
+- **Tweaks**: één scherm met bovenaan de status, daaronder de grote knop **Alles activeren** en een ingeklapt blok **Meer opties**. Er zijn geen tabbladen meer en ook geen apart Fortnite-tabblad: game-instellingen gelden voor alle games die nezty vindt. De status toont de Windows-instelling. Prestatieverschillen hangen af van hardware en game. Bij elke tweak staan twee korte regels uitleg ("Wat doet het?" en "Wat merk je ervan?"), technische details achter "Meer info", en wanneer hij werkt (meteen, na een herstart van de game of na een herstart van de pc).
 - **Dashboard**: live processor, videokaart, geheugen, temperatuur (als er een sensor is), ping en een korte status (alles actief, nog niet alles actief of herstart nodig). De knop **Game Boost** past het gekozen profiel in één keer toe en toont daarna wat er echt gebeurd is. Draait de game al, dan meet nezty op verzoek de FPS vóór en na (Intel PresentMon).
 - **Games**: nezty vindt games in Epic, Steam, Battle.net, Riot, EA, de Xbox-app en Minecraft, met de echte afbeelding van de game. Afbeeldingen komen eerst lokaal uit de launcher (Steam-bibliotheekcache, Xbox/Store-bestanden, de Epic-catalogus), daarna van de Steam-CDN en optioneel van SteamGridDB (eigen sleutel in Instellingen). Onder Meer opties > Games: per game een boostprofiel, automatisch boosten bij de start en terugzetten bij het sluiten, overlays, en voor Fortnite de FPS-limiet, de Performance-modus en een editor voor `GameUserSettings.ini` (altijd met back-up en per sleutel terug te zetten).
 - **Pc of laptop**: nezty herkent zelf of je op een pc of een laptop zit (behuizing en batterij, een pc met UPS telt als pc). In Instellingen kun je het vastzetten. Alles voor laptops staat ook op een eigen pagina **Laptop** in de zijbalk. Tweaks die niet bij je apparaat passen krijgen een slotje met de reden erbij, en Alles activeren en Game Boost slaan ze over. Op de laptoppagina staan ook controles voor hitte en terugschakeling, de snelle videokaart en MUX-switch, wifi of kabel, en een FPS-rem van de videokaart op de accu. Op het dashboard staan batterij, lader, hitte en welke videokaart je scherm aanstuurt. nezty stuurt nooit ventilatoren of spanningen aan.
-- **Licenties**: na de opstartanimatie log je in of maak je een account met een licentiesleutel (maand of demo, 1 apparaat). De server bepaalt of een sleutel geldig is. De app krijgt een ondertekend token en bewaart dat in Windows Credential Manager. Bovenin de zijbalk staat hoeveel tijd er nog over is. Verloopt de licentie, dan gaan tweaks, Game Boost, crosshair en metingen op slot, maar Alles terugzetten blijft altijd werken. Server en generator: zie [server/README.md](server/README.md). Zonder `scripts/license.json` bouwt nezty zonder licentie.
+- **Licenties**: na de opstartanimatie log je in of maak je een account met een licentiesleutel (maand of demo, 1 apparaat). De server bepaalt of een sleutel geldig is. De app krijgt een ondertekend token en bewaart dat in Windows Credential Manager. Bovenin de zijbalk staat hoeveel tijd er nog over is. Verloopt de licentie, dan gaan tweaks, Game Boost, crosshair en metingen op slot, maar Alles terugzetten blijft altijd werken. Server en generator: zie [server/README.md](server/README.md). De klantbuild vereist een licentieserver en publieke sleutel.
 - **Muis & toetsenbord**: muisversnelling uit, geen plaktoetsen-pop-ups, Alt+Shift wisselt geen taal meer, USB blijft altijd aan (alleen pc), en tips voor NVIDIA Reflex en AMD Anti-Lag.
 - **Altijd als administrator**: nezty past Windows-instellingen aan en vraagt daarom bij het starten één keer om beheerdersrechten (Windows toont daarvoor de UAC-melding). Starten met Windows loopt via één geplande taak met de hoogste rechten.
 - **Crosshair**: een doorklikbaar, altijd-bovenop venster met je eigen richtkruis (acht vormen, armen aan of uit, draaiing, kleur, lengte, dikte, opening, puntgrootte, rand, zichtbaarheid en positie), live voorbeeld, startpresets, eigen presets en een sneltoets. Er gaat niets de game in.
@@ -18,7 +18,7 @@ Windows-desktopapp (Windows 10 en 11) die games soepeler laat draaien met eerlij
 
 ## Alles activeren
 
-Eén klik zet alles aan wat op dit apparaat meetbaar helpt. Tijdens het werk toont een ring met animatie de voortgang en bij elke stap wat nezty nu doet. Een stap die niet lukt of niet past, wordt overgeslagen met de reden erbij. De rest gaat gewoon door. Na afloop staat er een overzicht: aangezet, stond al goed, overgeslagen en mislukt.
+Eén klik past de geselecteerde instellingen voor dit apparaat toe. Tijdens het werk toont een ring met animatie de voortgang en bij elke stap wat nezty nu doet. Een stap die niet lukt of niet past, wordt overgeslagen met de reden erbij. De rest gaat gewoon door. Na afloop staat er een overzicht: aangezet, stond al goed, overgeslagen en mislukt.
 
 In deze volgorde:
 
@@ -50,6 +50,14 @@ Tweaks staan in Windows zelf (register en energieplannen) en blijven na een hers
 
 ## Veiligheid
 
+De installer zet Nezty in de vaste map `Program Files\nezty`. De geplande taak controleert het pad, de eigenaar en de schrijfrechten van de map en de exe. Het hersteljournaal staat per Windows-account onder `Program Files\Nezty Recovery\<SID>`.
+
+Bij de overstap van een oudere versie neemt Nezty een volledig afgehandeld logboek automatisch over. Zijn er actieve of onbekende herstelregels, dan bewaart Nezty een vaste kopie als `legacy-review.json` en toont het precieze pad. Controleer als beheerder de acties, registerpaden, bestandspaden en oude waarden in **die kopie**. Hernoem de gecontroleerde kopie in dezelfde map naar `journal.json` en open Nezty opnieuw. Gebruik bij de overstap de nieuwe installatie in Program Files. Het oorspronkelijke logboek in AppData blijft beschikbaar.
+
+Als terugzetten bij verwijdering mislukt, stopt de uninstaller. Het rapport staat in `%TEMP%\nezty-restore-all.json`. Herstel de gemelde oorzaak en probeer het opnieuw. Andere Windows-accounts met actieve wijzigingen moeten die eerst vanuit hun eigen account terugzetten.
+
+De licentieproef met een tijdelijke lokale server draait via `node --no-warnings server/test/windows-client.ts`. Deze proef maakt eigen accounts en sleutels en verwijdert het tijdelijke energieplan na afloop. De overige regressietests draaien via `scripts/test-herstel.ps1` (Rust en Windows SDK) en `scripts/test-uninstall.ps1` (NSIS). Ze gebruiken tijdelijke configuratiebestanden, eigen registersleutels onder HKCU en een gesimuleerd herstelprogramma voor de uninstaller.
+
 - Vóór de eerste wijziging aan Windows maakt de app automatisch een herstelpunt. Dat geldt voor Alles activeren, de boost, losse tweaks, de Fix-knoppen, opstartitems en achtergrondapps. Er zijn beheerdersrechten en Systeembeveiliging voor nodig. Lukt het niet, dan meldt nezty dat één keer per sessie en blijft alles via het logboek terug te zetten.
 - Elke wijziging wordt gelogd met de oude waarde. Na elke wijziging controleert nezty of Windows hem echt heeft overgenomen.
 - Staat iets al goed, dan doet nezty niets en toont het "Al goed ingesteld".
@@ -61,9 +69,9 @@ Soms zet een virusscanner (meestal Microsoft Defender) nezty in quarantaine, vaa
 
 Wat nezty zelf doet om minder verdacht te lijken:
 
-- Eén geplande taak in plaats van twee, die 45 seconden na het inloggen start en niet meteen tijdens de opstartscan van Windows. De taak heeft een auteur en een beschrijving, en het taakbestand komt niet meer in `%TEMP%` te staan.
+- De stille licentietaak loopt ook als het venster gesloten is. De optionele opstarttaak opent de app na aanmelding. De taak heeft een auteur en een beschrijving, en het taakbestand komt niet meer in `%TEMP%` te staan.
 - Bij het starten of inloggen draait er geen PowerShell meer, behalve eenmalig bij de eerste start van 0.5.0 als er nog oude netwerk- of apparaatwijzigingen van weggehaalde tweaks terug moeten. Netwerkkaarten en Minecraft worden via Windows-functies en het register uitgelezen. Verder draait PowerShell alleen nog bij een herstelpunt en bij het terugzetten van een paar oude wijzigingen.
-- Updates worden gedownload in de eigen gegevensmap van nezty in plaats van `%TEMP%`, pas na controle van de handtekening.
+- Na controle van de handtekening schrijft Nezty de update-installer naar de beveiligde herstelmap.
 - Links openen via Windows zelf, niet via `cmd.exe`.
 - De zelftests zitten niet in een gewone release (zie Bouwen).
 
@@ -108,7 +116,7 @@ Zelftest voor ontwikkelaars (leest alle statussen en controles uit, ook of de pc
 
 Breng zo'n testbuild nooit uit als update. `build.ps1 -Selftest` maakt daarom geen updatebestanden en zet een markering `release\SELFTEST` neer, waarop `publish.ps1` stopt.
 
-De volledige app testen naast een al geopende nezty, zonder de echte instellingen of het logboek te raken: zet `NZTY_DATA_DIR` op een lege map en start met `--elevated`, dat de controle op een tweede venster overslaat. Zet `WEBVIEW2_USER_DATA_FOLDER` ook op een eigen map, zodat de twee vensters geen browsergegevens delen.
+Gebruik voor een aparte testgegevensmap een build met de feature `selftest`. `NZTY_DATA_DIR` kiest de map voor instellingen en het testlogboek. De regressietests hierboven gebruiken tijdelijke registersleutels om wijzigingen aan echte Windows-instellingen te vermijden.
 
 ```powershell
 $env:NZTY_DATA_DIR = "C:\temp\nzty-test\data"
@@ -118,15 +126,16 @@ $env:WEBVIEW2_USER_DATA_FOLDER = "C:\temp\nzty-test\wv"
 
 ## Naam en gegevens
 
-De app heet nezty (eerder nzty). De interne app-ID is bewust `com.nzty.desktop` gebleven: daaraan hangt de gegevensmap `%APPDATA%\com.nzty.desktop` met instellingen, logboek en covers. Zo houdt iedereen zijn gegevens en blijft "Alles terugzetten" werken. De installer verwijdert een oude nzty-installatie stil in updatemodus (gegevens blijven), ruimt de oude snelkoppelingen op en zet "starten met Windows" over. Zie `src-tauri/installer-hooks.nsh`.
+De app heet nezty (eerder nzty). Instellingen en covers blijven onder `%APPDATA%\com.nzty.desktop`. De installer vervangt de oude snelkoppelingen en per-gebruikerregistraties en neemt de keuze voor starten met Windows over. Oude programmabestanden in het gebruikersprofiel kunnen na de overstap blijven staan.
 
 **Installer.** Bestandsnaam `Nezty-Tweaks-Setup-<versie>.exe`, uitgever "Nezty", zonder links. De taal (NL, EN, FR) volgt Windows. Geen licentiepagina. De privacytekst staat in de app onder Instellingen > Over. Op de laatste pagina staan "Snelkoppeling op bureaublad" en "nezty starten" standaard aan. De afbeeldingen staan in `src-tauri/installer/`.
 
 **Verwijderen = alles terug.** De uninstaller start eerst `nezty.exe --restore-all` (sluit nezty, zet elke gelogde wijziging terug, haalt de geplande taken, autostart en het bewaarde token weg) en wist daarna `%APPDATA%\com.nzty.desktop` en `%LOCALAPPDATA%\com.nzty.desktop`. Bij een update (`/UPDATE`) gebeurt dat niet. De uitkomst staat in `%TEMP%\nezty-restore-all.json`.
 
-**Licentie niet meer geldig = alles terug.** Alleen als de server het zegt (verlopen, ingetrokken of verwijderd), of als het laatste token van de server ouder is dan zijn controlemoment (24 uur zonder bevestiging, bij een demo 5 minuten). Dan stopt nezty Game Boost en de crosshair en zet alle tweaks terug. Uitgelogd zijn, "Ingelogd blijven" uit of minder dan 24 uur offline zet niets terug: tweaks blijven staan na een herstart van de pc. Daarvoor bewaart nezty het laatste ondertekende token altijd in Credential Manager (`nezty/license-last`), de sessie alleen met "Ingelogd blijven". De precieze regel staat bovenaan `src-tauri/src/license.rs`. De controle draait bij het starten, elke 15 minuten en 45 seconden na het inloggen in Windows. Staat starten met Windows aan, dan doet de taak "nezty autostart" dat. Staat het uit, dan is er alleen de stille taak "nezty licentiecontrole" (`nezty.exe --license-check`, uitkomst in `%TEMP%\nezty-license-check.json`). Er staat dus altijd hooguit één taak. Zie `server/README.md`.
+**Licentiecontrole.** Betaalde functies vereisen een geldig, ondertekend token voor deze pc. Verlopen, ingetrokken of verwijderde licenties en ontbrekend geldig bewijs leiden tot herstel van de gelogde wijzigingen. Een maandtoken kan maximaal 24 uur zonder serverbevestiging geldig blijven, een demotoken 5 minuten en beide uiterlijk tot de einddatum. Een uitgelogde gebruiker kan niets nieuws aanzetten. Een nog geldig laatst bekend token mag bestaande wijzigingen behouden. De geopende app controleert de lokale geldigheid elke 15 seconden en vraagt de server doorgaans elke 15 minuten (demo elke minuut). De aparte geplande licentietaak controleert bij aanmelding en elk kwartier terwijl het Windows-account is aangemeld. Sommige instellingen hebben na herstel een herstart nodig.
 
-**Updates en instellingen.** Een update wordt gedownload naar `%APPDATA%\com.nzty.desktop\updates\Nezty-Tweaks-Setup.exe` (niet naar %TEMP%) en bij de volgende start opgeruimd. `settings.json`, `profiles.json` en het logboek worden eerst naar een tijdelijk bestand geschreven en dan in één keer vervangen. Van `settings.json` en `profiles.json` staat de vorige versie in `.bak`, die nezty gebruikt als het hoofdbestand onleesbaar is.
+
+**Updates en instellingen.** De ondertekende update-installer wordt na verificatie in de beveiligde herstelmap geplaatst en bij de volgende start opgeruimd. Instellingen, profielen en het hersteljournaal worden atomair vervangen. Van `settings.json` en `profiles.json` staat de vorige versie in `.bak`.
 
 ## Updates uitbrengen
 

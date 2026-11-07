@@ -2,31 +2,10 @@
 //! een token dat de server met Ed25519 ondertekent. De app controleert die handtekening met de publieke
 //! sleutel en vertrouwt verder niets van zichzelf.
 //!
-//! - Adres van de server en de publieke sleutel komen bij het bouwen binnen (NEZTY_LICENSE_URL en
-//!   NEZTY_LICENSE_PUBKEY). Zonder die twee staat de licentie uit en werkt de app zoals altijd.
-//! - De sessie staat in Windows Credential Manager (alleen met "Ingelogd blijven"). Het laatste ondertekende
-//!   token staat er altijd, onder een eigen naam (`nezty/license-last`), ook zonder "Ingelogd blijven". Dat token
-//!   is geen sleutel tot de licentie (zonder sessie kan de app er niets mee bij de server), maar wel het bewijs van
-//!   wat de server het laatst zei: status `s`, einddatum `e` en "controleren vóór" `c`.
-//! - Zonder internet werkt een maandlicentie maximaal 24 uur door; een demo alleen online.
-//! - "Alles terugzetten" en tweaks uitzetten werken altijd, ook zonder licentie.
-//!
-//! Wanneer zet nezty alles terug (`revert_reason`, gebruikt door `enforce` en `--license-check`)?
-//!   1. De server zegt het: ingetrokken, verlopen of verwijderd (`license_deleted`). Ook als dat eerder al
-//!      gezegd is en het terugzetten toen niet lukte (de vlag `gone` blijft bij het laatste token bewaard).
-//!   2. Het nieuwste bekende token zegt het: status revoked of expired, of de einddatum is voorbij.
-//!   3. Het nieuwste bekende token is te oud: "controleren vóór" is voorbij, dus al meer dan 24 uur (demo:
-//!      5 minuten) geen bevestiging van de server. Dat geldt ook na uitloggen of zonder "Ingelogd blijven":
-//!      zonder sessie kan nezty niet verversen, dus blijven tweaks dan nog tot dat moment staan.
-//!   4. Er is helemaal geen token (bijvoorbeeld na een update vanaf 0.4.0 zonder "Ingelogd blijven", of als het
-//!      uit Credential Manager is gehaald) terwijl er wijzigingen aan staan: 24 uur respijt vanaf het moment dat
-//!      nezty dat merkt (`license_no_token_since` in settings.json), daarna hetzelfde als punt 3.
-//!
-//! Alleen uitgelogd zijn, of minder dan 24 uur offline, zet dus niets terug. Het inlogscherm blijft wel komen
-//! (de stand voor de interface is `signed_out`), en nieuwe tweaks aanzetten kan alleen met een actieve licentie.
-//! De controle draait bij het starten, daarna elke 15 minuten, en bij het inloggen in Windows: via de taak
-//! "nezty autostart" (die start de app zelf) of, als starten met Windows uit staat, via de stille taak
-//! "nezty licentiecontrole" (`--license-check`).
+//! Alleen een ondertekend, geldig token voor deze pc geeft toegang. Een betaald token
+//! kan tot zijn ondertekende controlemoment offline geldig blijven. Na uitloggen
+//! mag een nog geldig laatst bekend token bestaande wijzigingen behouden.
+//! Ontbreekt geldig bewijs, dan blijven alleen herstelacties beschikbaar.
 
 use crate::error::{AppError, AppResult};
 use crate::models::now_ms;
@@ -45,7 +24,7 @@ const PUBKEY: Option<&str> = option_env!("NEZTY_LICENSE_PUBKEY");
 const DEFAULT_TARGET: &str = "nezty/license";
 /// Laatste ondertekende token, ook zonder "Ingelogd blijven". Alleen voor de beslissing om terug te zetten.
 const LAST_TARGET: &str = "nezty/license-last";
-const DAY_MS: i64 = 24 * 60 * 60 * 1000;
+
 
 pub fn enabled() -> bool {
     URL.is_some_and(|u| !u.trim().is_empty()) && verifying_key().is_some()
@@ -270,10 +249,6 @@ impl Runtime {
             remember: self.remember,
             reason: self.reason.clone(),
         };
-        if !enabled() {
-            st.mode = "off".into();
-            return st;
-        }
         let Some(p) = &self.payload else { return st };
         st.kind = Some(p.t.clone());
         st.username = p.n.clone();
@@ -282,11 +257,12 @@ impl Runtime {
         st.activated_at = p.a;
         st.expires_at = p.e;
         st.check_by = Some(p.c);
-        st.mode = if p.s == "revoked" || self.gone {
+        let latest = self.verdict();
+        st.mode = if p.s == "revoked" || latest == Some("revoked") {
             "revoked"
-        } else if p.s == "expired" || p.e.is_some_and(|e| now >= e) {
+        } else if p.s == "expired" || p.e.is_some_and(|e| now >= e) || latest == Some("expired") {
             "expired"
-        } else if now > p.c {
+        } else if now >= p.c || p.s != "active" || latest.is_some() {
             "offline"
         } else {
             "active"
@@ -319,29 +295,22 @@ impl Runtime {
         }
     }
 
-    /// Moet alles terug? Punt 1 tot en met 3 van de regel bovenaan; punt 4 (geen token) staat in `revert_reason`.
+    /// Bepaalt of het laatste ondertekende bewijs bestaande wijzigingen nog toestaat.
     fn verdict(&self) -> Option<&'static str> {
-        if !enabled() {
-            return None;
-        }
         if self.gone || self.last_gone {
             return Some("revoked");
         }
-        let p = self.last.as_ref()?;
+        let Some(p) = self.last.as_ref() else { return Some("no_token") };
         let now = self.server_now();
         if p.s == "revoked" {
             Some("revoked")
         } else if p.s == "expired" || p.e.is_some_and(|e| now >= e) {
             Some("expired")
-        } else if now > p.c {
+        } else if now >= p.c || p.s != "active" {
             Some("offline")
         } else {
             None
         }
-    }
-
-    fn has_any_token(&self) -> bool {
-        self.last.is_some() || self.payload.is_some() || self.gone || self.last_gone
     }
 
     fn persist(&self) {
@@ -426,11 +395,6 @@ fn accept(state: &AppState, v: &serde_json::Value, remember: Option<bool>) -> Ap
     rt.store(session, token.to_string(), payload);
     let st = rt.status();
     drop(rt);
-    // Er is weer een token: een eventueel respijt zonder token is voorbij.
-    let had_grace = lock(&state.settings).license_no_token_since.take().is_some();
-    if had_grace {
-        state.save_settings();
-    }
     Ok(st)
 }
 
@@ -477,59 +441,33 @@ pub fn init(state: &AppState) {
 /// Waarom alles terug moet ("revoked", "expired" of "offline"), of None als de wijzigingen mogen blijven.
 /// De volledige regel staat bovenaan dit bestand.
 pub fn revert_reason(state: &AppState) -> Option<&'static str> {
-    if !enabled() {
-        return None;
-    }
-    let (verdict, has_token) = {
-        let rt = lock(&state.license);
-        (rt.verdict(), rt.has_any_token())
-    };
-    if has_token {
-        // Er is weer een token: het respijt zonder token begint de volgende keer opnieuw.
-        let had_grace = {
-            let mut s = lock(&state.settings);
-            s.license_no_token_since.take().is_some()
-        };
-        if had_grace {
-            state.save_settings();
-        }
-        return verdict;
-    }
-    // Geen enkel token: 24 uur respijt vanaf het moment dat nezty dat merkt.
-    let now = now_ms();
-    let since = {
-        let mut s = lock(&state.settings);
-        match s.license_no_token_since {
-            Some(t) => Some(t),
-            None => {
-                s.license_no_token_since = Some(now);
-                None
-            }
-        }
-    };
-    match since {
-        Some(t) => (now - t > DAY_MS).then_some("offline"),
-        None => {
-            state.save_settings();
-            None
-        }
-    }
+    lock(&state.license).verdict()
 }
 
 pub fn status(state: &AppState) -> LicenseStatus {
     lock(&state.license).status()
 }
 
-/// Mag een functie gebruikt worden? Zonder licentie (of als die uit staat bij het bouwen) niets blokkeren.
+/// Mag een functie gebruikt worden? Alleen een geldige, ingelogde sessie geeft toegang.
 pub fn require(state: &AppState) -> AppResult<()> {
-    if !enabled() {
-        return Ok(());
-    }
     if status(state).mode == "active" {
         Ok(())
     } else {
         Err(AppError::coded("license_locked"))
     }
+}
+
+pub fn owner_revoke(state: &AppState, id: String) -> AppResult<serde_json::Value> {
+    require(state)?;
+    let session = lock(&state.license).session.clone().ok_or_else(|| AppError::coded("license_locked"))?;
+    post("/owner/revoke", serde_json::json!({ "session":session,"id":id })).map_err(to_app_error)
+}
+
+pub fn owner_accounts(state: &AppState) -> AppResult<serde_json::Value> {
+    require(state)?;
+    let session = lock(&state.license).session.clone().ok_or_else(|| AppError::coded("license_locked"))?;
+    let reply = post("/owner/accounts", serde_json::json!({ "session":session })).map_err(to_app_error)?;
+    Ok(reply["accounts"].clone())
 }
 
 pub fn config(state: &AppState) -> PublicConfig {
@@ -599,6 +537,10 @@ pub fn refresh(state: &AppState) -> AppResult<LicenseStatus> {
             // Sessie verlopen, ander apparaat of uitgelogd door een wachtwoordreset: opnieuw inloggen.
             if matches!(code.as_str(), "session_invalid" | "device_mismatch") {
                 rt.clear(Some(&code));
+                rt.last = None;
+                rt.last_token = None;
+                rt.last_gone = false;
+                rt.persist_last();
                 return Ok(rt.status());
             }
             Err(to_app_error(NetError::Server(code)))
@@ -608,10 +550,10 @@ pub fn refresh(state: &AppState) -> AppResult<LicenseStatus> {
 
 /// Geen toegang meer (verlopen, ingetrokken, verwijderd of 24 uur zonder bevestiging, zie `revert_reason`): alles
 /// terug naar de Windows-standaard. Stopt Game Boost, zet de crosshair en de wifi-gamestand uit en zet elke gelogde
-/// wijziging terug. Doet niets als de licentie uit staat bij het bouwen, of als er niets meer aan staat.
+/// wijziging terug. Zonder geldig token start ook het herstel.
 /// Alleen uitgelogd zijn zet niets terug.
 pub fn enforce(app: &AppHandle, state: &AppState) {
-    if !enabled() || status(state).mode == "active" {
+    if status(state).mode == "active" {
         return;
     }
     // Uitgelogd maar geen uitspraak van de server: Game Boost en de crosshair stoppen wel (die horen bij een
@@ -621,13 +563,18 @@ pub fn enforce(app: &AppHandle, state: &AppState) {
     let crosshair = state.settings_clone().crosshair_enabled;
     let wifi = crate::tweaks::wifi_gaming::is_active();
     let changes = lock(&state.journal).has_any_active();
+    crate::timer::hold(false);
+    crate::tweaks::smoothness::release_all_bg_tamer();
+    if wifi { crate::tweaks::wifi_gaming::stop(); }
     if boosting {
         let _ = crate::boost::unboost(app, state);
     }
     if crosshair {
         let _ = crate::crosshair::set_enabled(app, state, false);
     }
-    if verdict.is_none() || (!wifi && !changes) {
+    let settings = state.settings_clone();
+    let queued = settings.all_active || !settings.fortnite_pending.is_empty() || !settings.startup_keep_off.is_empty();
+    if verdict.is_none() || (!wifi && !changes && !queued) {
         if boosting {
             crate::boost::emit_state(app, state);
         }
@@ -635,32 +582,15 @@ pub fn enforce(app: &AppHandle, state: &AppState) {
     }
     let result = reset_changes(state);
     log::info!("licentie niet geldig: {} wijzigingen teruggezet", result.reverted);
-    let msg = crate::models::Msg::new("license_reverted").with("count", result.reverted);
+    let msg = match result.failed.first() {
+        Some(failure) => {
+            log::error!("licentieherstel mislukt: {}: {}", failure.target, failure.error);
+            crate::models::Msg::new("revert_failed").with("target", &failure.target)
+        }
+        None => crate::models::Msg::new("license_reverted").with("count", result.reverted),
+    };
     let _ = app.emit("notice", crate::models::Notice::new("warning", msg));
     crate::boost::emit_state(app, state);
-}
-
-/// Hoe vaak (elke 15 seconden) nezty bij het opstarten opnieuw de server vraagt voordat "offline" telt: 4 minuten.
-const BOOT_RETRIES: u32 = 16;
-
-/// Net na het inloggen op Windows is het netwerk (vooral wifi) vaak nog niet verbonden. Is "offline" de enige reden
-/// om terug te zetten en is er een bewaarde sessie, dan eerst een paar minuten opnieuw proberen. Pas als de server
-/// al die tijd onbereikbaar blijft, geldt de uitspraak. Ingetrokken, verlopen en verwijderd gelden meteen.
-fn retry_while_offline(state: &AppState) {
-    for n in 0..BOOT_RETRIES {
-        let waiting = {
-            let rt = lock(&state.license);
-            rt.session.is_some() && rt.verdict() == Some("offline")
-        };
-        if !waiting {
-            return;
-        }
-        if n == 0 {
-            log::info!("licentie: server nog niet bereikbaar, opnieuw proberen voordat er iets teruggaat");
-        }
-        std::thread::sleep(Duration::from_secs(15));
-        let _ = refresh(state);
-    }
 }
 
 /// Wifi-gamestand uit en elke gelogde wijziging terug. Los van de app, zodat de zelftest het ook kan.
@@ -668,6 +598,13 @@ pub fn reset_changes(state: &AppState) -> crate::models::RevertResult {
     crate::tweaks::wifi_gaming::stop();
     let result = lock(&state.journal).revert_all();
     crate::activate::forget(state);
+    let mut settings = lock(&state.settings);
+    if !settings.fortnite_pending.is_empty() || !settings.startup_keep_off.is_empty() {
+        settings.fortnite_pending.clear();
+        settings.startup_keep_off.clear();
+        drop(settings);
+        state.save_settings();
+    }
     result
 }
 
@@ -676,17 +613,14 @@ pub fn reset_changes(state: &AppState) -> crate::models::RevertResult {
 /// terug volgens `revert_reason`. Alleen uitgelogd zijn of "Ingelogd blijven" uit zet niets terug.
 pub fn check_headless(state: &AppState) -> serde_json::Value {
     init(state);
-    if !enabled() {
-        return serde_json::json!({ "enabled": false });
-    }
     let _ = refresh(state);
-    retry_while_offline(state);
     let st = status(state);
     let pending = lock(&state.journal).has_any_active();
     let verdict = revert_reason(state);
-    let reverted = if verdict.is_some() && pending { reset_changes(state).reverted } else { 0 };
+    let recovery = if verdict.is_some() { reset_changes(state) } else { Default::default() };
+    let reverted = recovery.reverted;
     log::info!("licentiecontrole bij inloggen: {} ({}), uitspraak {:?}, {} wijzigingen teruggezet", st.mode, st.reason.clone().unwrap_or_default(), verdict, reverted);
-    serde_json::json!({ "enabled": true, "mode": st.mode, "reason": st.reason, "verdict": verdict, "pendingChanges": pending, "reverted": reverted })
+    serde_json::json!({ "enabled": true, "mode": st.mode, "reason": st.reason, "verdict": verdict, "pendingChanges": pending, "reverted": reverted, "failed": recovery.failed, "remaining": lock(&state.journal).has_any_active() })
 }
 
 /// Bij het verwijderen van de app: sessie op de server sluiten en het bewaarde token weghalen.
@@ -700,7 +634,7 @@ pub fn forget(state: &AppState) {
     cred::delete(LAST_TARGET);
 }
 
-/// Zelftest: zonder token blijft een gelogde wijziging binnen het respijt staan en gaat ze daarna terug.
+/// Zelftest: zonder token wordt de tijdelijke registerwijziging teruggezet.
 /// Gebruikt een eigen testwaarde in HKCU en eigen plekken in Credential Manager.
 #[cfg(feature = "selftest")]
 pub fn selftest_enforce() -> serde_json::Value {
@@ -722,33 +656,21 @@ pub fn selftest_enforce() -> serde_json::Value {
     let recorded = lock(&state.journal).record(e).is_ok();
     let before = registry::read(Hive::Hkcu, path, "Probe").map(|v| v != RegData::Absent).unwrap_or(false);
     let mode = status(&state).mode;
-    // Eerste keer zonder token: respijt begint, er gaat niets terug.
-    let within_grace = revert_reason(&state);
-    // Respijt 25 uur geleden begonnen: nu moet alles terug.
-    lock(&state.settings).license_no_token_since = Some(now_ms() - 25 * 60 * 60 * 1000);
-    let after_grace = revert_reason(&state);
-    let reverted = if after_grace.is_some() { reset_changes(&state).reverted } else { 0 };
-    let after = registry::read(Hive::Hkcu, path, "Probe").map(|v| v != RegData::Absent).unwrap_or(false);
-    let left = lock(&state.journal).has_any_active();
-    let _ = registry::write(Hive::Hkcu, path, "Probe", &RegData::Absent);
-    let _ = Hive::Hkcu.root().delete_subkey(path);
-    serde_json::json!({ "enabled": enabled(), "mode": mode, "wroteTestValue": wrote && recorded, "valueBefore": before, "verdictWithinGrace": within_grace, "verdictAfterGrace": after_grace, "reverted": reverted, "valueAfter": after, "stillActiveInLog": left })
+    // Zonder ondertekend bewijs moeten de testwijzigingen terug.
+    let reason = revert_reason(&state);
+    let result = reset_changes(&state);
+    let after = registry::read(Hive::Hkcu, path, "Probe").ok();
+    let pending = lock(&state.journal).has_any_active();
+    serde_json::json!({ "configured": enabled(), "mode": mode, "wroteTestValue": wrote && recorded, "valueBefore": before, "reason": reason, "reverted": result.reverted, "failed": result.failed, "valueAfter": after, "stillActiveInLog": pending })
+
 }
 
 /// Achtergrondcontrole: demo elke minuut, anders elke 15 minuten. Stuurt de stand naar de frontend.
 pub fn start(app: AppHandle, state: std::sync::Arc<AppState>) {
-    if !enabled() {
-        return;
-    }
     let _ = std::thread::Builder::new().name("license".into()).spawn(move || {
         let mut since_refresh = Duration::from_secs(0);
         let mut last_mode = String::new();
         let _ = refresh(&state);
-        if lock(&state.license).verdict() == Some("offline") {
-            // Eerst de stand laten zien, dan pas (stil) opnieuw proberen.
-            let _ = app.emit("license-state", status(&state));
-            retry_while_offline(&state);
-        }
         enforce(&app, &state);
         let _ = app.emit("license-state", status(&state));
         loop {
@@ -816,6 +738,9 @@ pub fn selftest_server(key: &str) -> serde_json::Value {
     cred::delete("nezty/license-last-selftest");
     serde_json::json!({ "register": reg, "savedInCredentialManager": saved, "refresh": refreshed, "requireOk": required, "keyAgain": again, "afterLogout": after_logout, "lastTokenKeptAfterLogout": last_kept, "verdictAfterLogout": verdict_after_logout, "relogin": relog, "wrongPassword": wrong, "tamperedTokenRejected": tampered })
 }
+
+#[cfg(test)]
+mod windows_tests;
 
 #[cfg(test)]
 mod tests {

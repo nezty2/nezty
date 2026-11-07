@@ -2,7 +2,7 @@
 //! boost van een oudere versie aan, dan wordt die bij het afsluiten van de game teruggezet.
 
 use crate::boost;
-use crate::models::{GameEvent, Msg, WatcherStatus};
+use crate::models::{GameEvent, Msg, TweakState, WatcherStatus};
 use crate::state::{lock, AppState};
 use std::collections::HashSet;
 use std::sync::atomic::Ordering;
@@ -81,6 +81,8 @@ pub fn start(app: AppHandle, state: Arc<AppState>) {
             std::thread::sleep(Duration::from_secs(3));
             let games = state.all_games();
             if games.is_empty() {
+                crate::timer::hold(false);
+                crate::tweaks::smoothness::release_all_bg_tamer();
                 continue;
             }
             sys.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::nothing());
@@ -92,13 +94,24 @@ pub fn start(app: AppHandle, state: Arc<AppState>) {
                 .collect();
             *lock(&state.running_games) = now.clone();
             // Fijnere timer (0,5 ms) alleen zolang er een game draait en de tweak aan staat.
-            let timer_on = crate::tweaks::status(&state, "timer_resolution", None).state == crate::models::TweakState::On;
+            let licensed = crate::license::require(&state).is_ok();
+            let timer_on = licensed && crate::tweaks::status(&state, "timer_resolution", None).state == TweakState::On;
             crate::timer::hold(timer_on && !now.is_empty());
+
+            // Achtergrond-Temmer: zet bekende achtergrond-apps op EcoQoS / lage prioriteit tijdens het spelen.
+            // Raakt nooit het gameproces zelf aan (nul anti-cheat risico).
+            let bg_tamer_on = licensed && crate::tweaks::status(&state, "background_tamer", None).state == TweakState::On;
+            let active_game_procs: HashSet<String> = games
+                .iter()
+                .filter(|g| now.contains(&g.id))
+                .flat_map(|g| g.process_names.iter().map(|n| n.to_lowercase()))
+                .collect();
+            crate::tweaks::smoothness::sync_bg_tamer(bg_tamer_on && !now.is_empty(), &sys, &active_game_procs);
 
             // Fortnite schrijft zijn ini bij het afsluiten. Pas na twee rondes zonder Fortnite (zo'n 6 seconden)
             // zetten wat tijdens het spelen is gekozen, zodat Fortnite het niet meer overschrijft.
             fortnite_gone = if now.contains(FORTNITE) { 0 } else { fortnite_gone.saturating_add(1) };
-            if fortnite_gone >= 2 && !lock(&state.settings).fortnite_pending.is_empty() {
+            if licensed && fortnite_gone >= 2 && !lock(&state.settings).fortnite_pending.is_empty() {
                 match crate::fortnite::apply_pending(&state) {
                     Some(Ok(_)) => boost::notify(&app, "success", Msg::new("fortnite_pending_done")),
                     Some(Err(e)) => boost::notify(&app, "error", Msg::new("fortnite_pending_failed").with("detail", e.to_string())),
@@ -111,9 +124,13 @@ pub fn start(app: AppHandle, state: Arc<AppState>) {
                 let _ = app.emit("game-started", GameEvent { game_id: id.clone(), name: game.name.clone() });
                 // Apps die bij een spelstart dicht moeten (Achtergrond-apps, vinkje "Sluiten bij spelstart").
                 let settings = state.settings_clone();
-                if !settings.close_during_gaming.is_empty() && crate::license::require(&state).is_ok() {
+                if (!settings.close_during_gaming.is_empty() || settings.auto_close_unneeded) && crate::license::require(&state).is_ok() {
                     let own: Vec<String> = game.process_names.iter().map(|n| n.to_lowercase()).collect();
-                    let names: Vec<String> = settings.close_during_gaming.iter().filter(|n| !own.contains(&n.to_lowercase())).cloned().collect();
+                    let mut names: Vec<String> = settings.close_during_gaming.clone();
+                    if settings.auto_close_unneeded {
+                        names.extend(crate::processes::list(&state).into_iter().filter(|p| p.unneeded).map(|p| p.name));
+                    }
+                    let names: Vec<String> = names.into_iter().filter(|n| !own.contains(&n.to_lowercase())).collect();
                     let r = crate::processes::close_many(&state, &names, None, Some(id));
                     if !r.closed.is_empty() {
                         boost::notify(&app, "info", Msg::new("apps_closed_for_game").with("game", &game.name).with("count", r.closed.len()));

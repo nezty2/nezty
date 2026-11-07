@@ -11,6 +11,7 @@ export interface Env {
   keyPepper: string;
   /** SHA-256 (hex) van de beheerderssleutel. De sleutel zelf staat alleen op de pc van de eigenaar. */
   adminKeySha256: string;
+  ownerLicenseId?: string;
   now?: () => number;
 }
 
@@ -288,7 +289,7 @@ async function adminCreate(store: Store, env: Env, now: number, b: Record<string
       key_hash: await keyHash(env, norm),
       key_hint: norm.slice(-4),
       type,
-      duration_minutes: DURATION[type],
+      duration_minutes: Number(b.days) && Number(b.days) > 0 ? Math.round(Number(b.days) * 1440) : DURATION[type],
       created_at: iso(now),
       activated_at: null,
       expires_at: null,
@@ -391,6 +392,34 @@ export async function handle(path: string, body: Record<string, unknown>, header
   const now = (env.now ?? Date.now)();
   try {
     switch (path) {
+      case "/owner/revoke":
+      case "/owner/accounts": {
+        const denied = () => fail("unauthorized", 403);
+        const secret = str(body.session, 100);
+        if (!secret || !env.ownerLicenseId) return denied();
+        const s = await store.sessionByHash(await sha256Hex(secret));
+        if (!s?.user_id || s.license_id !== env.ownerLicenseId || Date.parse(s.expires_at) <= now) return denied();
+        const l = await store.licenseById(s.license_id);
+        if (!l || l.user_id !== s.user_id || l.device_id !== s.device_id || l.key_hint !== "88sn" || statusOf(l,now) !== "active") return denied();
+        const user = await store.userById(s.user_id);
+        if (user?.username !== "Mero") return denied();
+        if (path === "/owner/revoke") {
+          const id = str(body.id, 100);
+          if (!id || id === env.ownerLicenseId) return fail("bad_request");
+          const target = await store.licenseById(id);
+          if (!target || !target.activated_at) return fail("key_unknown", 404);
+          if (!target.revoked_at) await store.updateLicense(id, {revoked_at:iso(now)});
+          return ok({id,status:"revoked"});
+        }
+        const rows = (await store.connectedAccounts()).map(({username,license,sessions}) => {
+          const seen = sessions.filter(x => x.device_id === license.device_id && Date.parse(x.expires_at) > now)
+            .map(x => x.last_seen_at).sort().at(-1) ?? null;
+          const status = statusOf(license,now);
+          return {connectedAt:sessions.filter(x => x.device_id === license.device_id).map(x => x.created_at).sort().at(-1) ?? null,id:license.id,keyHint:license.key_hint,activatedAt:license.activated_at,expiresAt:license.expires_at,isOwner:license.id === env.ownerLicenseId,username,status,recent:status === "active" && !!seen && now-Date.parse(seen) <= 20*MINUTE,lastSeen:seen};
+        });
+        rows.sort((a,b) => Number(b.recent)-Number(a.recent) || a.username.localeCompare(b.username));
+        return ok({accounts:rows});
+      }
       case "/config":
         return ok(await settings(store));
       case "/register":

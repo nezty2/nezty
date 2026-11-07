@@ -195,13 +195,12 @@ pub fn set_enabled(state: &AppState, item_id: &str, enabled: bool) -> AppResult<
         RegData::Binary(b)
     };
     if is_enabled(&old) != enabled {
-        registry::write(hive, &path, name, &new)?;
         let mut e = JournalEntry::new("startup_apps", "Startup apps", JournalKind::Startup, name);
         e.old_value = Some(if is_enabled(&old) { "@enabled".into() } else { "@disabled".into() });
         e.new_value = Some(if enabled { "@enabled".into() } else { "@disabled".into() });
         e.revertable = true;
         e.payload = RevertPayload::Registry { hive, path: path.clone(), name: name.to_string(), old, post: None };
-        lock(&state.journal).record(e)?;
+        lock(&state.journal).write_registry(e, &new)?;
     }
     // Onthouden wat de gebruiker uit wil hebben, zodat de bewaker het uit houdt.
     {
@@ -268,15 +267,11 @@ pub fn enforce(state: &AppState) -> Vec<String> {
 pub fn start_keeper(app: tauri::AppHandle, state: std::sync::Arc<AppState>) {
     use tauri::Emitter;
     let _ = std::thread::Builder::new().name("startup-keeper".into()).spawn(move || {
-        std::thread::sleep(std::time::Duration::from_secs(20));
-        loop {
-            // Tijdens het spelen niets doen: een app die zichzelf weer aanzet, doet dat bij het opstarten.
-            if crate::license::require(&state).is_ok() && !crate::watcher::playing(&state) {
-                for name in enforce(&state) {
-                    let _ = app.emit("notice", crate::models::Notice::new("warning", crate::models::Msg::new("startup_came_back").with("app", &name)));
-                }
+        std::thread::sleep(std::time::Duration::from_secs(15));
+        if crate::license::require(&state).is_ok() && !crate::watcher::playing(&state) {
+            for name in enforce(&state) {
+                let _ = app.emit("notice", crate::models::Notice::new("warning", crate::models::Msg::new("startup_came_back").with("app", &name)));
             }
-            std::thread::sleep(std::time::Duration::from_secs(60));
         }
     });
 }

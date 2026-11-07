@@ -504,8 +504,74 @@ fn gpu_battery_limit_check() -> Option<BigWin> {
     Some(w)
 }
 
+// ---------- 7. Stutter-Doctor advies: optionele achtergrondservices (alleen advies, nooit automatisch) ----------
+
+const BLOAT_SERVICE_CANDIDATES: &[(&str, &str)] = &[
+    ("Razer Game Manager Service 3", "Razer Game Manager 3"),
+    ("Razer Game Manager Service", "Razer Game Manager"),
+    ("NahimicService", "Nahimic OSD"),
+];
+
+fn service_is_running(name: &str) -> bool {
+    crate::powershell::run_cmd("sc", &["query", name])
+        .ok()
+        .is_some_and(|(ok, out, _)| ok && out.contains("RUNNING"))
+}
+
+/// Controleert alleen op optionele merk-services (Razer Game Manager, Nahimic) die in sommige games
+/// frametime-pieken geven. Puur als advies met uitleg (geen automatische wijziging en geen GameInput).
+fn bloat_services_check() -> BigWin {
+    let mut names = Vec::new();
+    for &(svc, label) in BLOAT_SERVICE_CANDIDATES {
+        if service_is_running(svc) {
+            names.push(label.to_string());
+        }
+    }
+    if names.is_empty() {
+        return check("bloat_services", CheckStatus::Ok, Gain::Small, "ok");
+    }
+    let count = names.len();
+    let mut w = check("bloat_services", CheckStatus::Info, Gain::Small, "found");
+    w = p(w, "names", names.join(", "));
+    w = p(w, "count", count);
+    w
+}
+
+// ---------- 8. Stutter-Doctor: tweede ingebouwde GPU op een vaste pc ----------
+
+fn desktop_igpu_check() -> BigWin {
+    let layout = gpu_layout();
+    if !layout.hybrid {
+        return check("desktop_igpu", CheckStatus::Ok, Gain::Small, "single");
+    }
+    let dgpu = layout.gpus.iter().find(|g| g.discrete).map(|g| g.name.clone()).unwrap_or_default();
+    let igpu = layout.gpus.iter().find(|g| !g.discrete).map(|g| g.name.clone()).unwrap_or_default();
+    let displays = display::list();
+    let monitor_on_igpu = displays.iter().any(|d| d.adapter.trim().eq_ignore_ascii_case(igpu.trim()));
+    if monitor_on_igpu {
+        let mut w = check("desktop_igpu", CheckStatus::Issue, Gain::Big, "cable_wrong");
+        w = p(w, "igpu", igpu);
+        w = p(w, "dgpu", dgpu);
+        return w;
+    }
+    let mut w = check("desktop_igpu", CheckStatus::Info, Gain::Small, "unused_igpu");
+    w = p(w, "igpu", igpu);
+    w = p(w, "dgpu", dgpu);
+    w
+}
+
 pub fn all(state: &AppState) -> Vec<BigWin> {
-    let mut out = vec![refresh_check(), gpu_choice_check(state), power_check(), ram_check(), rebar_check(), memory_integrity_check(), driver_check(), heavy_check(state)];
+    let mut out = vec![
+        refresh_check(),
+        gpu_choice_check(state),
+        power_check(),
+        bloat_services_check(),
+        ram_check(),
+        rebar_check(),
+        memory_integrity_check(),
+        driver_check(),
+        heavy_check(state),
+    ];
     if crate::device::is_laptop(state) {
         out.push(laptop_heat_check(state));
         out.push(laptop_gpu_mode_check());
@@ -513,6 +579,8 @@ pub fn all(state: &AppState) -> Vec<BigWin> {
         if let Some(w) = gpu_battery_limit_check() {
             out.push(w);
         }
+    } else {
+        out.push(desktop_igpu_check());
     }
     out
 }

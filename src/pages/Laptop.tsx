@@ -11,9 +11,9 @@ import { BigWinCard, LAPTOP_CHECKS } from "@/components/BigWinCard";
 /** Tweaks per onderwerp. Laptoptweaks plus algemene tweaks die op een laptop veel doen (alleen op een laptop). */
 const GROUPS: { key: "power" | "input" | "network" | "windows"; ids: string[] }[] = [
   { key: "power", ids: ["power_mode_best", "cpu_full_speed", "cpu_epp_performance", "cpu_prefer_pcores", "battery_saver_off"] },
-  { key: "input", ids: ["usb_suspend_ac_off", "touchpad_off_with_mouse", "mouse_precision_off"] },
-  { key: "network", ids: ["wifi_gaming_mode", "wifi_power_max"] },
-  { key: "windows", ids: ["hags", "windowed_opt", "game_bar_dvr_off", "game_mode"] },
+  { key: "input", ids: ["usb_suspend_ac_off", "touchpad_off_with_mouse", "mouse_precision_off", "keyboard_response_fast"] },
+  { key: "network", ids: ["wifi_gaming_mode", "wifi_power_max", "mmcss_gaming", "ethernet_power_off"] },
+  { key: "windows", ids: ["hags", "windowed_opt", "foreground_priority", "windows_snappy", "background_apps_off", "game_bar_dvr_off", "game_mode"] },
 ];
 
 /** Alles voor laptops op één plek: status, tweaks en controles. */

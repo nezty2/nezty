@@ -1,13 +1,13 @@
-import { Cable, Eye, EyeOff, Globe, RefreshCw, ShieldQuestion, Wifi } from "lucide-react";
+import { Cable, CheckCircle2, Eye, EyeOff, Globe, RefreshCw, ShieldQuestion, Wifi } from "lucide-react";
 import { BandwidthCard } from "@/components/BandwidthCard";
 import { BufferbloatCard } from "@/components/BufferbloatCard";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { TweakCard } from "@/components/TweakCard";
 import { Badge, Button, Card, Kv, PageHeader, SectionTitle, Skeleton, cn } from "@/components/ui";
 import { useT } from "@/i18n/hooks";
 import { api } from "@/lib/ipc";
 import { formatMs } from "@/lib/format";
-import type { ConnectionOverview, PingResult, TweakInfo } from "@/lib/types";
+import type { ConnectionOverview, GameRegion, PingResult, TweakInfo } from "@/lib/types";
 import { useApp } from "@/store/app";
 
 const INTERNET = [
@@ -61,9 +61,9 @@ export function NetworkPage() {
   );
 }
 
-/** Je internet, je verbinding, wie je internet gebruikt, bufferbloat en de netwerktweaks. */
+/** Je internet, game-regio's, je verbinding, wie je internet gebruikt, bufferbloat en de netwerktweaks. */
 function OverviewTab() {
-  const { t } = useT();
+  const { t, lang } = useT();
   const handleError = useApp((s) => s.handleError);
   const toast = useApp((s) => s.toast);
   const tweaks = useApp((s) => s.tweaks);
@@ -72,6 +72,7 @@ function OverviewTab() {
   const [results, setResults] = useState<Record<string, PingResult>>({});
   const [loading, setLoading] = useState<Set<string>>(new Set());
   const [overview, setOverview] = useState<ConnectionOverview | null>(null);
+  const [regions, setRegions] = useState<GameRegion[]>([]);
   const [flushing, setFlushing] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   // IP-adres, router en DNS blijven verborgen tot je ze zelf toont (handig als je streamt).
@@ -79,10 +80,10 @@ function OverviewTab() {
   const hide = (v: string) => (showDetails ? v : "••••••");
 
   const test = useCallback(
-    async (id: string, host: string) => {
+    async (id: string, host: string, count = 8) => {
       setLoading((s) => new Set(s).add(id));
       try {
-        const r = await api.pingHost(host, 10);
+        const r = await api.pingHost(host, count);
         setResults((cur) => ({ ...cur, [id]: r }));
       } catch (e) {
         handleError(e);
@@ -96,12 +97,40 @@ function OverviewTab() {
     },
     [handleError],
   );
-  const testAll = useCallback(() => Promise.all(INTERNET.map((i) => test(i.id, i.host))), [test]);
+
+  const testAll = useCallback(
+    (regs: GameRegion[]) =>
+      Promise.all([
+        ...INTERNET.map((i) => test(i.id, i.host, 10)),
+        ...regs.map((r) => test(r.id, r.host, 6)),
+      ]),
+    [test],
+  );
 
   useEffect(() => {
-    void testAll();
+    void Promise.all(INTERNET.map((i) => test(i.id, i.host, 10)));
     api.getConnectionOverview().then(setOverview).catch(handleError);
-  }, [handleError, testAll]);
+    api
+      .getGameRegions()
+      .then((regs) => {
+        setRegions(regs);
+        // Meet standaard alvast de Europese regio's; klik op "Opnieuw testen" voor alle werelddelen.
+        const initial = regs.filter((r) => r.region === "eu");
+        void Promise.all((initial.length ? initial : regs.slice(0, 4)).map((r) => test(r.id, r.host, 6)));
+      })
+      .catch(handleError);
+  }, [handleError, test]);
+
+  const bestRegion = useMemo(() => {
+    let best: { region: GameRegion; ms: number } | null = null;
+    for (const r of regions) {
+      const avg = results[r.id]?.avgMs;
+      if (avg != null && (best === null || avg < best.ms)) {
+        best = { region: r, ms: avg };
+      }
+    }
+    return best;
+  }, [regions, results]);
 
   const netTweaks = tweaks.filter((tw) => tw.category === "network" && tw.scope === "global" && !tw.experimental);
   const onToggle = async (tw: TweakInfo, enabled: boolean, option: string | null) => {
@@ -114,7 +143,7 @@ function OverviewTab() {
   return (
     <div className="space-y-8">
       <div className="flex flex-wrap justify-end gap-2">
-        <Button icon={RefreshCw} loading={loading.size > 0} onClick={() => void testAll()}>
+        <Button icon={RefreshCw} loading={loading.size > 0} onClick={() => void testAll(regions)}>
           {loading.size > 0 ? t("network.testing") : t("network.testAll")}
         </Button>
         <Button
@@ -160,10 +189,45 @@ function OverviewTab() {
         <SectionTitle sub={t("network.internetDesc")}>{t("network.internet")}</SectionTitle>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {INTERNET.map((i) => (
-            <PingTile key={i.id} title={i.label} sub={i.host} result={results[i.id]} loading={loading.has(i.id)} onTest={() => void test(i.id, i.host)} />
+            <PingTile key={i.id} title={i.label} sub={i.host} result={results[i.id]} loading={loading.has(i.id)} onTest={() => void test(i.id, i.host, 10)} />
           ))}
         </div>
       </section>
+
+      {regions.length > 0 && (
+        <section>
+          <SectionTitle sub={t("network.regionsDesc")}>{t("network.regions")}</SectionTitle>
+          {bestRegion && (
+            <Card className="mb-3 flex items-start gap-3 border-ok/40">
+              <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-ok" />
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-semibold text-ok">
+                  {t("network.bestTitle", { region: `${t(`region.${bestRegion.region.region}`)} (${bestRegion.region.city})` })}
+                </div>
+                <p className="mt-0.5 text-[13px] text-ink-2">
+                  {t("network.bestAdvice", { region: t(`region.${bestRegion.region.region}`), ms: formatMs(lang, bestRegion.ms) })}
+                </p>
+                <p className="mt-1 text-[12px] text-ink-3">
+                  {t("network.fortniteHow")} · {t("network.otherGamesHow")}
+                </p>
+              </div>
+            </Card>
+          )}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {regions.map((r) => (
+              <PingTile
+                key={r.id}
+                title={r.city}
+                sub={t(`region.${r.region}`)}
+                result={results[r.id]}
+                loading={loading.has(r.id)}
+                onTest={() => void test(r.id, r.host, 6)}
+              />
+            ))}
+          </div>
+          <p className="mt-2 text-[12px] text-ink-3">{t("network.indicative")}</p>
+        </section>
+      )}
 
       <section>
         <SectionTitle

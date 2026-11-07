@@ -45,7 +45,9 @@ export function LogPage() {
     setBusy("all");
     try {
       const r = await api.revertAll();
-      toast({ level: r.failed.length ? "warning" : "success", title: t("notice.success"), message: t("log.revertedAll", { count: r.reverted }) });
+      const failure = r.failed[0];
+      if (failure) toast({ level: "error", title: t("notice.error"), message: t("msg.revert_failed", { target: failure.target }), detail: failure.error });
+      else toast({ level: "success", title: t("notice.success"), message: t("log.revertedAll", { count: r.reverted }) });
       setConfirm(false);
       void refreshJournal();
       void refreshTweaks();
