@@ -210,6 +210,15 @@ fn parse_scheme_line(line: &str) -> Option<(String, String)> {
 }
 
 pub fn active_scheme() -> AppResult<(String, String)> {
+    #[cfg(test)]
+    if let Some(id) = TEST_SCHEME.with(|id| id.borrow().clone()) { return Ok((id, "Test".into())); }
+    windows_active_scheme()
+}
+
+#[cfg(test)]
+thread_local! { pub(crate) static TEST_SCHEME: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) }; }
+
+pub(crate) fn windows_active_scheme() -> AppResult<(String, String)> {
     let (ok, out, err) = run_cmd("powercfg", &["/getactivescheme"])?;
     if !ok {
         return Err(AppError::msg(format!("powercfg: {}", err.trim())));
@@ -406,7 +415,6 @@ fn windowed_opt_write(state: &AppState, value: &str, session: Option<&str>, note
         return Ok(());
     }
     let new = RegData::Str(new_text);
-    registry::write(Hive::Hkcu, DX_PATH, DX_VALUE, &new)?;
     let mut e = JournalEntry::new(def.id, def.name, JournalKind::Registry, &registry::full_path(Hive::Hkcu, DX_PATH, DX_VALUE));
     e.old_value = Some(old.display());
     e.new_value = Some(new.display());
@@ -414,7 +422,7 @@ fn windowed_opt_write(state: &AppState, value: &str, session: Option<&str>, note
     e.session_id = session.map(|s| s.to_string());
     e.note = note.map(|n| n.to_string());
     e.payload = RevertPayload::Registry { hive: Hive::Hkcu, path: DX_PATH.to_string(), name: DX_VALUE.to_string(), old, post: None };
-    lock(&state.journal).record(e)
+    lock(&state.journal).write_registry(e, &new)
 }
 
 pub fn windowed_opt_apply(state: &AppState, session: Option<&str>) -> AppResult<()> {

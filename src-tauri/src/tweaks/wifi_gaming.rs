@@ -198,7 +198,7 @@ pub fn disable(state: &AppState) -> AppResult<()> {
 /// Bij het starten van nezty: stond de wifi-gamestand aan (volgens het logboek), dan weer activeren. Lukt
 /// dat nog niet (wifi nog niet verbonden), dan blijft de bewaker het proberen.
 pub fn resume_if_active(state: &AppState) {
-    if lock(&state.journal).has_active("wifi_gaming_mode", None) {
+    if crate::license::require(state).is_ok() && lock(&state.journal).has_active("wifi_gaming_mode", None) {
         if let Err(e) = start() {
             log::info!("wifi-gamestand nog niet hervat, nezty probeert het opnieuw: {e}");
         }

@@ -53,6 +53,17 @@ export function supabaseStore(url: string, serviceKey: string): Store {
     updateUser: (id, patch) => run(db.from("users").update(patch).eq("id", id)),
     deleteUser: (id) => run(db.from("users").delete().eq("id", id)),
 
+    connectedAccounts: async () => {
+      const accounts = [];
+      for (let offset = 0; ; offset += 200) {
+        const rows = await many(db.from("licenses").select("*, users(username), sessions(last_seen_at,expires_at,device_id,created_at)")
+          .not("activated_at","is",null).order("id").range(offset,offset + 199)) as (LicenseRow & {
+            users: { username:string } | null; sessions: Pick<SessionRow,"last_seen_at"|"expires_at"|"device_id">[]
+          })[];
+        accounts.push(...rows.map(l => ({ username:l.users?.username ?? "Demo", license:l, sessions:l.sessions })));
+        if (rows.length < 200) return accounts;
+      }
+    },
     sessionByHash: (hash) => one<SessionRow>(db.from("sessions").select("*").eq("token_hash", hash).limit(1)),
     insertSession: (row) => run(db.from("sessions").insert(row)),
     updateSession: (id, patch) => run(db.from("sessions").update(patch).eq("id", id)),

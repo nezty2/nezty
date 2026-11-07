@@ -36,14 +36,13 @@ pub fn wifi_apply(state: &AppState, session: Option<&str>) -> AppResult<()> {
     if old_ac == 0 && old_dc == 0 {
         return Ok(());
     }
-    write_power_setting(&scheme, WIFI_SUB, WIFI_SETTING, 0, 0)?;
     let mut e = JournalEntry::new(d.id, d.name, JournalKind::PowerSetting, &format!("{scheme_name}: wireless adapter power saving"));
     e.old_value = Some(format!("AC {old_ac}, DC {old_dc}"));
     e.new_value = Some("AC 0, DC 0".into());
     e.revertable = true;
     e.session_id = session.map(|s| s.to_string());
     e.payload = RevertPayload::PowerSetting { scheme, sub: WIFI_SUB.into(), setting: WIFI_SETTING.into(), ac: old_ac, dc: old_dc };
-    lock(&state.journal).record(e)?;
+    lock(&state.journal).write_power(e, 0, 0)?;
     Ok(())
 }
 

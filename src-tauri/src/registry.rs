@@ -17,6 +17,10 @@ pub enum Hive {
 
 impl Hive {
     pub fn root(self) -> RegKey {
+        #[cfg(test)]
+        if let Some(dir) = TEST_HIVES.with(|root| root.borrow().clone()) {
+            return RegKey::predef(HKEY_CURRENT_USER).create_subkey(format!("{dir}\\{}", self.label())).unwrap().0;
+        }
         match self {
             Hive::Hkcu => RegKey::predef(HKEY_CURRENT_USER),
             Hive::Hklm => RegKey::predef(HKEY_LOCAL_MACHINE),
@@ -34,6 +38,28 @@ impl Hive {
     pub fn needs_admin(self) -> bool {
         matches!(self, Hive::Hklm | Hive::Hku)
     }
+}
+
+#[cfg(test)]
+thread_local! { static TEST_HIVES: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) }; }
+
+#[cfg(test)]
+pub fn testing_hives() -> bool {
+    TEST_HIVES.with(|h| h.borrow().is_some())
+}
+
+#[cfg(test)]
+pub fn with_test_hives(run: impl FnOnce()) {
+    struct Root(String);
+    impl Drop for Root {
+        fn drop(&mut self) {
+            TEST_HIVES.with(|root| root.replace(None));
+            let _ = RegKey::predef(HKEY_CURRENT_USER).delete_subkey_all(&self.0);
+        }
+    }
+    let root = Root(format!(r"Software\Nezty-Test-{}", uuid::Uuid::new_v4()));
+    TEST_HIVES.with(|current| assert!(current.replace(Some(root.0.clone())).is_none()));
+    run();
 }
 
 /// Registerwaarde, inclusief "bestaat niet".
@@ -152,6 +178,16 @@ pub fn read(hive: Hive, path: &str, name: &str) -> AppResult<RegData> {
         Ok(rv) => Ok(from_reg_value(&rv)),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(RegData::Absent),
         Err(e) => Err(map_access_denied(e, &format!("lezen van {}\\{}\\{}", hive.label(), path, name))),
+    }
+}
+
+/// A value must be reproducible byte-for-byte, including its Windows type.
+/// Refuse to overwrite nonstandard types or encodings that RegData cannot preserve.
+pub fn matches_exact(hive: Hive, path: &str, name: &str, expected: &RegData) -> AppResult<bool> {
+    match hive.root().open_subkey_with_flags(path, KEY_READ).and_then(|key| key.get_raw_value(name)) {
+        Ok(value) => Ok(to_reg_value(expected).as_ref() == Some(&value)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(*expected == RegData::Absent),
+        Err(e) => Err(map_access_denied(e, &full_path(hive, path, name))),
     }
 }
 

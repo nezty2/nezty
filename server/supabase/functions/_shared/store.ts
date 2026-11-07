@@ -65,6 +65,7 @@ export interface Store {
   updateUser(id: string, patch: Partial<UserRow>): Promise<void>;
   deleteUser(id: string): Promise<void>;
 
+  connectedAccounts(): Promise<{ username: string; license: LicenseRow; sessions: Pick<SessionRow,"last_seen_at"|"expires_at"|"device_id"|"created_at">[] }[]>;
   sessionByHash(hash: string): Promise<SessionRow | null>;
   insertSession(row: SessionRow): Promise<void>;
   updateSession(id: string, patch: Partial<SessionRow>): Promise<void>;

@@ -78,8 +78,8 @@ pub const CATALOG: &[TweakDef] = &[
     def("background_tamer", "Tame background apps while gaming", C::System, S::Global, Measurable, Instant, false),
     def("nvidia_shader_cache", "NVIDIA 100 GB Shader Cache", C::System, S::Global, Measurable, GameRestart, false),
     def("nvidia_max_perf", "NVIDIA Power Management: Prefer Maximum Performance", C::System, S::Global, Measurable, GameRestart, false),
-    def("driver_paging_off", "Lock system drivers in RAM", C::System, S::Global, Measurable, PcRestart, false),
-    def("game_bar_presence_off", "Game Bar render hooks and telemetry off", C::System, S::Global, Measurable, Instant, false),
+    def("driver_paging_off", "Limit paging of Windows system code", C::System, S::Global, Measurable, PcRestart, false),
+    def("game_bar_presence_off", "Windows full-screen presentation preferences", C::System, S::Global, Measurable, Instant, false),
     TweakDef { platform: Platform::PcOnly, ..def("cpu_desktop_tuning", "Desktop CPU minimum 100% and PCIe/NVMe sleep off", C::System, S::Global, Small, Instant, false) },
     def("notifications_off", "Notification banners off", C::System, S::Global, Negligible, Instant, false),
     // Muis en toetsenbord
@@ -350,10 +350,15 @@ fn admin_check(state: &AppState, d: &TweakDef) -> AppResult<()> {
 
 /// Past een tweak toe. `session` koppelt de wijziging aan een boost-sessie.
 pub fn apply(state: &AppState, id: &str, option: Option<&str>, session: Option<&str>, game: Option<&Game>) -> AppResult<()> {
+    crate::license::require(state)?;
     let d = get(id)?;
     admin_check(state, d)?;
     if platform_locked(state, d) || (id == "power_plan" && option == Some("ultimate") && crate::device::is_laptop(state)) {
         return Err(AppError::coded("platform_locked"));
+    }
+    let before = status(state, id, game);
+    if matches!(before.state, TweakState::Unavailable | TweakState::Unknown) {
+        return Err(AppError::coded(before.detail.as_ref().map_or("not_available", |reason| reason.key.as_str())));
     }
     let journal_len = lock(&state.journal).entries.len();
     let result = apply_inner(state, id, option, session, game);
@@ -458,9 +463,6 @@ fn disable_inner(state: &AppState, id: &str, game: Option<&Game>) -> AppResult<(
 /// Controleert na een wijziging of Windows hem echt heeft overgenomen.
 pub fn verify(state: &AppState, id: &str, enabled: bool, game: Option<&Game>) -> AppResult<()> {
     let st = status(state, id, game);
-    if matches!(st.state, TweakState::Unknown | TweakState::Unavailable) {
-        return Ok(());
-    }
     let expected = if enabled { TweakState::On } else { TweakState::Off };
     if st.state != expected {
         return Err(AppError::coded("verify_failed"));

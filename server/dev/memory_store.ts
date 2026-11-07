@@ -67,6 +67,10 @@ export function memoryStore(file: string | null): Store {
       if (u) Object.assign(u, patch);
       save();
     },
+    connectedAccounts: async () => d.licenses.filter(l => l.activated_at).map(license => ({
+      username: d.users.find(u => u.id === license.user_id)?.username ?? "Demo",
+      license, sessions: d.sessions.filter(s => s.license_id === license.id),
+    })),
     sessionByHash: async (h) => copy(d.sessions.find((s) => s.token_hash === h)),
     insertSession: async (row) => {
       d.sessions.push(structuredClone(row));

@@ -277,29 +277,27 @@ export const nl = {
       ],
     },
     nvidia_max_perf: {
-      name: "NVIDIA-energiebeheer: maximale prestaties",
-      what: "Vergrendelt de GPU op zijn volle 3D boostklok zodra er een game draait (Prefer Maximum Performance).",
-      effect: "Voorkomt dat de videokaart tijdens rustige momenten in-game terugklokt om stroom te sparen. Elimineert micro-stutters en framedrops wanneer er plotseling tegenstanders of gevechten verschijnen.",
+      name: "NVIDIA: voorkeur voor maximale prestaties",
+      what: "Selecteert maximale prestaties als voorkeur in het globale NVIDIA-driverprofiel.",
+      effect: "De kaart kan hogere kloksnelheden aanhouden en meer stroom gebruiken. Het effect op frametijden verschilt per game.",
       tech: [
         "Via NVIDIA NVAPI DRS: PREFERRED_PSTATE (0x1057E38B) = 1 op het Base Profile.",
         "Terug te zetten naar de driverstandaard via het logboek.",
       ],
     },
     driver_paging_off: {
-      name: "Systeemdrivers in RAM vergrendelen",
-      what: "Verbiedt Windows om grafische en audiostuurprogramma's naar het wisselbestand op de SSD te verplaatsen (DisablePagingExecutive).",
-      effect: "Voorkomt hard page faults midden in gevechten. Drivers blijven 100% in het snelle DDR5 RAM-geheugen, wat plotselinge micro-freezes effectief elimineert.",
+      name: "Paging van Windows-systeemcode beperken",
+      what: "Zet de Windows-geheugeninstelling DisablePagingExecutive aan. De wijziging vereist een herstart.",
+      effect: "Deze instelling kan meer systeemgeheugen gebruiken. FPS-winst is voor deze pc niet gemeten.",
       tech: [
         "DisablePagingExecutive = 1 in HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management.",
       ],
     },
     game_bar_presence_off: {
-      name: "Game Bar render-hooks uitschakelen",
-      what: "Blokkeert de achtergrondservice GameBarPresenceWriter en verwijdert D3D-renderhooks.",
-      effect: "Stopt onnodige D3D frame presentation hitches en CPU-telemetrieonderbrekingen tijdens het gamen.",
-      tech: [
-        "ActivationType = 0 op Windows.Gaming.GameBar.PresenceServer.Internal.PresenceWriter en GameConfigStore FSE-optimalisaties.",
-      ],
+      name: "Windows-voorkeuren voor volledig scherm",
+      what: "Stelt drie voorkeuren voor volledig scherm in bij het huidige Windows-account.",
+      effect: "Of de presentatie van een game verandert, hangt af van de game en de schermmodus.",
+      tech: ["GameConfigStore: GameDVR_FSEBehaviorMode = 2, GameDVR_HonorUserFSEBehaviorMode = 1, GameDVR_DXGIHonorFSEWindowsCompatible = 1."],
     },
     cpu_desktop_tuning: {
       name: "Vaste pc: minimale CPU op 100% en PCIe/NVMe-slaapstand uit",
@@ -400,7 +398,7 @@ export const nl = {
     touchpad_none: "Geen touchpad gevonden, of deze Windows-versie kan dit niet instellen.",
     already_default: "Dit stond al zo voordat nezty iets aanpaste. Er is niets om terug te zetten.",
     license_locked: "Je licentie is niet geldig. Verleng hem om dit te gebruiken. Alles terugzetten blijft altijd werken.",
-    license_reverted: "Je licentie is niet meer geldig. nezty heeft alles teruggezet naar de Windows-standaard ({count} wijzigingen).",
+    license_reverted: "Je licentie is niet meer geldig. Nezty heeft {count} wijzigingen teruggezet naar de oorspronkelijke instellingen.",
     lic_offline: "Geen verbinding met de licentieserver. Controleer je internet en probeer het opnieuw.",
     lic_bad_token: "Het antwoord van de licentieserver klopt niet. Probeer het later opnieuw.",
     lic_server_error: "Er ging iets mis bij de licentieserver. Probeer het later opnieuw.",
@@ -657,7 +655,7 @@ export const nl = {
     cleanupOpen: "Bekijk wat weg kan",
     hero: {
       title: "Alles activeren",
-      text: "Zet in Ã©Ã©n keer alles aan wat op dit apparaat meetbaar helpt: Windows, je scherm, wifi en je games. Wat niet bij je pc past, slaat nezty over. Nieuwe games krijgen het daarna vanzelf.",
+      text: "Past de beschikbare Windows-, scherm-, netwerk- en game-instellingen toe. Het effect verschilt per pc en game.",
       button: "Alles activeren",
       again: "Opnieuw controleren",
       busy: "Bezig met activerenâ€¦",
@@ -718,7 +716,7 @@ export const nl = {
     },
     covers: {
       title: "Wat Alles activeren doet",
-      sub: "Alleen instellingen met echt, meetbaar effect. Een groen vinkje betekent: staat aan en werkt.",
+      sub: "Een groen vinkje betekent dat de instelling aanstaat. De FPS-meting op het dashboard laat zien hoe je game presteert.",
       active: "Actief",
       todo: "Nog niet",
       afterGame: "Werkt na herstart van de game",
@@ -753,7 +751,7 @@ export const nl = {
   status: {
     checking: "Status controlerenâ€¦",
     ready: "Alles is actief",
-    readySub: "Alles uit Alles activeren staat aan en werkt.",
+    readySub: "De geselecteerde instellingen staan aan.",
     restart: "Herstart je pc om af te ronden",
     restartSub: "Werkt pas na een herstart: {names}.",
     restartSubGeneric: "Een instelling werkt pas nadat Windows opnieuw is opgestart.",

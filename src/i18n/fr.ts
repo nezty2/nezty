@@ -279,28 +279,26 @@ export const fr: Dict = {
       ],
     },
     nvidia_max_perf: {
-      name: "Gestion de l'alimentation NVIDIA : Performances maximales",
-      what: "Verrouille les fréquences du GPU à son boost maximal dès qu'un jeu 3D tourne.",
-      effect: "Empêche la carte graphique de baisser sa fréquence pendant les moments calmes, éliminant les saccades quand un combat commence.",
+      name: "NVIDIA : privilégier les performances maximales",
+      what: "Sélectionne la préférence de performances maximales dans le profil global du pilote NVIDIA.",
+      effect: "Le GPU peut maintenir des fréquences plus élevées et consommer davantage. L’effet sur le temps de trame dépend du jeu.",
       tech: [
         "Via NVIDIA NVAPI DRS : PREFERRED_PSTATE (0x1057E38B) = 1 sur le Base Profile.",
       ],
     },
     driver_paging_off: {
-      name: "Verrouiller les pilotes système en RAM",
-      what: "Empêche Windows de transférer les pilotes du noyau vers le fichier d'échange du SSD (DisablePagingExecutive).",
-      effect: "Évite les défauts de page majeurs en plein jeu, gardant les pilotes en RAM ultra-rapide.",
+      name: "Limiter la pagination du code système Windows",
+      what: "Active le paramètre mémoire DisablePagingExecutive de Windows. Un redémarrage est nécessaire.",
+      effect: "La consommation de mémoire peut augmenter. Aucun gain de FPS n’a été mesuré sur ce PC.",
       tech: [
         "DisablePagingExecutive = 1 dans Memory Management.",
       ],
     },
     game_bar_presence_off: {
-      name: "Désactiver les hooks de rendu Game Bar",
-      what: "Bloque le service d'arrière-plan GameBarPresenceWriter et supprime les hooks de rendu D3D.",
-      effect: "Élimine les accrocs de présentation d'images D3D et les interruptions de télémétrie CPU en jeu.",
-      tech: [
-        "ActivationType = 0 sur PresenceWriter.",
-      ],
+      name: "Préférences du mode plein écran de Windows",
+      what: "Règle trois préférences du plein écran pour le compte Windows actuel.",
+      effect: "Le résultat dépend du jeu et de son mode d’affichage.",
+      tech: ["GameConfigStore: GameDVR_FSEBehaviorMode = 2, GameDVR_HonorUserFSEBehaviorMode = 1, GameDVR_DXGIHonorFSEWindowsCompatible = 1."],
     },
     cpu_desktop_tuning: {
       name: "PC fixe : CPU minimum ÃƒÂ  100 % et veille PCIe/NVMe coupÃƒÂ©e",
@@ -401,7 +399,7 @@ export const fr: Dict = {
     touchpad_none: "Aucun pavÃƒÂ© tactile trouvÃƒÂ©, ou cette version de Windows ne permet pas ce rÃƒÂ©glage.",
     already_default: "C'ÃƒÂ©tait dÃƒÂ©jÃƒÂ  rÃƒÂ©glÃƒÂ© ainsi avant que nezty ne change quoi que ce soit. Rien ÃƒÂ  rÃƒÂ©tablir.",
     license_locked: "Votre licence n'est pas valide. Renouvelez-la pour utiliser ceci. Tout rÃƒÂ©tablir fonctionne toujours.",
-    license_reverted: "Votre licence n'est plus valide. nezty a tout rÃƒÂ©tabli aux rÃƒÂ©glages par dÃƒÂ©faut de Windows ({count} modifications).",
+    license_reverted: "La licence n’est plus valide. Nezty a rétabli les valeurs d’origine pour {count} modifications.",
     lic_offline: "Pas de connexion au serveur de licences. VÃƒÂ©rifiez votre connexion Internet et rÃƒÂ©essayez.",
     lic_bad_token: "La rÃƒÂ©ponse du serveur de licences n'est pas correcte. RÃƒÂ©essayez plus tard.",
     lic_server_error: "Un problÃƒÂ¨me est survenu sur le serveur de licences. RÃƒÂ©essayez plus tard.",
@@ -658,7 +656,7 @@ export const fr: Dict = {
     cleanupOpen: "Voir ce qui peut partir",
     hero: {
       title: "Tout activer",
-      text: "Active en une fois tout ce qui aide de faÃƒÂ§on mesurable sur cet appareil : Windows, votre ÃƒÂ©cran, le Wi-Fi et vos jeux. Ce qui ne convient pas ÃƒÂ  votre PC, nezty le laisse de cÃƒÂ´tÃƒÂ©. Les nouveaux jeux en profitent ensuite automatiquement.",
+      text: "Applique les réglages disponibles pour Windows, l’écran, le réseau et les jeux. Le résultat dépend du PC et du jeu.",
       button: "Tout activer",
       again: "VÃƒÂ©rifier ÃƒÂ  nouveau",
       busy: "Activation en coursÃ¢â‚¬Â¦",
@@ -719,7 +717,7 @@ export const fr: Dict = {
     },
     covers: {
       title: "Ce que fait Tout activer",
-      sub: "Uniquement des rÃƒÂ©glages ÃƒÂ  l'effet rÃƒÂ©el et mesurable. Une coche verte signifie : activÃƒÂ© et fonctionnel.",
+      sub: "Une coche verte indique que le réglage est activé. La mesure des FPS du tableau de bord permet de vérifier les performances du jeu.",
       active: "Actif",
       todo: "Pas encore",
       afterGame: "Fonctionne aprÃƒÂ¨s le redÃƒÂ©marrage du jeu",
@@ -754,7 +752,7 @@ export const fr: Dict = {
   status: {
     checking: "VÃƒÂ©rification du statutÃ¢â‚¬Â¦",
     ready: "Tout est actif",
-    readySub: "Tout ce que contient Tout activer est activÃƒÂ© et fonctionne.",
+    readySub: "Les réglages sélectionnés sont activés.",
     restart: "RedÃƒÂ©marrez votre PC pour terminer",
     restartSub: "Ne fonctionne qu'aprÃƒÂ¨s un redÃƒÂ©marrage : {names}.",
     restartSubGeneric: "Un rÃƒÂ©glage ne fonctionne qu'aprÃƒÂ¨s le redÃƒÂ©marrage de Windows.",

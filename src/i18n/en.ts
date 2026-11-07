@@ -279,29 +279,27 @@ export const en: Dict = {
       ],
     },
     nvidia_max_perf: {
-      name: "NVIDIA Power Management: Prefer Maximum Performance",
-      what: "Locks GPU clocks at full boost frequency whenever a 3D game is running.",
-      effect: "Prevents your graphics card from downclocking during quiet moments. Eliminates frametime spikes and micro-stutters when combat suddenly begins.",
+      name: "NVIDIA: prefer maximum performance",
+      what: "Selects the maximum performance preference in the global NVIDIA driver profile.",
+      effect: "The GPU may maintain higher clock speeds and use more power. Frame-time changes depend on the game.",
       tech: [
         "Uses NVIDIA NVAPI DRS: PREFERRED_PSTATE (0x1057E38B) = 1 on Base Profile.",
         "Can be reverted to driver default via the log.",
       ],
     },
     driver_paging_off: {
-      name: "Lock System Drivers in RAM",
-      what: "Prevents Windows from paging kernel drivers and executive code to the SSD pagefile (DisablePagingExecutive).",
-      effect: "Prevents hard page faults during intense matches. Drivers stay in high-speed RAM, eliminating sudden driver micro-freezes.",
+      name: "Limit paging of Windows system code",
+      what: "Enables the Windows DisablePagingExecutive memory setting. A restart is required.",
+      effect: "This can increase memory use. An FPS gain has not been measured on this PC.",
       tech: [
         "DisablePagingExecutive = 1 in HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management.",
       ],
     },
     game_bar_presence_off: {
-      name: "Disable Game Bar Render Hooks",
-      what: "Blocks background GameBarPresenceWriter and removes D3D render hooks.",
-      effect: "Eliminates D3D frame presentation hitches and CPU telemetry interruptions while gaming.",
-      tech: [
-        "ActivationType = 0 on Windows.Gaming.GameBar.PresenceServer.Internal.PresenceWriter and GameConfigStore FSE tweaks.",
-      ],
+      name: "Windows full-screen preferences",
+      what: "Sets three full-screen presentation preferences for the current Windows account.",
+      effect: "The result depends on the game and its display mode.",
+      tech: ["GameConfigStore: GameDVR_FSEBehaviorMode = 2, GameDVR_HonorUserFSEBehaviorMode = 1, GameDVR_DXGIHonorFSEWindowsCompatible = 1."],
     },
     cpu_desktop_tuning: {
       name: "Desktop PC: minimum CPU at 100% and PCIe/NVMe sleep off",
@@ -402,7 +400,7 @@ export const en: Dict = {
     touchpad_none: "No touchpad found, or this version of Windows can't set this.",
     already_default: "This was already set before nezty changed anything. There is nothing to revert.",
     license_locked: "Your license isn't valid. Renew it to use this. Revert everything always keeps working.",
-    license_reverted: "Your license is no longer valid. nezty has reverted everything to the Windows defaults ({count} changes).",
+    license_reverted: "Your license is no longer valid. Nezty restored {count} changes to their original settings.",
     lic_offline: "No connection to the license server. Check your internet and try again.",
     lic_bad_token: "The license server's answer isn't right. Try again later.",
     lic_server_error: "Something went wrong at the license server. Try again later.",
@@ -659,7 +657,7 @@ export const en: Dict = {
     cleanupOpen: "See what can go",
     hero: {
       title: "Activate everything",
-      text: "Turns on everything that measurably helps on this device in one go: Windows, your display, Wi-Fi and your games. What does not fit your PC, nezty skips. New games get it automatically after that.",
+      text: "Applies the available Windows, display, network and game settings. The effect depends on your PC and game.",
       button: "Activate everything",
       again: "Check again",
       busy: "Activatingâ€¦",
@@ -720,7 +718,7 @@ export const en: Dict = {
     },
     covers: {
       title: "What Activate everything does",
-      sub: "Only settings with a real, measurable effect. A green check means: on and working.",
+      sub: "A green check means the setting is enabled. Use the FPS measurement on the dashboard to check game performance.",
       active: "Active",
       todo: "Not yet",
       afterGame: "Works after restarting the game",
@@ -755,7 +753,7 @@ export const en: Dict = {
   status: {
     checking: "Checking statusâ€¦",
     ready: "Everything is active",
-    readySub: "Everything from Activate everything is on and working.",
+    readySub: "The selected settings are enabled.",
     restart: "Restart your PC to finish",
     restartSub: "Only works after a restart: {names}.",
     restartSubGeneric: "A setting only works after Windows has restarted.",

@@ -87,6 +87,8 @@ pub fn set_mouse_params(params: [i32; 3]) {
 
 /// Leest MouseThreshold1/2 en MouseSpeed uit het register en past ze direct toe.
 pub fn apply_mouse_from_registry() {
+    #[cfg(test)]
+    if registry::testing_hives() { return; }
     let read = |name: &str, default: i32| -> i32 {
         registry::read(Hive::Hkcu, "Control Panel\\Mouse", name)
             .ok()
@@ -114,6 +116,8 @@ pub fn set_min_animate(enabled: bool) {
 /// Laat andere programma's weten dat een instelling is veranderd.
 /// Past vensteranimaties en taakbalk-/transparantiewijzigingen direct toe vanuit het register, zonder ClearType aan te raken.
 pub fn apply_snappy_ui_from_registry() {
+    #[cfg(test)]
+    if registry::testing_hives() { return; }
     let min_animate = registry::read(Hive::Hkcu, "Control Panel\\Desktop\\WindowMetrics", "MinAnimate")
         .ok()
         .and_then(|d| d.as_str().map(|v| v.trim() != "0"))
@@ -141,6 +145,8 @@ fn reg_u32(path: &str, name: &str, default: u32) -> u32 {
 
 /// Past toetsenbordvertraging (0-3) en herhaalsnelheid (0-31) direct toe vanuit het register.
 pub fn apply_keyboard_from_registry() {
+    #[cfg(test)]
+    if registry::testing_hives() { return; }
     let delay = reg_u32("Control Panel\\Keyboard", "KeyboardDelay", 1).min(3);
     let speed = reg_u32("Control Panel\\Keyboard", "KeyboardSpeed", 31).min(31);
     unsafe {
@@ -151,6 +157,8 @@ pub fn apply_keyboard_from_registry() {
 
 /// Laat Windows de sneltoetsen voor taal- en indelingswissel opnieuw uit het register lezen.
 pub fn apply_lang_toggle_from_registry() {
+    #[cfg(test)]
+    if registry::testing_hives() { return; }
     unsafe {
         SystemParametersInfoW(SPI_SETLANGTOGGLE, 0, std::ptr::null_mut(), SPIF_SENDCHANGE);
     }
@@ -158,6 +166,8 @@ pub fn apply_lang_toggle_from_registry() {
 
 /// Past de vlaggen van plaktoetsen, filtertoetsen en wisseltoetsen direct toe vanuit het register.
 pub fn apply_accessibility_from_registry() {
+    #[cfg(test)]
+    if registry::testing_hives() { return; }
     let sticky = reg_u32("Control Panel\\Accessibility\\StickyKeys", "Flags", 510);
     let filter = reg_u32("Control Panel\\Accessibility\\Keyboard Response", "Flags", 126);
     let toggle = reg_u32("Control Panel\\Accessibility\\ToggleKeys", "Flags", 62);

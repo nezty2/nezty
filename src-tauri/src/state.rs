@@ -44,11 +44,37 @@ pub fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 impl AppState {
+    /// De periodieke controle kan net het logboek hebben. Wacht op de schrijver
+    /// zodat het venster bij een gelijktijdige start gewoon kan openen.
+    pub fn open_desktop(data_dir: PathBuf, elevated: bool) -> crate::error::AppResult<Self> {
+        let start = std::time::Instant::now();
+        loop {
+            match Self::open(data_dir.clone(), elevated, false) {
+                Err(crate::error::AppError::Io(e)) if e.raw_os_error() == Some(32) && start.elapsed().as_secs() < 60 =>
+                    std::thread::sleep(std::time::Duration::from_millis(250)),
+                result => return result,
+            }
+        }
+    }
+    #[cfg(any(test, feature = "selftest"))]
     pub fn new(data_dir: PathBuf, elevated: bool) -> Self {
+        let journal = Journal::load(&data_dir);
+        Self::with_journal(data_dir, elevated, journal)
+    }
+
+    pub fn open(data_dir: PathBuf, elevated: bool, uninstalling: bool) -> crate::error::AppResult<Self> {
+        #[cfg(feature = "selftest")]
+        if std::env::var_os("NZTY_DATA_DIR").is_some_and(|p| !p.is_empty()) {
+            return Ok(Self::new(data_dir, elevated));
+        }
+        let journal = Journal::open(&data_dir, uninstalling)?;
+        Ok(Self::with_journal(data_dir, elevated, journal))
+    }
+
+    fn with_journal(data_dir: PathBuf, elevated: bool, journal: Journal) -> Self {
         std::fs::create_dir_all(&data_dir).ok();
         let settings = load_json::<Settings>(&data_dir.join("settings.json")).unwrap_or_default();
         let profiles = load_json::<Vec<GameProfile>>(&data_dir.join("profiles.json")).unwrap_or_default();
-        let journal = Journal::load(&data_dir);
         AppState {
             data_dir,
             elevated,

@@ -81,6 +81,7 @@ pub fn start(app: AppHandle, state: Arc<AppState>) {
             std::thread::sleep(Duration::from_secs(3));
             let games = state.all_games();
             if games.is_empty() {
+                crate::timer::hold(false);
                 crate::tweaks::smoothness::release_all_bg_tamer();
                 continue;
             }
@@ -93,12 +94,13 @@ pub fn start(app: AppHandle, state: Arc<AppState>) {
                 .collect();
             *lock(&state.running_games) = now.clone();
             // Fijnere timer (0,5 ms) alleen zolang er een game draait en de tweak aan staat.
-            let timer_on = crate::tweaks::status(&state, "timer_resolution", None).state == TweakState::On;
+            let licensed = crate::license::require(&state).is_ok();
+            let timer_on = licensed && crate::tweaks::status(&state, "timer_resolution", None).state == TweakState::On;
             crate::timer::hold(timer_on && !now.is_empty());
 
             // Achtergrond-Temmer: zet bekende achtergrond-apps op EcoQoS / lage prioriteit tijdens het spelen.
             // Raakt nooit het gameproces zelf aan (nul anti-cheat risico).
-            let bg_tamer_on = crate::tweaks::status(&state, "background_tamer", None).state == TweakState::On;
+            let bg_tamer_on = licensed && crate::tweaks::status(&state, "background_tamer", None).state == TweakState::On;
             let active_game_procs: HashSet<String> = games
                 .iter()
                 .filter(|g| now.contains(&g.id))
@@ -109,7 +111,7 @@ pub fn start(app: AppHandle, state: Arc<AppState>) {
             // Fortnite schrijft zijn ini bij het afsluiten. Pas na twee rondes zonder Fortnite (zo'n 6 seconden)
             // zetten wat tijdens het spelen is gekozen, zodat Fortnite het niet meer overschrijft.
             fortnite_gone = if now.contains(FORTNITE) { 0 } else { fortnite_gone.saturating_add(1) };
-            if fortnite_gone >= 2 && !lock(&state.settings).fortnite_pending.is_empty() {
+            if licensed && fortnite_gone >= 2 && !lock(&state.settings).fortnite_pending.is_empty() {
                 match crate::fortnite::apply_pending(&state) {
                     Some(Ok(_)) => boost::notify(&app, "success", Msg::new("fortnite_pending_done")),
                     Some(Err(e)) => boost::notify(&app, "error", Msg::new("fortnite_pending_failed").with("detail", e.to_string())),

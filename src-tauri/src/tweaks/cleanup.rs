@@ -5,6 +5,8 @@ use crate::journal::JournalEntry;
 use crate::models::{CleanupItem, CleanupPreview, CleanupResult, JournalKind, Msg};
 use crate::state::{lock, AppState};
 use std::path::{Path, PathBuf};
+use std::os::windows::fs::MetadataExt;
+use windows_sys::Win32::Storage::FileSystem::FILE_ATTRIBUTE_REPARSE_POINT;
 
 struct Candidate {
     id: &'static str,
@@ -45,6 +47,7 @@ fn dir_stats(path: &Path) -> (u64, u64) {
         let Ok(rd) = std::fs::read_dir(&dir) else { continue };
         for entry in rd.flatten() {
             let Ok(meta) = entry.metadata() else { continue };
+            if meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 { continue; }
             if meta.is_dir() {
                 stack.push(entry.path());
             } else {
@@ -59,7 +62,7 @@ fn dir_stats(path: &Path) -> (u64, u64) {
 pub fn preview(state: &AppState) -> CleanupPreview {
     let mut items = vec![];
     for c in candidates() {
-        if !c.path.is_dir() {
+        if !cleanup_directory(&c.path) {
             continue;
         }
         let (size, files) = dir_stats(&c.path);
@@ -84,6 +87,7 @@ fn clean_dir(path: &Path, result: &mut CleanupResult) {
     for entry in rd.flatten() {
         let p = entry.path();
         let Ok(meta) = entry.metadata() else { continue };
+        if meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 { continue; }
         if meta.is_dir() {
             clean_dir(&p, result);
             let _ = std::fs::remove_dir(&p);
@@ -101,15 +105,24 @@ fn clean_dir(path: &Path, result: &mut CleanupResult) {
 }
 
 pub fn run(state: &AppState, item_ids: &[String]) -> AppResult<CleanupResult> {
+    crate::license::require(state)?;
+    run_selected(state, item_ids, &candidates())
+}
+
+fn cleanup_directory(path: &Path) -> bool {
+    path.is_absolute() && path.parent().is_some() && path.is_dir() &&
+        path.ancestors().all(|part| std::fs::symlink_metadata(part).is_ok_and(|m| m.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT == 0))
+}
+
+fn run_selected(state: &AppState, item_ids: &[String], cands: &[Candidate]) -> AppResult<CleanupResult> {
     let mut result = CleanupResult::default();
-    let cands = candidates();
     for id in item_ids {
         let Some(c) = cands.iter().find(|c| c.id == id) else { continue };
         if c.needs_admin && !state.elevated {
             result.admin_skipped.push(c.id.to_string());
             continue;
         }
-        if !c.path.is_dir() {
+        if !cleanup_directory(&c.path) {
             continue;
         }
         clean_dir(&c.path, &mut result);
@@ -125,4 +138,25 @@ pub fn run(state: &AppState, item_ids: &[String]) -> AppResult<CleanupResult> {
     e.note = Some("not_revertable".into());
     lock(&state.journal).record(e)?;
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn cleans_only_selected_temporary_data_and_marks_it_irreversible() {
+        let root = std::env::temp_dir().join(format!("nezty-cleanup-{}", uuid::Uuid::new_v4()));
+        let state = AppState::new(root.join("data"), false);
+        let selected = root.join("selected");
+        std::fs::create_dir(&selected).unwrap();
+        std::fs::write(selected.join("sample"), b"abc").unwrap();
+        std::fs::write(root.join("keep"), b"keep").unwrap();
+        assert!(matches!(run(&state, &[]), Err(crate::error::AppError::Coded { key, .. }) if key == "license_locked"));
+        let candidate = Candidate { id: "temp", path: selected, shader: false, needs_admin: false };
+        let r = run_selected(&state, &["temp".into()], &[candidate]).unwrap();
+        assert_eq!((r.deleted_files, r.freed_bytes), (1, 3));
+        assert!(root.join("keep").is_file());
+        assert!(!lock(&state.journal).entries[0].revertable);
+        std::fs::remove_dir_all(root).unwrap();
+    }
 }

@@ -13,7 +13,7 @@ use crate::state::{lock, AppState};
 use crate::tweaks;
 use crate::winapi::wide;
 use std::ptr::{null, null_mut};
-use windows_sys::Win32::System::Registry::{RegCloseKey, RegCreateKeyExW, HKEY, HKEY_LOCAL_MACHINE, KEY_WRITE, REG_OPTION_VOLATILE};
+use windows_sys::Win32::System::Registry::{RegCloseKey, RegCreateKeyExW, HKEY, KEY_WRITE, REG_OPTION_VOLATILE};
 
 /// Vluchtige sleutel (bestaat alleen tot de volgende herstart), met daaronder één sleutel per tweak.
 const MARKER_ROOT: &str = "SOFTWARE\\nezty-pending-restart";
@@ -21,7 +21,8 @@ const MARKER_ROOT: &str = "SOFTWARE\\nezty-pending-restart";
 fn create_volatile(path: &str) -> bool {
     let w = wide(path);
     let mut key: HKEY = null_mut();
-    let rc = unsafe { RegCreateKeyExW(HKEY_LOCAL_MACHINE, w.as_ptr(), 0, null(), REG_OPTION_VOLATILE, KEY_WRITE, null(), &mut key, null_mut()) };
+    let hive = Hive::Hklm.root();
+    let rc = unsafe { RegCreateKeyExW(hive.raw_handle(), w.as_ptr(), 0, null(), REG_OPTION_VOLATILE, KEY_WRITE, null(), &mut key, null_mut()) };
     if rc != 0 {
         return false;
     }

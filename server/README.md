@@ -62,7 +62,7 @@ Alle commando's vanuit de map `nzty-broncode`.
    ```json
    { "url": "https://<project-ref>.supabase.co/functions/v1/license", "publicKey": "..." }
    ```
-   Vanaf nu bouwt `scripts/build.ps1` nezty met inlogscherm. Zonder dit bestand bouwt hij zonder licentie, zoals voorheen.
+   Vanaf nu bouwt `scripts/build.ps1` nezty met inlogscherm. Zonder dit bestand stopt het klantbuildscript.
 
 ## Dagelijks gebruik
 
@@ -92,7 +92,7 @@ In plaats van `--sleutel` kun je `--id` gebruiken (de eerste tekens uit `licenti
 - **Intrekken, verwijderen en verlengen.** Dit ziet de klant bij de volgende controle: bij het starten, daarna elke 15 minuten, en bij de demo elke minuut. Zegt de server dat de licentie niet meer geldig is (ingetrokken, verlopen of verwijderd), of is het laatste token ouder dan zijn controlemoment (24 uur zonder bevestiging, demo 5 minuten), dan zet de app meteen alle tweaks terug naar hoe het stond (op basis van het herstellogboek), ook wat "Alles activeren" had aangezet, stopt Game Boost en de crosshair en toont "Licentie ingetrokken" of "Licentie verlopen" met je contactgegevens.
 - **Verwijderen** (`licentie:verwijder`) haalt sleutel, sessie en account weg. Voor de klant is dat hetzelfde als intrekken. Wil hij verder, dan heeft hij een nieuwe sleutel nodig en maakt hij opnieuw een account (dezelfde gebruikersnaam mag weer).
 - **Niet terugzetten.** Alleen uitgelogd, "Ingelogd blijven" uit of minder dan 24 uur offline: de tweaks blijven staan, ook na een herstart van de pc. De app toont wel het inlogscherm. Zonder enig bewaard token (bijvoorbeeld na een update vanaf 0.4.0 zonder "Ingelogd blijven") krijgt de klant 24 uur om in te loggen.
-- **Ook zonder de app te openen.** 45 seconden na het inloggen in Windows controleert de app de licentie. Staat starten met Windows aan, dan doet de taak "nezty autostart" dat. Staat het uit, dan maakt de app de stille taak "nezty licentiecontrole", die alleen de licentie controleert en zo nodig alles terugzet. Er is altijd hooguit één van de twee.
+- **Ook met het venster dicht.** De stille licentietaak loopt per Windows-account bij aanmelding en elke 15 minuten zolang het account is aangemeld. Het automatisch openen van de app is een aparte, optionele taak.
 
 ## Testen zonder Supabase
 

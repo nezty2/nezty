@@ -115,7 +115,6 @@ fn set_hotkey_bits(state: &AppState, on: bool, session: Option<&str>, note: Opti
             continue;
         }
         let new = RegData::Str(new_flags.to_string());
-        registry::write(Hive::Hkcu, path, "Flags", &new)?;
         let mut e = JournalEntry::new(d.id, d.name, JournalKind::Registry, &registry::full_path(Hive::Hkcu, path, "Flags"));
         e.old_value = Some(old.display());
         e.new_value = Some(new.display());
@@ -129,7 +128,7 @@ fn set_hotkey_bits(state: &AppState, on: bool, session: Option<&str>, note: Opti
             old,
             post: Some(PostAction::AccessibilitySpi),
         };
-        lock(&state.journal).record(e)?;
+        lock(&state.journal).write_registry(e, &new)?;
     }
     winapi::apply_accessibility_from_registry();
     Ok(())
@@ -180,11 +179,11 @@ pub fn write_power_setting(scheme: &str, sub: &str, setting: &str, ac: u32, dc: 
         }
     }
     // Opnieuw activeren past de waarde direct toe, maar alleen als dit schema nog actief is.
-    if let Ok((active, _)) = system::active_scheme() {
-        if active == scheme.to_lowercase() {
-            let _ = run_cmd("powercfg", &["/setactive", scheme]);
-        }
+    if system::windows_active_scheme()?.0 == scheme.to_lowercase() {
+        let (ok, _, error) = run_cmd("powercfg", &["/setactive", scheme])?;
+        if !ok { return Err(AppError::msg(format!("powercfg: {}", error.trim()))); }
     }
+    if read_power_setting(scheme, sub, setting)? != Some((ac, dc)) { return Err(AppError::coded("verify_failed")); }
     Ok(())
 }
 
@@ -205,7 +204,6 @@ fn usb_set(state: &AppState, value: u32, session: Option<&str>, note: Option<&st
     if old_ac == value && old_dc == value {
         return Ok(());
     }
-    write_power_setting(&scheme, USB_SUB, USB_SETTING, value, value)?;
     let mut e = JournalEntry::new(d.id, d.name, JournalKind::PowerSetting, &format!("{scheme_name}: USB selective suspend"));
     e.old_value = Some(format!("AC {old_ac}, DC {old_dc}"));
     e.new_value = Some(format!("AC {value}, DC {value}"));
@@ -219,7 +217,7 @@ fn usb_set(state: &AppState, value: u32, session: Option<&str>, note: Option<&st
         ac: old_ac,
         dc: old_dc,
     };
-    lock(&state.journal).record(e)?;
+    lock(&state.journal).write_power(e, value, value)?;
     Ok(())
 }
 

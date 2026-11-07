@@ -515,7 +515,6 @@ pub fn cpu_desktop_apply(state: &AppState, session: Option<&str>) -> AppResult<(
         if old_ac == want_ac {
             continue;
         }
-        write_power_setting(&scheme, sub, setting, want_ac, old_dc)?;
         let mut e = JournalEntry::new(d.id, d.name, JournalKind::PowerSetting, &format!("{scheme_name}: {label}"));
         e.old_value = Some(format!("AC {old_ac}, DC {old_dc}"));
         e.new_value = Some(format!("AC {want_ac}, DC {old_dc}"));
@@ -528,7 +527,7 @@ pub fn cpu_desktop_apply(state: &AppState, session: Option<&str>) -> AppResult<(
             ac: old_ac,
             dc: old_dc,
         };
-        lock(&state.journal).record(e)?;
+        lock(&state.journal).write_power(e, want_ac, old_dc)?;
     }
     if !changed_any {
         return Err(AppError::coded("power_setting_missing"));

@@ -151,6 +151,7 @@ fn keep_out_of_alt_tab(app: &AppHandle, win: &tauri::WebviewWindow) {
 /// Zet de overlay aan of uit en bewaart dat in de instellingen.
 pub fn set_enabled(app: &AppHandle, state: &AppState, enabled: bool) -> AppResult<()> {
     if enabled {
+        crate::license::require(state)?;
         let win = ensure_window(app)?;
         place(app, &win)?;
         win.show().map_err(|e| AppError::msg(e.to_string()))?;

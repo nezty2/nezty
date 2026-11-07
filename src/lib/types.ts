@@ -232,7 +232,6 @@ export interface Settings {
   /** Alleen door de backend bijgehouden: games die "Alles activeren" al hebben gehad. */
   activatedGames: string[];
   /** Alleen door de backend bijgehouden: licentie, sinds wanneer er geen bewaard token is (ms). */
-  licenseNoTokenSince: number | null;
   startupKeepOff: string[];
   startupCameBack: string[];
   /** Alleen door de backend bijgehouden: Fortnite-aanbevelingen voor na het afsluiten. */

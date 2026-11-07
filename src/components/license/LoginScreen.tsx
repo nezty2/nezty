@@ -7,6 +7,7 @@ import { api, asBackendError } from "@/lib/ipc";
 import { formatKeyInput, keyChars } from "@/lib/license";
 import { useApp } from "@/store/app";
 import { ContactInfo } from "./LicenseParts";
+import { LogPage } from "@/pages/Log";
 
 type Tab = "register" | "login";
 type Panel = null | "forgot" | "request";
@@ -51,6 +52,8 @@ export function LoginScreen() {
   const setLicense = useApp((s) => s.setLicense);
   const [tab, setTab] = useState<Tab>("login");
   const [panel, setPanel] = useState<Panel>(null);
+  const [showRecovery, setShowRecovery] = useState(false);
+  const refreshJournal = useApp((s) => s.refreshJournal);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [key, setKey] = useState("");
@@ -104,6 +107,14 @@ export function LoginScreen() {
     }
   };
 
+  if (showRecovery) {
+    return (
+      <div className="absolute inset-0 z-40 overflow-y-auto bg-panel p-6">
+        <Button onClick={() => setShowRecovery(false)}>{t("common.close")}</Button>
+        <LogPage />
+      </div>
+    );
+  }
   return (
     <div className="fixed inset-0 z-[90] flex items-center justify-center overflow-y-auto px-4 py-10">
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }} className="w-full max-w-[420px]">
@@ -196,6 +207,9 @@ export function LoginScreen() {
           <span className="text-line-2">·</span>
           <button type="button" onClick={() => setPanel(panel === "request" ? null : "request")} className="text-ink-3 hover:text-ink">
             {t("login.request")}
+          </button>
+          <button type="button" onClick={() => { void refreshJournal(); setShowRecovery(true); }} className="text-ink-3 hover:text-ink">
+            {t("license.gate.revert")}
           </button>
         </div>
 

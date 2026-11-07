@@ -294,6 +294,7 @@ pub fn queue(state: &AppState, ids: &[String]) -> AppResult<FortniteOverview> {
 
 /// Na het afsluiten van Fortnite: wat klaarstaat zetten. None als er niets klaarstaat of Fortnite nog draait.
 pub fn apply_pending(state: &AppState) -> Option<AppResult<FortniteOverview>> {
+    if crate::license::require(state).is_err() { return None; }
     let ids = lock(&state.settings).fortnite_pending.clone();
     if ids.is_empty() || is_running(state) {
         return None;

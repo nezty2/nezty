@@ -339,26 +339,23 @@ pub fn store_background_allowed() -> AppResult<bool> {
 pub fn set_store_background(state: &AppState, allowed: bool) -> AppResult<()> {
     let old = registry::read(Hive::Hkcu, BAA, "GlobalUserDisabled")?;
     let new = RegData::Dword(if allowed { 0 } else { 1 });
-    if old == new {
-        return Ok(());
+    if old != new {
+        let mut e = JournalEntry::new("store_background_apps", "Store apps in background", JournalKind::StoreApp, &registry::full_path(Hive::Hkcu, BAA, "GlobalUserDisabled"));
+        e.old_value = Some(old.display());
+        e.new_value = Some(new.display());
+        e.revertable = true;
+        e.payload = RevertPayload::Registry { hive: Hive::Hkcu, path: BAA.into(), name: "GlobalUserDisabled".into(), old, post: None };
+        lock(&state.journal).write_registry(e, &new)?;
     }
-    registry::write(Hive::Hkcu, BAA, "GlobalUserDisabled", &new)?;
-    let mut e = JournalEntry::new("store_background_apps", "Store apps in background", JournalKind::StoreApp, &registry::full_path(Hive::Hkcu, BAA, "GlobalUserDisabled"));
-    e.old_value = Some(old.display());
-    e.new_value = Some(new.display());
-    e.revertable = true;
-    e.payload = RevertPayload::Registry { hive: Hive::Hkcu, path: BAA.into(), name: "GlobalUserDisabled".into(), old, post: None };
-    lock(&state.journal).record(e)?;
     let old_s = registry::read(Hive::Hkcu, SEARCH_BG, "BackgroundAppGlobalToggle")?;
     let new_s = RegData::Dword(if allowed { 1 } else { 0 });
     if old_s != new_s {
-        registry::write(Hive::Hkcu, SEARCH_BG, "BackgroundAppGlobalToggle", &new_s)?;
         let mut es = JournalEntry::new("store_background_apps", "Store apps in background", JournalKind::StoreApp, &registry::full_path(Hive::Hkcu, SEARCH_BG, "BackgroundAppGlobalToggle"));
         es.old_value = Some(old_s.display());
         es.new_value = Some(new_s.display());
         es.revertable = true;
         es.payload = RevertPayload::Registry { hive: Hive::Hkcu, path: SEARCH_BG.into(), name: "BackgroundAppGlobalToggle".into(), old: old_s, post: None };
-        lock(&state.journal).record(es)?;
+        lock(&state.journal).write_registry(es, &new_s)?;
     }
     Ok(())
 }

@@ -3,7 +3,7 @@
 
 use crate::error::AppResult;
 use crate::journal::PostAction;
-use crate::powershell::run_ps;
+use crate::powershell::{ps_quote, run_ps};
 use crate::registry::Hive;
 use crate::state::AppState;
 use crate::tweaks::regtweak::{self, RegSpec};
@@ -40,10 +40,10 @@ pub fn lang_hotkey_disable(state: &AppState) -> AppResult<()> {
 /// Zet het vinkje "De computer mag dit apparaat uitschakelen" voor één apparaat. Alleen nog nodig om oude
 /// logboekregels van de weggehaalde tweak exact terug te zetten.
 pub fn set_device_power(instance: &str, enable: bool) -> AppResult<()> {
-    let inst = instance.replace('\'', "''");
+    let inst = ps_quote(instance);
     let val = if enable { "$true" } else { "$false" };
     run_ps(&format!(
-        "$d = @(Get-CimInstance -Namespace root\\wmi -ClassName MSPower_DeviceEnable | Where-Object {{ $_.InstanceName -eq '{inst}' }}); if ($d.Count -eq 0) {{ throw 'device not found' }}; $d | Set-CimInstance -Property @{{ Enable = {val} }}"
+        "$d = @(Get-CimInstance -Namespace root\\wmi -ClassName MSPower_DeviceEnable | Where-Object {{ $_.InstanceName -eq {inst} }}); if ($d.Count -ne 1) {{ throw 'device missing or ambiguous' }}; $d | Set-CimInstance -Property @{{ Enable = {val} }}"
     ))?;
     Ok(())
 }

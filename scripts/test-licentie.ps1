@@ -11,21 +11,29 @@ param([string]$Stap = "alles")
 $ErrorActionPreference = "Stop"
 Set-Location (Join-Path $PSScriptRoot "..")
 
-$dataDir = Join-Path $env:APPDATA "com.nzty.desktop"
+$sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+$dataDir = Join-Path $env:ProgramFiles "Nezty Recovery\$sid"
 $journal = Join-Path $dataDir "journal.json"
-$exe = Join-Path $env:LOCALAPPDATA "nezty\nezty.exe"
-if (-not (Test-Path $exe)) { $exe = (Get-ChildItem "$env:LOCALAPPDATA\Programs" -Recurse -Filter nezty.exe -ErrorAction SilentlyContinue | Select-Object -First 1).FullName }
+$exe = Join-Path $env:ProgramFiles "nezty\nezty.exe"
+if (-not (Test-Path -LiteralPath $exe)) { throw "Installeer eerst de klantbuild in Program Files." }
 
 function Kop($t) { Write-Host ""; Write-Host "=== $t ===" -ForegroundColor Cyan }
 function Wacht($t) { Write-Host ""; Read-Host "  $t  (Enter om door te gaan)" | Out-Null }
 
 # Registerwaarde lezen zoals hij nu is (of "(afwezig)").
 function RegNu($hive, $path, $name) {
-    $root = if ($hive -eq "hklm") { "HKLM:" } else { "HKCU:" }
+    $roots = @{ hklm = [Microsoft.Win32.Registry]::LocalMachine; hkcu = [Microsoft.Win32.Registry]::CurrentUser; hku = [Microsoft.Win32.Registry]::Users }
+    $sub = $roots[$hive].OpenSubKey($path)
     try {
-        $v = Get-ItemProperty -Path "$root\$path" -Name $name -ErrorAction Stop
-        return [string]$v.$name
-    } catch { return "(afwezig)" }
+        if (!$sub -or $sub.GetValueNames() -notcontains $name) { return '{"t":"Absent"}' }
+        $value = $sub.GetValue($name, $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+        $kind = $sub.GetValueKind($name).ToString()
+        $types = @{ DWord='Dword'; QWord='Qword'; String='Str'; ExpandString='ExpandStr'; MultiString='MultiStr'; Binary='Binary' }
+        if ($kind -eq 'DWord') { $value = [BitConverter]::ToUInt32([BitConverter]::GetBytes([int32]$value), 0) }
+        if ($kind -eq 'QWord') { $value = [BitConverter]::ToUInt64([BitConverter]::GetBytes([int64]$value), 0) }
+        if ($kind -eq 'Binary') { $value = @($value | ForEach-Object { [int]$_ }) }
+        return (ConvertTo-Json -Compress ([ordered]@{t=$types[$kind];v=$value}))
+    } finally { if ($sub) { $sub.Dispose() } }
 }
 
 # Alle actieve (niet teruggezette) registerwijzigingen uit het logboek, met oude en huidige waarde.
@@ -53,10 +61,16 @@ function Controleer($before) {
     $entries = if ($j.entries) { $j.entries } else { $j }
     $left = @($entries | Where-Object { $_.revertable -and -not $_.reverted }).Count
     $ok = $left -eq 0
+    $seen = @{}
     foreach ($e in $before) {
         if ($e.payload -and $e.payload.kind -eq "registry") {
             $nu = RegNu $e.payload.hive $e.payload.path $e.payload.name
-            $terug = ($nu -eq "$($e.oldValue)") -or ($nu -eq "(afwezig)" -and -not $e.oldValue)
+            $target = @($e.payload.hive, $e.payload.path, $e.payload.name) -join '|'
+            if ($seen.ContainsKey($target)) { continue }
+            $seen[$target] = $true
+            if ($e.payload.old.t -eq 'Absent') { $expected = '{"t":"Absent"}' }
+            else { $expected = ConvertTo-Json -Compress ([ordered]@{t=$e.payload.old.t;v=$e.payload.old.v}) }
+            $terug = $nu -ceq $expected
             Write-Host ("   {0} {1}: nu {2}" -f ($(if ($terug) { "OK " } else { "MIS" })), $e.target, $nu)
             if (-not $terug) { $ok = $false }
         }
@@ -89,8 +103,8 @@ if ($Stap -in "alles", "uitgelogd") {
     Write-Host ("  Tweaks gebleven: {0}" -f $(if ($ok) { "JA" } else { "NEE, er is iets teruggezet" })) -ForegroundColor $(if ($ok) { "Green" } else { "Red" })
     $log = Join-Path $env:TEMP "nezty-license-check.json"
     if (Test-Path $log) { Write-Host "  Uitkomst van de controle bij het inloggen:"; Get-Content $log }
-    $taken = @("nezty autostart", "nezty licentiecontrole") | Where-Object { schtasks /Query /TN $_ 2>$null }
-    Write-Host ("  Geplande taken: {0} (hoort er precies één te zijn)" -f ($taken -join ", "))
+    $taken = @("nezty autostart", "nezty licentiecontrole $sid") | Where-Object { schtasks /Query /TN $_ 2>$null }
+    Write-Host ("  Geplande taken: {0} (licentiecontrole verplicht, autostart optioneel)" -f ($taken -join ", "))
     Wacht "Log in nezty weer in (met 'Ingelogd blijven')"
 }
 
@@ -144,6 +158,7 @@ if ($Stap -in "alles", "verwijderen-app") {
     $log = Join-Path $env:TEMP "nezty-restore-all.json"
     if (Test-Path $log) { Write-Host "  Uitkomst van --restore-all:"; Get-Content $log }
     else { Write-Warning "  $log ontbreekt: --restore-all is niet gedraaid (UAC geweigerd?)" }
+    $seen = @{}
     foreach ($e in $before) {
         if ($e.payload -and $e.payload.kind -eq "registry") {
             Write-Host ("   {0}: nu {1} (oud: {2})" -f $e.target, (RegNu $e.payload.hive $e.payload.path $e.payload.name), $e.oldValue)

@@ -6,6 +6,7 @@ import { LANGS } from "@/i18n";
 import { api, autostart, isTauri } from "@/lib/ipc";
 import { formatMb, timeAgo } from "@/lib/format";
 import type { DeviceSetting, Lang } from "@/lib/types";
+import { OwnerPanel } from "@/components/OwnerPanel";
 import { AppearanceRows } from "@/components/AppearanceRows";
 import { useApp } from "@/store/app";
 import { useUpdate } from "@/store/update";
@@ -244,6 +245,7 @@ export function SettingsPage() {
             </Card>
           </section>
 
+          <OwnerPanel />
           <UpdateSection />
 
           <section>

@@ -102,7 +102,6 @@ let settings: T.Settings = {
   migratedV050: true,
   allActive: false,
   activatedGames: [],
-  licenseNoTokenSince: null,
   startupKeepOff: [],
   startupCameBack: [],
   fortnitePending: [],

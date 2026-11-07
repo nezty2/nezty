@@ -195,13 +195,12 @@ pub fn set_enabled(state: &AppState, item_id: &str, enabled: bool) -> AppResult<
         RegData::Binary(b)
     };
     if is_enabled(&old) != enabled {
-        registry::write(hive, &path, name, &new)?;
         let mut e = JournalEntry::new("startup_apps", "Startup apps", JournalKind::Startup, name);
         e.old_value = Some(if is_enabled(&old) { "@enabled".into() } else { "@disabled".into() });
         e.new_value = Some(if enabled { "@enabled".into() } else { "@disabled".into() });
         e.revertable = true;
         e.payload = RevertPayload::Registry { hive, path: path.clone(), name: name.to_string(), old, post: None };
-        lock(&state.journal).record(e)?;
+        lock(&state.journal).write_registry(e, &new)?;
     }
     // Onthouden wat de gebruiker uit wil hebben, zodat de bewaker het uit houdt.
     {

@@ -32,7 +32,7 @@ $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""
 
 # ---------- Licentieserver ----------
 # scripts\license.json (niet in de repo): { "url": "https://<project>.supabase.co/functions/v1/license", "publicKey": "..." }
-# Zonder dit bestand bouwt nezty zonder licentie (geen inlogscherm), net als voorheen.
+# Een klantbuild vereist deze gegevens.
 $licenseConfig = Join-Path $PSScriptRoot "license.json"
 $env:NEZTY_LICENSE_URL = ""
 $env:NEZTY_LICENSE_PUBKEY = ""
@@ -43,7 +43,8 @@ if (Test-Path $licenseConfig) {
     $env:NEZTY_LICENSE_PUBKEY = [string]$lic.publicKey
     Write-Host "Licentie: aan ($($env:NEZTY_LICENSE_URL))"
 } else {
-    Write-Host "Licentie: uit (geen scripts\license.json)"
+    if (!$Selftest) { throw "scripts\license.json ontbreekt. Een klantbuild vereist de licentieserver en publieke sleutel." }
+    Write-Host "Zelftest zonder licentieserver: betaalde functies blijven vergrendeld."
 }
 
 $override = @{}

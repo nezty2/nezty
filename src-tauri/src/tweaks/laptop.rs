@@ -11,7 +11,7 @@ use crate::journal::{JournalEntry, PostAction, RevertPayload};
 use crate::models::{JournalKind, Msg, TweakState};
 use crate::registry::{self, Hive, RegData};
 use crate::state::{lock, AppState};
-use crate::tweaks::input::{read_power_setting, write_power_setting};
+use crate::tweaks::input::read_power_setting;
 use crate::tweaks::regtweak::{self, RegSpec};
 use crate::tweaks::{get, revert_via_journal, system, Status};
 use crate::winapi::wide;
@@ -165,7 +165,6 @@ fn saver_set(state: &AppState, dc_value: u32, session: Option<&str>, note: Optio
     if old_dc == dc_value {
         return Ok(());
     }
-    write_power_setting(&scheme, SAVER_SUB, SAVER_THRESHOLD, old_ac, dc_value)?;
     let mut e = JournalEntry::new(d.id, d.name, JournalKind::PowerSetting, &format!("{scheme_name}: battery saver threshold"));
     e.old_value = Some(format!("{old_dc}%"));
     e.new_value = Some(format!("{dc_value}%"));
@@ -173,7 +172,7 @@ fn saver_set(state: &AppState, dc_value: u32, session: Option<&str>, note: Optio
     e.session_id = session.map(|s| s.to_string());
     e.note = note.map(|s| s.to_string());
     e.payload = RevertPayload::PowerSetting { scheme, sub: SAVER_SUB.into(), setting: SAVER_THRESHOLD.into(), ac: old_ac, dc: old_dc };
-    lock(&state.journal).record(e)?;
+    lock(&state.journal).write_power(e, old_ac, dc_value)?;
     Ok(())
 }
 
@@ -304,14 +303,13 @@ fn apply_wants(state: &AppState, id: &str, wants: &[Want], session: Option<&str>
         if new_ac == old_ac && new_dc == old_dc {
             continue;
         }
-        write_power_setting(&scheme, w.sub, w.setting, new_ac, new_dc)?;
         let mut e = JournalEntry::new(d.id, d.name, JournalKind::PowerSetting, &format!("{scheme_name}: {}", w.label));
         e.old_value = Some(format!("AC {old_ac}, DC {old_dc}"));
         e.new_value = Some(format!("AC {new_ac}, DC {new_dc}"));
         e.revertable = true;
         e.session_id = session.map(|s| s.to_string());
         e.payload = RevertPayload::PowerSetting { scheme: scheme.clone(), sub: w.sub.into(), setting: w.setting.into(), ac: old_ac, dc: old_dc };
-        lock(&state.journal).record(e)?;
+        lock(&state.journal).write_power(e, new_ac, new_dc)?;
     }
     Ok(())
 }
@@ -536,5 +534,76 @@ mod tests {
     fn guid_roundtrip() {
         let g = parse_guid(OVERLAY_BEST).unwrap();
         assert_eq!(guid_string(&g), OVERLAY_BEST);
+    }
+
+    // Test the powercfg part on a real, inactive scheme even when this
+    // machine has no wireless adapter or hybrid processor.
+    #[test]
+    #[ignore = "opt-in remaining-hardware benchmark"]
+    fn unavailable_hardware_power_settings_roundtrip() {
+        let Some(dir) = std::env::var_os("NEZTY_PLAN_PROBE").map(std::path::PathBuf::from) else { return };
+        use crate::tweaks::network_extra;
+        let active = system::windows_active_scheme().unwrap().0;
+        let id = uuid::Uuid::new_v4().to_string();
+        let (ok, _, err) = crate::powershell::run_cmd("powercfg", &["/duplicatescheme", "SCHEME_BALANCED", &id]).unwrap();
+        assert!(ok, "{err}");
+        struct TemporaryPlan(String);
+        impl Drop for TemporaryPlan {
+            fn drop(&mut self) {
+                system::TEST_SCHEME.with(|v| v.replace(None));
+                assert!(crate::powershell::run_cmd("powercfg", &["/delete", &self.0]).unwrap().0);
+            }
+        }
+        let _plan = TemporaryPlan(id.clone());
+        system::TEST_SCHEME.with(|v| v.replace(Some(id.clone())));
+        let state = AppState::new(dir.join("power-test-journal"), false);
+        let wifi = ("19cbb8fa-5279-450e-9fac-8a3d5fedd0c1", "12bbebe6-58d6-4636-95bb-3217ef867c1a");
+        let mut report = serde_json::Map::new();
+        for (name, fields) in [("wifi_power_max", vec![wifi]), ("cpu_prefer_pcores", vec![(SUB_PROCESSOR,SCHEDPOLICY),(SUB_PROCESSOR,SHORTSCHEDPOLICY)])] {
+            if fields.iter().any(|(sub,key)| read_power_setting(&id,sub,key).unwrap().is_none()) {
+                report.insert(name.into(), "setting unavailable in cloned plan".into());
+                continue;
+            }
+            let initial = if name == "wifi_power_max" { 1 } else { 0 };
+            for (sub,key) in &fields { crate::tweaks::input::write_power_setting(&id,sub,key,initial,initial).unwrap(); }
+            let expected = if name == "wifi_power_max" {
+                network_extra::wifi_apply(&state,Some("test")).unwrap();
+                0
+            } else {
+                apply_wants(&state,name,&PCORES,Some("test")).unwrap();
+                2
+            };
+            for (sub,key) in &fields { assert_eq!(read_power_setting(&id,sub,key).unwrap(),Some((expected,expected))); }
+            assert!(crate::tweaks::revert_via_journal(&state,name,None).unwrap());
+            for (sub,key) in &fields { assert_eq!(read_power_setting(&id,sub,key).unwrap(),Some((initial,initial))); }
+            report.insert(name.into(), serde_json::json!({"AC_DC_before":[initial,initial],"AC_DC_applied":[expected,expected],"AC_DC_restored":[initial,initial]}));
+        }
+        // Exercise only the registry half of the laptop overlay here. The
+        // real workstation's live overlay must not be changed by this probe.
+        crate::registry::with_test_hives(|| {
+            let overlay_state = AppState::new(dir.join("overlay-fixture"), true);
+            let specs = mode_specs();
+            let initial = [RegData::Str(OVERLAY_BALANCED.into()), RegData::Absent];
+            for (s,old) in specs.iter().zip(&initial) { registry::write(s.hive,&s.path,&s.name,old).unwrap(); }
+            regtweak::apply(&overlay_state,get("power_mode_best").unwrap(),&specs,None,None,None).unwrap();
+            assert_eq!(regtweak::state_of(&specs).unwrap(),TweakState::On);
+            assert!(crate::tweaks::revert_via_journal(&overlay_state,"power_mode_best",None).unwrap());
+            for (s,old) in specs.iter().zip(&initial) { assert!(registry::matches_exact(s.hive,&s.path,&s.name,old).unwrap()); }
+        });
+        report.insert("power_mode_best".into(),serde_json::json!({"registry_roundtrip":true,"live_overlay_read":effective_overlay(),"live_switch":false}));
+        if touchpad_get().is_none() {
+            report.insert("touchpad_off_with_mouse".into(),serde_json::json!({"native_apply":touchpad_apply(&state,None).unwrap_err().to_string()}));
+        }
+        if !cpu_is_hybrid() {
+            report.insert("pcore_native_guard".into(),cpu_pcores_apply(&state,None).unwrap_err().to_string().into());
+        }
+        let adapters = crate::tweaks::wifi_gaming::adapter_count();
+        if adapters == 0 {
+            let result = crate::tweaks::wifi_gaming::start();
+            crate::tweaks::wifi_gaming::stop();
+            report.insert("wifi_gaming_mode".into(),serde_json::json!({"adapters":adapters,"native_start":result.unwrap_err().to_string()}));
+        }
+        assert_eq!(system::windows_active_scheme().unwrap().0,active);
+        std::fs::write(dir.join("power-subsettings.json"),serde_json::to_vec_pretty(&report).unwrap()).unwrap();
     }
 }

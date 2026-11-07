@@ -33,6 +33,7 @@ mod overlays;
 mod ping;
 mod powershell;
 mod processes;
+mod protected;
 mod registry;
 mod restart;
 mod restore;
@@ -140,7 +141,6 @@ fn save_settings(app: AppHandle, state: St<'_>, mut settings: Settings) -> AppRe
     settings.migrated_v074 = old.migrated_v074;
     settings.all_active = old.all_active;
     settings.activated_games = old.activated_games.clone();
-    settings.license_no_token_since = old.license_no_token_since;
     settings.fortnite_pending = old.fortnite_pending.clone();
     *lock(&state.settings) = settings.clone();
     state.save_settings();
@@ -256,6 +256,10 @@ async fn set_tweak(app: AppHandle, state: St<'_>, tweak_id: String, enabled: boo
             None => None,
         };
         let d = tweaks::get(&tweak_id)?;
+        if !enabled && license::require(&st).is_err() {
+            tweaks::revert_via_journal(&st, d.id, game.as_ref().map(|g| g.id.as_str()))?;
+            return Ok(tweaks::info(&st, d, game.as_ref()));
+        }
         restore_point_first(&app, &st);
         if enabled {
             // Andere optie gekozen (bv. Ultieme prestaties): eerst terug, dan opnieuw toepassen.
@@ -648,6 +652,18 @@ fn license_status(state: St<'_>) -> license::LicenseStatus {
 }
 
 #[tauri::command]
+async fn owner_revoke(state: St<'_>, id: String) -> AppResult<serde_json::Value> {
+    let st = state.inner().clone();
+    blocking(move || license::owner_revoke(&st, id)).await
+}
+
+#[tauri::command]
+async fn owner_accounts(state: St<'_>) -> AppResult<serde_json::Value> {
+    let st = state.inner().clone();
+    blocking(move || license::owner_accounts(&st)).await
+}
+
+#[tauri::command]
 async fn license_config(state: St<'_>) -> AppResult<license::PublicConfig> {
     let st = state.inner().clone();
     blocking(move || Ok(license::config(&st))).await
@@ -694,7 +710,12 @@ async fn license_logout(app: AppHandle, state: St<'_>) -> AppResult<license::Lic
 #[tauri::command]
 async fn license_refresh(app: AppHandle, state: St<'_>) -> AppResult<license::LicenseStatus> {
     let st = state.inner().clone();
-    let r = blocking(move || license::refresh(&st)).await?;
+    let handle = app.clone();
+    let r = blocking(move || {
+        let r = license::refresh(&st)?;
+        license::enforce(&handle, &st);
+        Ok(r)
+    }).await?;
     let _ = app.emit("license-state", r.clone());
     Ok(r)
 }
@@ -834,9 +855,8 @@ async fn check_update(app: AppHandle) -> AppResult<Option<updater::UpdateInfo>> 
 
 /// Downloadt, controleert de handtekening en start de installer in updatemodus. nezty sluit daarna.
 #[tauri::command]
-async fn install_update(app: AppHandle, state: St<'_>) -> AppResult<()> {
-    let data_dir = state.data_dir.clone();
-    blocking(move || updater::install(&app, &data_dir)).await
+async fn install_update(app: AppHandle) -> AppResult<()> {
+    blocking(move || updater::install(&app)).await
 }
 
 #[tauri::command]
@@ -849,22 +869,31 @@ fn get_crosshair_config(state: St<'_>) -> CrosshairConfig {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 /// De gegevensmap zonder draaiende Tauri-app: dezelfde als `app.path().app_data_dir()`
 /// (%APPDATA%\com.nzty.desktop), of NZTY_DATA_DIR om te testen.
-fn standalone_data_dir() -> std::path::PathBuf {
+fn standalone_data_dir() -> AppResult<std::path::PathBuf> {
+    #[cfg(feature = "selftest")]
     if let Some(dir) = std::env::var_os("NZTY_DATA_DIR").filter(|d| !d.is_empty()) {
-        return std::path::PathBuf::from(dir);
+        return Ok(std::path::PathBuf::from(dir));
     }
-    let appdata = std::env::var_os("APPDATA").map(std::path::PathBuf::from).unwrap_or_else(std::env::temp_dir);
-    appdata.join("com.nzty.desktop")
+    Ok(protected::known_folder(&windows_sys::Win32::UI::Shell::FOLDERID_RoamingAppData)?.join("com.nzty.desktop"))
 }
 
 /// Andere nezty.exe-processen dan dit (het gewone venster of een tweede stille controle): telt ze en sluit ze
 /// als `kill` aan staat.
 fn other_instances(kill: bool) -> usize {
-    use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System};
+    use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
     let own = std::process::id();
+    let Ok(exe) = std::env::current_exe() else { return 0 };
+    let session = |pid| {
+        let mut id = 0;
+        let ok = unsafe { windows_sys::Win32::System::RemoteDesktop::ProcessIdToSessionId(pid, &mut id) };
+        (ok != 0).then_some(id)
+    };
+    let Some(own_session) = session(own) else { return 0 };
     let mut sys = System::new();
-    sys.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::nothing());
-    let others: Vec<_> = sys.processes().iter().filter(|(pid, p)| pid.as_u32() != own && p.name().to_string_lossy().eq_ignore_ascii_case("nezty.exe")).map(|(_, p)| p).collect();
+    sys.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::nothing().with_exe(UpdateKind::Always));
+    let others: Vec<_> = sys.processes().iter().filter(|(pid, p)| pid.as_u32() != own &&
+        p.exe().is_some_and(|p| p.as_os_str().eq_ignore_ascii_case(exe.as_os_str())) && session(pid.as_u32()) == Some(own_session))
+        .map(|(_, p)| p).collect();
     if kill {
         for p in &others {
             p.kill();
@@ -894,25 +923,38 @@ fn write_standalone_log(name: &str, result: &serde_json::Value) {
 
 /// `nezty.exe --restore-all`: elke gelogde wijziging terug naar hoe het stond, wifi-gamestand uit, geplande taken en
 /// autostart weg, token uit Credential Manager. Zet niets terug wat nezty niet zelf heeft veranderd.
-fn restore_all_standalone() -> serde_json::Value {
+fn restore_all_standalone() -> AppResult<serde_json::Value> {
     let closed = close_other_instances();
-    let state = AppState::new(standalone_data_dir(), winapi::is_elevated());
+    let state = AppState::open(standalone_data_dir()?, winapi::is_elevated(), true)?;
+    lock(&state.journal).check_other_users()?;
     license::init(&state);
     let pending = lock(&state.journal).has_any_active();
     let reverted = license::reset_changes(&state);
     let left = lock(&state.journal).has_any_active();
-    autostart::remove_all();
-    license::forget(&state);
+    if !left && reverted.failed.is_empty() {
+        autostart::remove_all()?;
+        license::forget(&state);
+    }
+    let tasks = [autostart::is_enabled(), autostart::task_exists(autostart::LICENSE_TASK)];
+    let complete = !left && reverted.failed.is_empty() && !tasks.contains(&true);
+    if complete {
+        // Keep an empty migration marker, so a later reinstall cannot replay
+        // already restored entries from a previous per-user installation.
+        let mut journal = lock(&state.journal);
+        journal.entries.clear();
+        journal.save()?;
+    }
     log::info!("alles teruggezet voor verwijderen: {} wijzigingen, nog actief in logboek: {}", reverted.reverted, left);
-    serde_json::json!({
+    Ok(serde_json::json!({
+        "success": complete,
         "elevated": state.elevated,
         "closedInstances": closed,
         "pendingChanges": pending,
         "reverted": reverted.reverted,
         "failed": reverted.failed,
         "stillActiveInLog": left,
-        "tasksLeft": [autostart::is_enabled(), autostart::task_exists(autostart::LICENSE_TASK)],
-    })
+        "tasksLeft": tasks,
+    }))
 }
 
 /// `--selftest*`: schrijft de uitkomst als JSON naar het opgegeven pad. Geeft true als zo'n modus gevraagd is.
@@ -1012,16 +1054,18 @@ pub fn run() {
         if another_instance_running() {
             return;
         }
-        let state = AppState::new(standalone_data_dir(), winapi::is_elevated());
-        let result = license::check_headless(&state);
+        let result = match standalone_data_dir().and_then(|dir| AppState::open(dir, winapi::is_elevated(), false)) {
+            Ok(state) => license::check_headless(&state),
+            Err(e) => serde_json::json!({"error": e.to_string()}),
+        };
         write_standalone_log("license-check", &result);
         return;
     }
     // Alles terugzetten en opruimen, vóór het verwijderen van de app (de uninstaller start dit en wacht erop).
     if args.iter().any(|a| a == "--restore-all") {
-        let result = restore_all_standalone();
+        let result = restore_all_standalone().unwrap_or_else(|e| serde_json::json!({"success": false, "error": e.to_string()}));
         write_standalone_log("restore-all", &result);
-        return;
+        std::process::exit(if result["success"] == true { 0 } else { 1 });
     }
     // --minimized komt alleen van starten met Windows (geplande taak).
     let autostart_launch = args.iter().any(|a| a == "--minimized");
@@ -1035,12 +1079,13 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(crosshair::plugin())
         .setup(move |app| {
-            // NZTY_DATA_DIR wijst een andere gegevensmap aan: om te testen zonder echte instellingen of logboek te raken.
-            let data_dir = match std::env::var_os("NZTY_DATA_DIR").filter(|d| !d.is_empty()) {
-                Some(dir) => std::path::PathBuf::from(dir),
-                None => app.path().app_data_dir()?,
-            };
-            let state = Arc::new(AppState::new(data_dir, winapi::is_elevated()));
+            let data_dir = standalone_data_dir()?;
+            let state = Arc::new(AppState::open_desktop(data_dir, winapi::is_elevated()).inspect_err(|e| {
+                use windows_sys::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONERROR};
+                let text: Vec<u16> = e.to_string().encode_utf16().chain(Some(0)).collect();
+                let title: Vec<u16> = "Nezty".encode_utf16().chain(Some(0)).collect();
+                unsafe { MessageBoxW(std::ptr::null_mut(), text.as_ptr(), title.as_ptr(), MB_ICONERROR); }
+            })?);
             // Covers mogen altijd uit de eigen covermap laden, ook als de gegevensmap anders is.
             if let Err(e) = app.asset_protocol_scope().allow_directory(state.covers_dir(), false) {
                 log::warn!("covermap niet toegestaan: {e}");
@@ -1062,13 +1107,12 @@ pub fn run() {
             }
             lock(&state.restore_point).protection_enabled = restore::protection_enabled();
             {
-                let data_dir = state.data_dir.clone();
                 std::thread::spawn(move || {
                     autostart::migrate_old();
                     // Eén geplande taak bij het inloggen, van deze versie (met vertraging).
                     autostart::sync_tasks();
                     // Een gedownloade update van de vorige keer is geïnstalleerd: het bestand mag weg.
-                    updater::cleanup(&data_dir);
+                    updater::cleanup();
                 });
             }
 
@@ -1086,11 +1130,11 @@ pub fn run() {
                 log::warn!("sneltoets crosshair: {e}");
             }
             crosshair::start_keeper(app.handle().clone(), state.clone());
-            if settings.crosshair_enabled {
+            license::init(&state);
+            if settings.crosshair_enabled && license::require(&state).is_ok() {
                 let _ = crosshair::set_enabled(app.handle(), &state, true);
             }
 
-            license::init(&state);
             // Eerste start van 0.5.0: weggehaalde tweaks die nog aan staan exact terugzetten (eenmalig).
             {
                 let st = state.clone();
@@ -1203,6 +1247,8 @@ pub fn run() {
             get_game_regions,
             get_device_info,
             license_status,
+            owner_accounts,
+            owner_revoke,
             license_config,
             license_register,
             license_login,

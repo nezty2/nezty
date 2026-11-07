@@ -429,8 +429,6 @@ pub struct Settings {
     pub all_active: bool,
     /// Games die de instellingen van "Alles activeren" al hebben gehad.
     pub activated_games: Vec<String>,
-    /// Licentie: sinds wanneer (ms) er wijzigingen aan staan zonder enig bewaard token. Na 24 uur gaat alles terug.
-    pub license_no_token_since: Option<i64>,
     /// Opstart-apps die de gebruiker heeft uitgezet: zet zo'n app zichzelf weer aan, dan zet nezty hem weer uit.
     pub startup_keep_off: Vec<String>,
     /// Opstart-apps die zichzelf weer aanzetten (gezien door nezty), voor de uitleg op de pagina.
@@ -478,7 +476,6 @@ impl Default for Settings {
             migrated_v074: false,
             all_active: false,
             activated_games: vec![],
-            license_no_token_since: None,
             startup_keep_off: vec![],
             startup_came_back: vec![],
             fortnite_pending: vec![],
